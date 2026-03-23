@@ -146,19 +146,26 @@ pytest tests/test_hal_advanced.py --device-port COM8 --device-ip 192.168.178.229
 
 ## Test Modules
 
-The device test suite contains **105 tests across 9 modules** in `device_tests/tests/`:
+The device test suite contains **185 tests across 16 modules** in `device_tests/tests/`:
 
 | Module | Tests | Category | What It Validates |
 |--------|-------|----------|-------------------|
 | `test_boot_health.py` | 8 | Boot | Serial errors, auth init, settings loaded, HAL discovery, heap, crash log, uptime |
 | `test_health_check.py` | 12 | Health | `GET /api/health` response schema, verdict, counts, per-check fields, duration, deferred phase |
-| `test_hal_devices.py` | 6 | HAL | Device list, onboard present, no errors, valid configs, DB presets, pin conflicts |
+| `test_hal_devices.py` | 7 | HAL | Device list, onboard present, no errors, valid configs, DB presets, scan, pin conflicts |
 | `test_hal_advanced.py` | 31 | HAL | DB completeness, scan behavior, config updates, validation boundaries, reinit, CRUD lifecycle, custom devices, error handling |
 | `test_dsp_audio.py` | 24 | Audio | DSP config/metrics/bypass/presets, signal generator, pipeline matrix, DAC, THD, diagnostics |
-| `test_audio.py` | 8 | Audio | I2S ports, pipeline matrix, DAC status, PSRAM, DMA, pause state, heap budget |
+| `test_dsp_extended.py` | 20 | Audio/DSP | DSP stage CRUD, crossover, bass management, baffle step, import/export (APO/miniDSP/JSON), preset CRUD, PEQ presets |
+| `test_output_dsp.py` | 9 | Audio/DSP | Per-output post-matrix DSP: config, bypass, stage add/delete, crossover, validation |
+| `test_audio.py` | 10 | Audio | I2S ports, pipeline matrix, DAC status, PSRAM, DMA, pause state, heap budget, smart sensing, input names |
+| `test_websocket.py` | 15 | WS/Network | Auth handshake (valid/invalid/timeout), initial state broadcasts, command dispatch, binary frames (waveform/spectrum), multi-client, oversized message |
+| `test_wifi.py` | 9 | WiFi/Network | Status fields, RSSI range, IP format, scan results, saved networks, validation (read-only — no state changes) |
+| `test_ethernet.py` | 8 | Ethernet/Network | Status, hostname, link state, config validation, hostname roundtrip (no IP changes) |
+| `test_ota.py` | 7 | OTA | Update status, version match, check update, releases list, validation (read-only — never flashes firmware) |
+| `test_dac_eeprom.py` | 6 | Audio/HAL | EEPROM read, scan, presets, parsed fields, validation (read-only — never programs/erases) |
 | `test_network.py` | 6 | Network | Reachable, WiFi status, security headers, auth required, auth status, WS port |
 | `test_mqtt.py` | 4 | MQTT | Config readable, connected if configured, HA discovery, diagnostics (3 skip when not configured) |
-| `test_settings.py` | 5 | Settings | Get, export, darkMode toggle, reboot persistence (@slow), auth change validation |
+| `test_settings.py` | 9 | Settings | Get, export, darkMode toggle, reboot persistence (@slow), auth change validation, import roundtrip, import validation, export v2 structure |
 
 ### Pytest Markers
 
@@ -168,12 +175,17 @@ Filter tests by category using markers defined in `pytest.ini`:
 pytest tests/ -m "boot" -v              # Boot health only
 pytest tests/ -m "hal" -v               # All HAL tests
 pytest tests/ -m "audio" -v             # DSP + audio tests
-pytest tests/ -m "not slow" -v          # Skip slow tests (scan, reboot)
+pytest tests/ -m "ws" -v                # WebSocket protocol tests
+pytest tests/ -m "wifi" -v              # WiFi management tests
+pytest tests/ -m "ethernet" -v          # Ethernet tests
+pytest tests/ -m "ota" -v               # OTA tests (read-only)
+pytest tests/ -m "dsp" -v               # DSP pipeline tests
+pytest tests/ -m "not slow" -v          # Skip slow tests (scan, reboot, OTA)
 pytest tests/ -m "not reboot" -v        # Skip reboot tests
 pytest tests/ -m "health" -v            # Health check endpoint only
 ```
 
-Available markers: `boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `reboot`, `slow`.
+Available markers: `boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `reboot`, `slow`, `ws`, `wifi`, `ethernet`, `ota`, `dsp`.
 
 ## HAL Testing in Depth
 
@@ -314,6 +326,125 @@ When the firmware is updated to call `hal_validate_config()` in the PUT handler,
 - `GET /api/diagnostics/journal` returns 200 with an `entries` or `journal` list.
 - On a healthy device, no audio error diagnostics (error codes `0x2001`–`0x200E` at Error or Critical severity) should be present in the journal.
 
+## WebSocket Protocol Testing
+
+`test_websocket.py` (15 tests across 4 classes) is the only test module that exercises the firmware's WebSocket server (port 81). It uses the `DeviceWebSocket` utility class from `device_tests/utils/ws_client.py` — a synchronous client built on the `websocket-client` library.
+
+### Auth Handshake
+
+`TestWebSocketAuth` verifies the token-based authentication flow:
+
+- Connecting to port 81 must produce an `authRequired` JSON message as the first frame.
+- Sending a valid WS token (obtained from `GET /api/ws-token`) must produce `authSuccess`.
+- An invalid token produces `authFailed` and the server disconnects.
+- Connecting but never authenticating results in a server-side timeout (~5s) and disconnect.
+- After successful auth, the firmware sends initial state broadcasts — at least 3 of the 17 state types (WiFi, HAL, DSP, DAC, etc.) must arrive within 3 seconds.
+
+### Command Dispatch
+
+`TestWebSocketCommands` verifies that JSON commands produce expected responses:
+
+- `getHardwareStats` → `hardwareStats` response with heap info.
+- `getHealthCheck` → `healthCheckState` response.
+- `setDebugMode` roundtrip — enable then disable, both produce `debugState` broadcast.
+- `subscribeAudio` enable/disable doesn't crash.
+- A message >4096 bytes is silently rejected without crashing the connection.
+
+### Binary Frames
+
+`TestWebSocketBinaryFrames` subscribes to audio data and verifies binary frame format:
+
+- Waveform frames start with byte `0x01` and are 258 bytes (`[type:1][adc:1][samples:256]`).
+- Spectrum frames start with byte `0x02` and are 70 bytes (`[type:1][adc:1][freq:f32LE][bands:16×f32LE]`).
+- Tests skip gracefully if no ADC data is available (no audio input connected).
+
+### Edge Cases
+
+- Two authenticated clients can coexist (multi-client test).
+- Commands sent without authentication are ignored or cause disconnect.
+
+## DSP Extended Testing
+
+`test_dsp_extended.py` (20 tests across 5 classes) covers DSP operations not tested in the base `test_dsp_audio.py` module — primarily stage CRUD, crossover/bass management, import/export, and preset management.
+
+### Stage CRUD
+
+`TestDspStageCrud` exercises the full add/update/delete lifecycle for DSP stages:
+
+- Add a PEQ stage to channel 0, update its parameters, delete it.
+- Full add-delete roundtrip: verify stage count increments and decrements.
+- Reorder stages within a channel.
+- Toggle stage enable/disable.
+- Invalid channel number (99) returns 400/422.
+
+All tests use a `_cleanup_test_stages()` helper that brute-force removes all stages from the test channel, ensuring clean state even on test failure.
+
+### Crossover and Bass Management
+
+`TestDspCrossover` applies signal-processing presets and verifies responses:
+
+- LR4 crossover at 2000 Hz on channel 0.
+- Baffle step correction with 200mm diameter.
+- Bass management with main/sub channel routing.
+
+### Import/Export
+
+`TestDspImportExport` verifies format conversion:
+
+- Export to Equalizer APO and miniDSP text formats.
+- JSON export/reimport roundtrip (export, PUT the export back).
+- Stereo link toggle on channel pair.
+
+### Preset CRUD
+
+`TestDspPresetCrud` uses slot 7 (avoiding user presets) for save/load/rename/delete lifecycle. `TestPeqPresets` does the same for named PEQ presets.
+
+## Output DSP Testing
+
+`test_output_dsp.py` (9 tests across 3 classes) covers the per-output mono DSP engine applied post-matrix and pre-sink (`/api/output/dsp` endpoints).
+
+- Read output channel config, toggle per-channel and global bypass.
+- Add and delete gain stages.
+- Apply output crossover.
+- Validation: invalid channel, missing parameters, out-of-range stage index.
+
+## WiFi, Ethernet, OTA, and EEPROM Testing
+
+These modules test read-only or validation-only operations to avoid disrupting the test runner's network connection or the device's firmware.
+
+### WiFi (`test_wifi.py`, 9 tests)
+
+- Status fields: mode, SSID, RSSI range (-100 to 0 dBm), IP format validation.
+- Scan: trigger scan, verify network fields (ssid, rssi, encryption).
+- Validation: empty SSID rejected, nonexistent network removal handled safely.
+- **No tests change WiFi state** — that would disconnect the runner.
+
+### Ethernet (`test_ethernet.py`, 8 tests)
+
+- Status: linkUp boolean, hostname field, required fields present.
+- Validation: invalid hostname (leading hyphen), invalid IP format, missing static IP fields.
+- Safe operations: confirm with no pending change, hostname roundtrip.
+- **No tests change the IP address** — that would disconnect the runner.
+
+### OTA (`test_ota.py`, 7 tests)
+
+- Status: update status JSON, version match against `/api/settings`.
+- Read-only: check update, releases list (requires internet, skips in AP mode).
+- Validation: missing version param, nonexistent version, start update with no update available.
+- **No tests trigger firmware download or flash.**
+
+### DAC EEPROM (`test_dac_eeprom.py`, 6 tests)
+
+- Read: EEPROM state, scan I2C bus, presets list, parsed device info.
+- Validation: program with empty body, zero read errors.
+- **No tests program or erase the EEPROM.**
+
+### Settings Import (`test_settings.py`, +4 tests)
+
+- Import the device's own export (no-op roundtrip).
+- Invalid JSON and empty body rejection.
+- Export v2 structure validation (exportInfo, settings sections).
+
 ## TEST\_MODE Build Flag
 
 For local device test development, the firmware supports a `TEST_MODE` build flag that removes authentication friction:
@@ -421,4 +552,4 @@ def test_my_check_passes(health_api):
 
 6. **Add a diagnostic code** in `src/diag_error_codes.h` if the check warrants a distinct code (follow the existing `DIAG_*` naming convention and numeric range for the category).
 
-7. **Add a pytest marker** to `device_tests/pytest.ini` if the new check belongs to a new category not already covered by the existing markers (`boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`).
+7. **Add a pytest marker** to `device_tests/pytest.ini` if the new check belongs to a new category not already covered by the existing markers (`boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `ws`, `wifi`, `ethernet`, `ota`, `dsp`).
