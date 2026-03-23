@@ -30,8 +30,8 @@ def pytest_addoption(parser):
     )
     parser.addoption(
         "--device-password",
-        default="admin",
-        help="Device web password (default: admin)",
+        default="test1234",
+        help="Device web password (default: test1234 when firmware built with TEST_MODE)",
     )
     parser.addoption(
         "--baud",
