@@ -578,6 +578,8 @@ bool hal_save_custom_schema(const char* schemaJson, char* outCompatible, size_t 
 
     const char* compatible = doc["compatible"] | "";
     if (strlen(compatible) == 0) return false;
+    // Reject path traversal characters
+    if (strstr(compatible, "..") || strchr(compatible, '/') || strchr(compatible, '\\')) return false;
 
     if (!LittleFS.exists("/hal/custom")) {
         LittleFS.mkdir("/hal/custom");

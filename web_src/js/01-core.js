@@ -33,7 +33,7 @@
                     // Try to parse JSON to see if there's a redirect provided
                     try {
                         const data = await response.clone().json();
-                        if (data.redirect) {
+                        if (data.redirect && data.redirect.startsWith('/') && !data.redirect.startsWith('//')) {
                             window.location.href = data.redirect;
                         } else {
                             window.location.href = '/login';
@@ -71,6 +71,22 @@
         function escapeHtml(str) {
             if (!str) return '';
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Sanitize HTML from markdown rendering — strip dangerous elements and attributes
+        function sanitizeHtml(html) {
+            // Remove script tags and their content
+            html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+            // Remove iframe, object, embed, form tags (with content)
+            html = html.replace(/<(iframe|object|embed|form)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
+            html = html.replace(/<(iframe|object|embed|form)\b[^>]*\/?\s*>/gi, '');
+            // Remove event handlers (onclick, onerror, onload, etc.)
+            html = html.replace(/\s+on\w+\s*=\s*(['"])[^'"]*\1/gi, '');
+            html = html.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
+            // Remove javascript: URLs
+            html = html.replace(/href\s*=\s*(['"])javascript:[^'"]*\1/gi, 'href=$1#$1');
+            html = html.replace(/src\s*=\s*(['"])javascript:[^'"]*\1/gi, 'src=$1#$1');
+            return html;
         }
 
         // ===== Connection Status =====

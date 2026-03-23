@@ -757,7 +757,7 @@ function showRemoveCurrentNetworkModal(network, selectedIndex) {
                                 Warning: You are currently connected to this network
                             </div>
                             <div style="margin-bottom: 12px;">
-                                Network: <strong>${network.ssid}</strong>
+                                Network: <strong>${escapeHtml(network.ssid)}</strong>
                             </div>
                             <div style="margin-bottom: 16px; line-height: 1.5;">
                                 If you remove this network, the device will:

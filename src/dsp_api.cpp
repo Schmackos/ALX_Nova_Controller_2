@@ -1273,8 +1273,13 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("name")) { sendJsonError(400, "Name required"); return; }
 
+        char safeName[36];
+        if (!sanitize_filename(server.arg("name").c_str(), safeName, sizeof(safeName))) {
+            sendJsonError(400, "Invalid name");
+            return;
+        }
         char path[40];
-        snprintf(path, sizeof(path), "/peq_%s.json", server.arg("name").c_str());
+        snprintf(path, sizeof(path), "/peq_%s.json", safeName);
         if (!dspFileExists(path)) { sendJsonError(404, "Preset not found"); return; }
 
         File f = LittleFS.open(path, "r");
@@ -1289,13 +1294,18 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("name")) { sendJsonError(400, "Name required"); return; }
 
+        char safeName[36];
+        if (!sanitize_filename(server.arg("name").c_str(), safeName, sizeof(safeName))) {
+            sendJsonError(400, "Invalid name");
+            return;
+        }
         char path[40];
-        snprintf(path, sizeof(path), "/peq_%s.json", server.arg("name").c_str());
+        snprintf(path, sizeof(path), "/peq_%s.json", safeName);
         if (!dspFileExists(path)) { sendJsonError(404, "Preset not found"); return; }
 
         LittleFS.remove(path);
         server_send(200, "application/json", "{\"success\":true}");
-        LOG_I("[DSP] PEQ preset deleted: %s", server.arg("name").c_str());
+        LOG_I("[DSP] PEQ preset deleted: %s", safeName);
     });
 
     // ===== DSP Config Preset Endpoints (up to 32 slots) =====

@@ -442,6 +442,11 @@ void registerHalApiEndpoints(WebServer& server) {
         }
 
         const char* compatible = doc["compatible"];
+        // Validate compatible string: reject path traversal characters
+        if (strstr(compatible, "..") || strchr(compatible, '/') || strchr(compatible, '\\')) {
+            server_send(400, "application/json", "{\"error\":\"Invalid compatible string\"}");
+            return;
+        }
         String filename = String("/hal/custom/") + String(compatible) + ".json";
         // Replace commas with underscores for filesystem safety
         filename.replace(',', '_');
@@ -467,8 +472,12 @@ void registerHalApiEndpoints(WebServer& server) {
             server_send(400, "application/json", "{\"error\":\"Missing name parameter\"}");
             return;
         }
-        String name = server.arg("name");
-        String filename = "/hal/custom/" + name + ".json";
+        char safeName[36];
+        if (!sanitize_filename(server.arg("name").c_str(), safeName, sizeof(safeName))) {
+            server_send(400, "application/json", "{\"error\":\"Invalid name\"}");
+            return;
+        }
+        String filename = "/hal/custom/" + String(safeName) + ".json";
 
         if (LittleFS.remove(filename)) {
             hal_load_custom_devices();

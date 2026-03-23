@@ -96,6 +96,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
     case WStype_TEXT:
       {
+        if (length > 4096) {
+            LOG_W("[WebSocket] Message too large (%u bytes), rejected", length);
+            return;
+        }
+
         LOG_D("[WebSocket] Received from client [%u]: %s", num, payload);
 
         JsonDocument doc;
