@@ -206,6 +206,20 @@ int hal_discover_devices() {
 #ifndef NATIVE_TEST
     HalDeviceManager& mgr = HalDeviceManager::instance();
 
+    // Cross-bus I2C address dedup bitmap (addresses 0x00-0x7F).
+    // Tracks addresses already claimed by a registered device across all buses.
+    // An address appearing on two buses would cause I2C conflicts; we warn and skip.
+    bool _seenI2cAddr[128] = {};
+
+    // Populate bitmap from devices already registered before this discovery pass
+    for (uint8_t di = 0; di < HAL_MAX_DEVICES; di++) {
+        HalDevice* existing = mgr.getDevice(di);
+        if (existing && existing->getDescriptor().bus.type == HAL_BUS_I2C) {
+            uint8_t a = existing->getDescriptor().i2cAddr;
+            if (a < 128) _seenI2cAddr[a] = true;
+        }
+    }
+
     LOG_I("[HAL:Discovery]", "Starting device discovery...");
 
     // Phase 1: I2C bus scan
@@ -262,6 +276,14 @@ int hal_discover_devices() {
                         }
                     }
 
+                    // Cross-bus I2C address dedup: warn and skip if this address is
+                    // already claimed by a device on another bus to prevent conflicts.
+                    if (desc.i2cAddr < 128 && _seenI2cAddr[desc.i2cAddr]) {
+                        LOG_W("[HAL:Discovery]", "Duplicate I2C addr 0x%02X — skipping %s",
+                              desc.i2cAddr, desc.compatible);
+                        alreadyRegistered = true;
+                    }
+
                     if (!alreadyRegistered) {
                         // Use HalDriverRegistry factory to create the device
                         HalDevice* dev = entry->factory ? entry->factory() : nullptr;
@@ -272,10 +294,12 @@ int hal_discover_devices() {
                                 delete dev;
                             } else if (appState.halAutoDiscovery) {
                                 dev->_state = HAL_STATE_AVAILABLE;
+                                if (desc.i2cAddr < 128) _seenI2cAddr[desc.i2cAddr] = true;
                                 LOG_I("[HAL:Discovery]", "Device auto-registered: %s (slot %d)", desc.name, slot);
                                 newDevices++;
                             } else {
                                 dev->_state = HAL_STATE_CONFIGURING;
+                                if (desc.i2cAddr < 128) _seenI2cAddr[desc.i2cAddr] = true;
                                 LOG_I("[HAL:Discovery]", "Device registered, awaiting init: %s (slot %d)", desc.name, slot);
                                 newDevices++;
                             }
@@ -326,6 +350,44 @@ int hal_rescan() {
     }
     return hal_discover_devices();
 }
+
+// Perform a 9-clock bus recovery sequence followed by a STOP condition.
+// Used after I2C timeout errors to release a stuck SDA line.
+// busIndex selects which SDA/SCL pin pair to toggle.
+#ifndef NATIVE_TEST
+static void hal_i2c_bus_recovery(uint8_t busIndex) {
+    int pinSda = -1, pinScl = -1;
+    switch (busIndex) {
+        case HAL_I2C_BUS_EXT:     pinSda = 48; pinScl = 54; break;
+        case HAL_I2C_BUS_ONBOARD: pinSda = 7;  pinScl = 8;  break;
+        case HAL_I2C_BUS_EXP:     pinSda = 28; pinScl = 29; break;
+        default: return;
+    }
+
+    // Configure both pins as GPIO output, SDA high
+    pinMode(pinSda, OUTPUT);
+    pinMode(pinScl, OUTPUT);
+    digitalWrite(pinSda, HIGH);
+    digitalWrite(pinScl, HIGH);
+    delayMicroseconds(5);
+
+    // Toggle SCL 9 times with SDA held high to force any stuck device to release
+    for (int i = 0; i < 9; i++) {
+        digitalWrite(pinScl, LOW);
+        delayMicroseconds(5);
+        digitalWrite(pinScl, HIGH);
+        delayMicroseconds(5);
+    }
+
+    // Generate a STOP condition: SDA low → high while SCL is high
+    digitalWrite(pinSda, LOW);
+    delayMicroseconds(5);
+    digitalWrite(pinSda, HIGH);
+    delayMicroseconds(5);
+
+    LOG_W("[HAL:Discovery]", "Bus %u: I2C recovery sequence applied (9-clock + STOP)", busIndex);
+}
+#endif // NATIVE_TEST
 
 uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
     uint8_t found = 0;
@@ -381,6 +443,20 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
             LOG_I("[HAL:Discovery]", "Bus %u: device at 0x%02X", busIndex, addr);
         } else if ((err == 4 || err == 5) && timeoutCount < HAL_PROBE_RETRY_MAX_ADDRS) {
             timeoutAddrs[timeoutCount++] = addr;
+        }
+    }
+
+    // Bus recovery: if any address caused a timeout, the SDA line may be stuck.
+    // Toggle SCL 9 times + STOP to release it before retrying.
+    if (timeoutCount > 0) {
+        hal_i2c_bus_recovery(busIndex);
+        // Re-initialise the Wire instance after GPIO toggling
+        if (needsInit) {
+            switch (busIndex) {
+                case HAL_I2C_BUS_EXT: Wire1.begin(48, 54, 100000); break;
+                case HAL_I2C_BUS_EXP: Wire2.begin(28, 29, 100000); break;
+                default: break;
+            }
         }
     }
 

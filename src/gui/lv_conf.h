@@ -110,8 +110,13 @@
 #define LV_USE_ASSERT_OBJ 0
 
 /* Override default while(1) handler — continue instead of freezing gui_task.
- * The LV_LOG_ERROR before this handler already logs the failure details.
- * NOTE: LV_ASSERT_HANDLER is pasted without trailing ';' in lv_assert.h */
+ * LVGL calls LV_LOG_ERROR (via lv_assert.h) BEFORE invoking LV_ASSERT_HANDLER,
+ * so the assertion failure file/line/expression is already emitted to the LVGL
+ * log (printf-based, directed to serial) before this handler runs.
+ * Using ';' (no-op) prevents the audio/MQTT tasks from being starved by a
+ * frozen gui_task.  LOG_E is not available here (pure config header, no
+ * Arduino/debug_serial includes), but the LVGL log output is equivalent.
+ * NOTE: LV_ASSERT_HANDLER is pasted without a trailing ';' in lv_assert.h */
 #define LV_ASSERT_HANDLER  ;
 
 /*-------------

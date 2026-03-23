@@ -290,6 +290,19 @@ void registerHalApiEndpoints(WebServer& server) {
         if (doc.containsKey("filterMode"))     newCfg.filterMode   = doc["filterMode"].as<uint8_t>();
         newCfg.valid = true;
 
+        // Validate bounds before persisting
+        HalConfigError cfgErr = hal_validate_config(newCfg);
+        if (!cfgErr.valid) {
+            JsonDocument errDoc;
+            errDoc["error"] = "Invalid config";
+            errDoc["field"] = cfgErr.field;
+            errDoc["message"] = cfgErr.message;
+            String errJson;
+            serializeJson(errDoc, errJson);
+            server_send(422, "application/json", errJson);
+            return;
+        }
+
         mgr.setConfig(slot, newCfg);
         hal_save_device_config(slot);
         hal_apply_config(slot);

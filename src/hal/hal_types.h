@@ -192,6 +192,61 @@ inline void hal_safe_strcpy(char* dest, size_t destSize, const char* src) {
     dest[destSize - 1] = '\0';
 }
 
+// ===== HalDeviceConfig Validation =====
+// Checks all configurable fields in HalDeviceConfig for out-of-range values.
+// Returns on the first violation found.  Call before mgr.setConfig().
+
+struct HalConfigError {
+    bool valid;
+    char field[24];
+    char message[48];
+};
+
+inline HalConfigError hal_validate_config(const HalDeviceConfig& cfg) {
+    HalConfigError err = {true, {0}, {0}};
+
+    // i2sPort: 0-2 or 255 (auto/default)
+    if (cfg.i2sPort != 255 && cfg.i2sPort > 2) {
+        err.valid = false;
+        hal_safe_strcpy(err.field,   sizeof(err.field),   "i2sPort");
+        hal_safe_strcpy(err.message, sizeof(err.message), "must be 0-2 or 255 (auto)");
+        return err;
+    }
+
+    // i2cBusIndex: 0-2
+    if (cfg.i2cBusIndex > 2) {
+        err.valid = false;
+        hal_safe_strcpy(err.field,   sizeof(err.field),   "i2cBusIndex");
+        hal_safe_strcpy(err.message, sizeof(err.message), "must be 0-2");
+        return err;
+    }
+
+    // GPIO pin helper: -1 (unset) or 0..HAL_GPIO_MAX
+    auto checkPin = [&](int16_t pin, const char* name) -> bool {
+        if (pin != -1 && (pin < 0 || pin > HAL_GPIO_MAX)) {
+            err.valid = false;
+            hal_safe_strcpy(err.field,   sizeof(err.field),   name);
+            hal_safe_strcpy(err.message, sizeof(err.message), "must be -1 or 0-54");
+            return false;
+        }
+        return true;
+    };
+
+    if (!checkPin(cfg.pinSda,  "pinSda"))  return err;
+    if (!checkPin(cfg.pinScl,  "pinScl"))  return err;
+    if (!checkPin(cfg.pinMclk, "pinMclk")) return err;
+    if (!checkPin(cfg.pinData, "pinData")) return err;
+    if (!checkPin(cfg.pinBck,  "pinBck"))  return err;
+    if (!checkPin(cfg.pinLrc,  "pinLrc"))  return err;
+    if (!checkPin(cfg.pinFmt,  "pinFmt"))  return err;
+    if (!checkPin(cfg.gpioA,   "gpioA"))   return err;
+    if (!checkPin(cfg.gpioB,   "gpioB"))   return err;
+    if (!checkPin(cfg.gpioC,   "gpioC"))   return err;
+    if (!checkPin(cfg.gpioD,   "gpioD"))   return err;
+
+    return err;  // err.valid == true
+}
+
 // ===== Descriptor Initializer Helper =====
 // Fills all common HalDeviceDescriptor fields in one call, eliminating
 // per-driver boilerplate (memset + 10-12 individual assignments).
