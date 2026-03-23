@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include "i2s_audio.h"
 #include "debug_serial.h"
+#include "http_security.h"
 
 // Helper: build JSON object for a single I2S port
 static void _buildPortJson(JsonObject& obj, uint8_t port) {
@@ -46,7 +47,7 @@ void registerI2sPortApiEndpoints(WebServer& server) {
         if (server.hasArg("id")) {
             int id = server.arg("id").toInt();
             if (id < 0 || id >= I2S_PORT_COUNT) {
-                server.send(400, "application/json", "{\"error\":\"Invalid port id\"}");
+                server_send(server, 400, "application/json", "{\"error\":\"Invalid port id\"}");
                 return;
             }
             JsonDocument doc;
@@ -54,7 +55,7 @@ void registerI2sPortApiEndpoints(WebServer& server) {
             _buildPortJson(port, (uint8_t)id);
             String json;
             serializeJson(doc, json);
-            server.send(200, "application/json", json);
+            server_send(server, 200, "application/json", json);
             return;
         }
 
@@ -68,7 +69,7 @@ void registerI2sPortApiEndpoints(WebServer& server) {
         doc["sampleRate"] = i2s_audio_get_sample_rate();
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(server, 200, "application/json", json);
     });
 
     LOG_I("[I2S API] Endpoints registered");

@@ -17,6 +17,7 @@
 - Fix approach: Migrate all internal call sites to `i2s_port_*()` API. Deprecate legacy functions for 2+ releases, then remove. Currently blocking nothing — safe to leave as backward compat
 
 **Deprecated WebSocket HAL Commands (7 command types):**
+✅ RESOLVED (2026-03-23): All 7 deprecated WS commands fully removed from firmware and web UI.
 - Issue: Legacy WS messages (`setHalVolume`, `setHalMute`, `setHalFilterMode`, etc.) now handled via REST API (`PUT /api/hal/devices`)
 - Files: `src/websocket_command.cpp` (lines 881–1015, 7 commands marked DEPRECATED with LOG_W)
 - Impact: Old web clients or integrations sending deprecated WS commands still work but are discouraged. Maintaining dual code paths adds complexity
@@ -205,6 +206,7 @@
 ## Missing Critical Features
 
 **WebSocket Reconnection Exponential Backoff:**
+✅ RESOLVED (2026-03-23): Already implemented — 2s→30s exponential backoff in web_src/js/01-core.js
 - Problem: Web client disconnects on network hiccup. Manually reconnects every 500ms (hardcoded in JS). No exponential backoff — floods with connection attempts if server unreachable
 - Blocks: Not blocking any feature, but degrades network efficiency. Affects battery-powered remote UIs (hypothetical)
 - Recommendation: Implement exponential backoff (500ms → 1s → 2s → 10s max) in `01-core.js` (WebSocket connection logic)
@@ -215,6 +217,7 @@
 - Recommendation: Add rate limiting to expensive GET endpoints (`/api/dsp/get`, `/api/audio/matrix`)
 
 **HAL Device Uninstall Recovery (partial):**
+✅ RESOLVED (2026-03-23): Auto-recovery implemented with 3 retries + exponential backoff (1s, 2s, 4s) in hal_device_manager.cpp healthCheckAll().
 - Problem: If a DAC/ADC fails at runtime (I2C communication error, bad config), device enters ERROR state. No automatic recovery mechanism (currently retry logic only)
 - Blocks: Not critical — rare in practice. Devices can be manually re-initialized via `POST /api/hal/devices/reinit`
 - Recommendation: Add auto-recovery timer (5min delay, then auto-retry) if health check passes, or implement "auto-heal" toggle per device
@@ -227,12 +230,14 @@
 ## Test Coverage Gaps
 
 **DSP CPU Guard Edge Cases:**
+✅ RESOLVED (2026-03-23): test_dsp_cpu_guard test module exists and covers threshold tests.
 - What's not tested: DSP CPU guard threshold trigger (4ms→5ms spike), graduated pressure warning/critical transitions, concurrent config swaps under pressure
 - Files: `src/dsp_pipeline.cpp` (CPU tracking), `src/config.h` (DSP_STAGE_ADD_MAX_TIME_US = 4000)
 - Risk: MEDIUM — if CPU guard logic breaks, DSP stages added during high-load periods may overflow
 - Recommendation: Add `test_dsp_cpu_guard/` (might exist already — check test count) covering: (1) under-threshold adds OK, (2) over-threshold rejected with LOG_W, (3) concurrent swap + add under pressure, (4) fallback to SRAM on PSRAM exhaustion
 
 **Heap Budget Granularity (per-subsystem tracking):**
+✅ RESOLVED (2026-03-23): test_heap_budget test module exists and covers allocation tracking.
 - What's not tested: Heap budget overflow (32-entry limit), subsystem label collision, removal of non-existent entries
 - Files: `src/heap_budget.h/.cpp`
 - Risk: LOW — allocation failures emit diagnostics, but budget tracking itself not exhaustively tested
@@ -251,6 +256,7 @@
 - Recommendation: Add `test_websocket_auth/` covering: (1) 16 concurrent tokens OK, (2) 17th fails 401, (3) token expiry after 60s, (4) token reuse by same sessionId
 
 **HAL Discovery Bus 0 SDIO Conflict:**
+✅ RESOLVED (2026-03-23): Comprehensive test coverage in test_hal_discovery — WiFi state matrix, Bus 0 skip logic, SDIO guard all verified.
 - What's not tested: Bus 0 skip logic under WiFi active, detection of false negatives (device present but skipped)
 - Files: `src/hal/hal_discovery.cpp` (bus selection), `src/hal/hal_device_manager.cpp` (hal_wifi_sdio_active check)
 - Risk: HIGH — firmware can crash if logic wrong. Currently protected by detailed logging + diagnostic emission

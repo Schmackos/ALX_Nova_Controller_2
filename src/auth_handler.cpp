@@ -11,6 +11,9 @@
 #include <esp_timer.h>
 #include <mbedtls/md.h>
 #include <mbedtls/pkcs5.h>
+#ifndef NATIVE_TEST
+#include <mbedtls/constant_time.h>
+#endif
 
 Session activeSessions[MAX_SESSIONS];
 Preferences authPrefs;
@@ -39,23 +42,26 @@ static bool _passwordNeedsMigration = false;
 bool timingSafeCompare(const String &a, const String &b) {
   size_t lenA = a.length();
   size_t lenB = b.length();
-  size_t maxLen = (lenA > lenB) ? lenA : lenB;
 
-  if (maxLen == 0) {
-    return (lenA == 0 && lenB == 0);
-  }
+  // Both empty
+  if (lenA == 0 && lenB == 0) return true;
 
-  volatile uint8_t result = (lenA != lenB) ? 1 : 0;
+  // Length mismatch: still not secret for password hashes (fixed-length hex)
+  if (lenA != lenB) return false;
+
+#ifndef NATIVE_TEST
+  // ESP32: use mbedTLS guaranteed constant-time comparison
+  return mbedtls_ct_memcmp(a.c_str(), b.c_str(), lenA) == 0;
+#else
+  // Native tests: volatile XOR fallback (mbedTLS not available)
+  volatile uint8_t result = 0;
   const char *pA = a.c_str();
   const char *pB = b.c_str();
-
-  for (size_t i = 0; i < maxLen; i++) {
-    uint8_t byteA = (i < lenA) ? (uint8_t)pA[i] : 0;
-    uint8_t byteB = (i < lenB) ? (uint8_t)pB[i] : 0;
-    result |= byteA ^ byteB;
+  for (size_t i = 0; i < lenA; i++) {
+    result |= (uint8_t)pA[i] ^ (uint8_t)pB[i];
   }
-
   return result == 0;
+#endif
 }
 
 // Hash password using SHA256, returns 64-char hex string
