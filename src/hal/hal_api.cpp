@@ -202,12 +202,12 @@ void registerHalApiEndpoints(WebServer& server) {
         bool ok = probeOk && initResult.success;
         if (ok) {
             dev->clearLastError();
+            dev->setReady(true);
             dev->_state = HAL_STATE_AVAILABLE;
-            dev->_ready = true;
         } else {
             dev->setLastError(initResult);
+            dev->setReady(false);
             dev->_state = HAL_STATE_ERROR;
-            dev->_ready = false;
             LOG_W("[HAL] Probe/init failed for %s (slot %d): %s", compatible, slot, initResult.reason);
         }
 
@@ -356,8 +356,8 @@ void registerHalApiEndpoints(WebServer& server) {
 
         // Deinit then re-init
         dev->deinit();
+        dev->setReady(false);
         dev->_state = HAL_STATE_CONFIGURING;
-        dev->_ready = false;
         appState.markHalDeviceDirty();
 
         bool probeOk = dev->probe();
@@ -365,12 +365,12 @@ void registerHalApiEndpoints(WebServer& server) {
         bool ok = probeOk && reinitResult.success;
         if (ok) {
             dev->clearLastError();
+            dev->setReady(true);
             dev->_state = HAL_STATE_AVAILABLE;
-            dev->_ready = true;
         } else {
             dev->setLastError(reinitResult);
+            dev->setReady(false);
             dev->_state = HAL_STATE_ERROR;
-            dev->_ready = false;
             LOG_W("[HAL] Reinit failed for slot %d: %s", slot, reinitResult.reason);
         }
         appState.markHalDeviceDirty();

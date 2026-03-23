@@ -74,6 +74,24 @@ public:
     volatile bool _ready;
     volatile HalDeviceState _state;
 
+    // Atomic accessors for _ready — use release/acquire semantics on RISC-V targets
+    // so descriptor fields written by Core 0 are visible to Core 1 before _ready=true.
+    // Fall back to plain volatile assignment in native (host) test builds.
+    void setReady(bool val) {
+#ifndef NATIVE_TEST
+        __atomic_store_n(const_cast<bool*>(&_ready), val, __ATOMIC_RELEASE);
+#else
+        _ready = val;
+#endif
+    }
+    bool isReady() const {
+#ifndef NATIVE_TEST
+        return __atomic_load_n(const_cast<const bool*>(&_ready), __ATOMIC_ACQUIRE);
+#else
+        return _ready;
+#endif
+    }
+
     // ----- Last init/reinit error (stored on the device, surfaced via API + WS) -----
     char _lastError[48];
 

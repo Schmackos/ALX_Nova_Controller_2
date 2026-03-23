@@ -142,7 +142,7 @@ void hal_apply_config(uint8_t slot) {
         // (I2S driver lifecycle is too heavy for direct call — must pause audio pipeline first)
         if (desc.capabilities & HAL_CAP_DAC_PATH) {
             HalDeviceState oldState = dev->_state;
-            dev->_ready = false;
+            dev->setReady(false);
             dev->_state = HAL_STATE_MANUAL;
             // Fire state change callback — bridge removes the sink immediately,
             // then the deferred deinit tears down the I2S driver safely.
@@ -156,13 +156,13 @@ void hal_apply_config(uint8_t slot) {
             return;
         }
         if (dev->_state == HAL_STATE_AVAILABLE || dev->_state == HAL_STATE_CONFIGURING) {
-            dev->_ready = false;
+            dev->setReady(false);
             dev->deinit();
         }
         {
             HalDeviceState oldState = dev->_state;
+            dev->setReady(false);
             dev->_state = HAL_STATE_MANUAL;
-            dev->_ready = false;
             hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
         }
         LOG_I("[HAL:Settings] Device slot %u disabled", slot);

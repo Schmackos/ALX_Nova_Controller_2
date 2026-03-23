@@ -82,7 +82,7 @@ bool HalDeviceManager::removeDevice(uint8_t slot) {
 
     HalDeviceState oldState = _devices[slot]->_state;
     const char* name = _devices[slot]->getDescriptor().name;
-    _devices[slot]->_ready = false;
+    _devices[slot]->setReady(false);
     _devices[slot]->_state = HAL_STATE_REMOVED;
 
     diag_emit(DIAG_HAL_DEVICE_REMOVED, DIAG_SEV_WARN,
@@ -174,6 +174,12 @@ void HalDeviceManager::initAll() {
         HalDevice* dev = sorted[i];
         if (dev->_state == HAL_STATE_UNKNOWN || dev->_state == HAL_STATE_CONFIGURING) {
             HalDeviceState oldState = dev->_state;
+
+            // 1c: Guard against double-init — deinit first if partially initialized
+            if (oldState == HAL_STATE_CONFIGURING) {
+                dev->deinit();
+            }
+
             dev->_state = HAL_STATE_CONFIGURING;
             if (_stateChangeCb && oldState != HAL_STATE_CONFIGURING) {
                 _stateChangeCb(dev->_slot, oldState, HAL_STATE_CONFIGURING);
@@ -182,14 +188,15 @@ void HalDeviceManager::initAll() {
             HalInitResult result = dev->init();
             if (result.success) {
                 dev->clearLastError();
+                // 1b: Set _ready BEFORE _state so bridge reads correct value on callback
+                dev->setReady(true);
                 dev->_state = HAL_STATE_AVAILABLE;
-                dev->_ready = true;
                 _resetRetryState(dev->_slot);
                 if (_stateChangeCb) _stateChangeCb(dev->_slot, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE);
             } else {
                 dev->setLastError(result);
+                dev->setReady(false);
                 dev->_state = HAL_STATE_ERROR;
-                dev->_ready = false;
                 _retryState[dev->_slot].lastErrorCode = result.errorCode;
                 diag_emit((DiagErrorCode)result.errorCode, DIAG_SEV_ERROR,
                           dev->_slot, dev->getDescriptor().name, result.reason);
@@ -220,8 +227,9 @@ void HalDeviceManager::healthCheckAll() {
                 // Recovery succeeded
                 HalDeviceState oldState = dev->_state;
                 dev->clearLastError();
+                // 1b: Set _ready BEFORE _state so bridge reads correct value on callback
+                dev->setReady(true);
                 dev->_state = HAL_STATE_AVAILABLE;
-                dev->_ready = true;
                 _resetRetryState(static_cast<uint8_t>(i));
                 diag_emit(DIAG_HAL_REINIT_OK, DIAG_SEV_INFO,
                           static_cast<uint8_t>(i), dev->getDescriptor().name, "reinit OK");
@@ -237,12 +245,14 @@ void HalDeviceManager::healthCheckAll() {
                 if (rs.count >= HAL_MAX_RETRIES) {
                     // Exhausted — permanent ERROR
                     HalDeviceState oldState = dev->_state;
+                    dev->setReady(false);
                     dev->_state = HAL_STATE_ERROR;
-                    dev->_ready = false;
                     _faultCount[i]++;
                     diag_emit(DIAG_HAL_REINIT_EXHAUSTED, DIAG_SEV_CRIT,
                               static_cast<uint8_t>(i), dev->getDescriptor().name, "retries exhausted");
-                    if (_stateChangeCb && oldState != HAL_STATE_ERROR) {
+                    // 1a: Always fire callback on ERROR — bridge removal is idempotent.
+                    // Dropping the oldState != ERROR guard prevents orphaned sinks.
+                    if (_stateChangeCb) {
                         _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_ERROR);
                     }
                 } else {
@@ -258,8 +268,8 @@ void HalDeviceManager::healthCheckAll() {
 
         if (!dev->healthCheck()) {
             HalDeviceState oldState = dev->_state;
+            dev->setReady(false);
             dev->_state = HAL_STATE_UNAVAILABLE;
-            dev->_ready = false;
             // Start retry sequence
             HalRetryState& rs = _retryState[i];
             rs.count = 0;

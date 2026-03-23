@@ -286,8 +286,8 @@ HalInitResult HalCustomDevice::init() {
     // Execute Tier 2 init register sequence (I2C bus only)
     // I2S-only devices have no register bus to write to
     if (_descriptor.bus.type == HAL_BUS_I2C && !_runInitSequence()) {
+        setReady(false);
         _state = HAL_STATE_ERROR;
-        _ready = false;
         return hal_init_fail(DIAG_HAL_INIT_FAILED, _lastError);
     }
 
@@ -328,8 +328,8 @@ HalInitResult HalCustomDevice::init() {
     }
 
     _initialized = true;
+    setReady(true);
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
     LOG_I("[HAL:Custom]", "Custom device init: %s", _descriptor.name);
     return hal_init_ok();
 }
@@ -354,7 +354,7 @@ void HalCustomDevice::deinit() {
 
     _initialized = false;
     _inputSourceValid = false;
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
 }
 

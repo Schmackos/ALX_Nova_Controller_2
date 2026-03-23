@@ -196,7 +196,7 @@ void hal_audio_health_check() {
             LOG_W("[HAL:HealthBridge] Audio health bridge: lane %u fault (status=%d) — marking HAL slot %d UNAVAILABLE",
                   (unsigned)lane, health, (int)halSlot);
 
-            dev->_ready  = false;
+            dev->setReady(false);
             HalDeviceState old = dev->_state;
             dev->_state  = HAL_STATE_UNAVAILABLE;
 
@@ -211,7 +211,7 @@ void hal_audio_health_check() {
                 LOG_W("[HAL:HealthBridge] Audio health bridge: lane %u flapping — escalating to ERROR", (unsigned)lane);
                 HalDeviceState old2 = dev->_state;
                 dev->_state = HAL_STATE_ERROR;
-                dev->_ready = false;
+                dev->setReady(false);
 
                 diag_emit(DIAG_HAL_DEVICE_FLAPPING, DIAG_SEV_CRIT,
                           (uint8_t)halSlot, name, "AVAIL/UNAVAIL flapping >2 in 30s");
@@ -227,7 +227,7 @@ void hal_audio_health_check() {
             LOG_I("[HAL:HealthBridge] Audio health bridge: lane %u recovered — marking HAL slot %d AVAILABLE",
                   (unsigned)lane, (int)halSlot);
 
-            dev->_ready  = true;
+            dev->setReady(true);
             HalDeviceState old = dev->_state;
             dev->_state  = HAL_STATE_AVAILABLE;
 
@@ -243,7 +243,7 @@ void hal_audio_health_check() {
                       (unsigned)lane);
                 HalDeviceState old2 = dev->_state;
                 dev->_state = HAL_STATE_ERROR;
-                dev->_ready = false;
+                dev->setReady(false);
 
                 diag_emit(DIAG_HAL_DEVICE_FLAPPING, DIAG_SEV_CRIT,
                           (uint8_t)halSlot, name, "AVAIL/UNAVAIL flapping >2 in 30s");
