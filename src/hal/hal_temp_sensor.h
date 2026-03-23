@@ -16,6 +16,7 @@ public:
     bool healthCheck() override;
 
     float getTemperature() const { return _lastTemp; }
+    float getTemperatureCelsius() const { return _lastTemp; }
 
 private:
     float _lastTemp;
