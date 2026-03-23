@@ -19,8 +19,7 @@ test.describe('@visual Visual Status Bar', () => {
       audioThreshold: -40.0,
       audioLevel: -30.0,
       signalDetected: true,
-      audioSampleRate: 48000,
-      audioVrms: 0.15
+      audioSampleRate: 48000
     });
     await page.waitForTimeout(300);
 

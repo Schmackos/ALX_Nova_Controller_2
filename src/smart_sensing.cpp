@@ -81,22 +81,6 @@ void handleSmartSensingGet() {
     adcObj["vrms"] = adc.vrmsCombined;
     adcObj["dBFS"] = adc.dBFS;
   }
-  // DEPRECATED v1.14: flat REST fields — use adc[] array above
-  static bool _flatFieldWarnLogged = false;
-  if (!_flatFieldWarnLogged) {
-      LOG_W("[Sensing] REST flat fields (audioRms1, etc.) are deprecated — use adc[] array");
-      _flatFieldWarnLogged = true;
-  }
-  doc["audioRms1"] = appState.audio.adc[0].rms1;
-  doc["audioRms2"] = appState.audio.adc[0].rms2;
-  doc["audioVu1"] = appState.audio.adc[0].vu1;
-  doc["audioVu2"] = appState.audio.adc[0].vu2;
-  doc["audioPeak1"] = appState.audio.adc[0].peak1;
-  doc["audioPeak2"] = appState.audio.adc[0].peak2;
-  doc["audioPeak"] = appState.audio.adc[0].peakCombined;
-  doc["audioVrms1"] = appState.audio.adc[0].vrms1;
-  doc["audioVrms2"] = appState.audio.adc[0].vrms2;
-  doc["audioVrms"] = appState.audio.adc[0].vrmsCombined;
 
   String json;
   serializeJson(doc, json);
@@ -467,8 +451,6 @@ void sendSmartSensingStateInternal() {
   doc["audioLevel"] = appState.audio.level_dBFS;
   doc["signalDetected"] = (_smoothedAudioLevel >= appState.audio.threshold_dBFS);
   doc["audioSampleRate"] = appState.audio.sampleRate;
-  // DEPRECATED v1.14: use per-lane adc[] array
-  doc["audioVrms"] = appState.audio.adc[0].vrmsCombined;
 
   String json;
   serializeJson(doc, json);
