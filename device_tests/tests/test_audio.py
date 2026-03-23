@@ -93,3 +93,28 @@ class TestAudio:
         assert isinstance(data, (dict, list)), (
             "I2S port detail response has unexpected type"
         )
+
+    def test_smartsensing_state(self, api):
+        """Smart sensing endpoint returns valid amplifier/ADC state."""
+        resp = api.get("/api/smartsensing")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("success") is True, f"smartsensing success=false: {data}"
+        assert "mode" in data, f"smartsensing missing 'mode': {data.keys()}"
+        assert data["mode"] in ("always_on", "always_off", "smart_auto"), (
+            f"Unexpected mode: {data['mode']}"
+        )
+        assert "amplifierState" in data, "smartsensing missing 'amplifierState'"
+        assert "audioLevel" in data, "smartsensing missing 'audioLevel'"
+        assert "numAdcsDetected" in data, "smartsensing missing 'numAdcsDetected'"
+
+    def test_input_names_readable(self, api):
+        """Pipeline input names endpoint returns valid channel name list."""
+        resp = api.get("/api/inputnames")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("success") is True, f"inputnames success=false: {data}"
+        assert "names" in data, f"inputnames missing 'names': {data.keys()}"
+        assert isinstance(data["names"], list), "inputnames 'names' is not a list"
+        assert len(data["names"]) > 0, "inputnames 'names' list is empty"
+        assert "numAdcsDetected" in data, "inputnames missing 'numAdcsDetected'"
