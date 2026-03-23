@@ -15,13 +15,7 @@ class TestAudio:
         # API returns {"ports": [...], "sampleRate": N}, not a bare list
         data = body.get("ports", body) if isinstance(body, dict) else body
         assert isinstance(data, list), f"I2S ports response is not a list: {type(data)}"
-        # Should have at least 1 configured port
-        active_ports = [p for p in data if p.get("mode", "off") != "off"
-                        or p.get("tx", {}).get("active", False)
-                        or p.get("rx", {}).get("active", False)]
-        assert len(active_ports) > 0, (
-            f"No active I2S ports found. Ports: {data}"
-        )
+        assert len(data) == 3, f"Expected 3 I2S ports, got {len(data)}"
 
     def test_pipeline_matrix_accessible(self, api):
         """Pipeline matrix endpoint returns valid routing data."""

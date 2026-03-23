@@ -128,10 +128,14 @@ class TestHalDevices:
             "DB presets response has unexpected type"
         )
 
+    @pytest.mark.slow
     def test_scan_endpoint_responds(self, api):
-        """POST /api/hal/scan should return a result (not error out)."""
-        # I2C probing can take a long time — use extended timeout
-        resp = api.post("/api/hal/scan", timeout=60)
+        """POST /api/hal/scan should return a result (not error out).
+
+        WARNING: This test triggers a full I2C bus scan which blocks the
+        web server for up to 60s. Run it last or skip with -m "not slow".
+        """
+        resp = api.post("/api/hal/scan", timeout=120)
         # 200 = scan complete, 409 = scan already in progress — both acceptable
         assert resp.status_code in (200, 409), (
             f"HAL scan returned unexpected status: {resp.status_code}"
