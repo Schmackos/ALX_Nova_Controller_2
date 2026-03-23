@@ -17,6 +17,9 @@ function loadMqttSettings() {
         document.getElementById('appState.mqttBaseTopic').placeholder = data.defaultBaseTopic || 'ALX/device-serial';
         document.getElementById('mqttDefaultTopic').textContent = data.defaultBaseTopic || 'ALX/{serial}';
         document.getElementById('appState.mqttHADiscovery').checked = data.haDiscovery || false;
+        document.getElementById('appState.mqttUseTls').checked = data.useTls || false;
+        document.getElementById('mqttTlsFields').style.display = (data.useTls || false) ? '' : 'none';
+        document.getElementById('appState.mqttVerifyCert').checked = data.verifyCert || false;
         updateMqttConnectionStatus(data.connected, data.broker, data.port, data.effectiveBaseTopic);
     })
     .catch(err => console.error('Failed to load MQTT settings:', err));
@@ -32,6 +35,7 @@ function updateMqttConnectionStatus(connected, broker, port, baseTopic) {
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
                     <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
+                    ${broker ? `<div class="info-row"><span class="info-label">TLS</span><span class="info-value">${document.getElementById('appState.mqttUseTls').checked ? 'Enabled' : 'Off'}</span></div>` : ''}
                 `;
         currentMqttConnected = true;
     } else if (enabled) {
@@ -78,6 +82,18 @@ function toggleMqttEnabled() {
     });
 }
 
+function toggleMqttTls() {
+    const useTls = document.getElementById('appState.mqttUseTls').checked;
+    document.getElementById('mqttTlsFields').style.display = useTls ? '' : 'none';
+    // Auto-suggest TLS port
+    const portInput = document.getElementById('appState.mqttPort');
+    if (useTls && portInput.value === '1883') {
+        portInput.value = '8883';
+    } else if (!useTls && portInput.value === '8883') {
+        portInput.value = '1883';
+    }
+}
+
 function saveMqttSettings() {
     const settings = {
         broker: document.getElementById('appState.mqttBroker').value,
@@ -85,7 +101,9 @@ function saveMqttSettings() {
         username: document.getElementById('appState.mqttUsername').value,
         password: document.getElementById('appState.mqttPassword').value,
         baseTopic: document.getElementById('appState.mqttBaseTopic').value,
-        haDiscovery: document.getElementById('appState.mqttHADiscovery').checked
+        haDiscovery: document.getElementById('appState.mqttHADiscovery').checked,
+        useTls: document.getElementById('appState.mqttUseTls').checked,
+        verifyCert: document.getElementById('appState.mqttVerifyCert').checked
     };
 
     apiFetch('/api/mqtt', {

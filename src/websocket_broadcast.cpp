@@ -646,6 +646,8 @@ void sendMqttSettingsState() {
   doc["hasPassword"] = (appState.mqtt.password.length() > 0);
   doc["baseTopic"] = appState.mqtt.baseTopic;
   doc["haDiscovery"] = appState.mqtt.haDiscovery;
+  doc["useTls"] = appState.mqtt.useTls;
+  doc["verifyCert"] = appState.mqtt.verifyCert;
   doc["connected"] = appState.mqtt.connected;
   String json;
   serializeJson(doc, json);

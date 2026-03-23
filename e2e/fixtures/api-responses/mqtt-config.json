@@ -6,5 +6,7 @@
   "hasPassword": false,
   "baseTopic": "alx-nova",
   "haDiscovery": true,
+  "useTls": false,
+  "verifyCert": false,
   "connected": true
 }

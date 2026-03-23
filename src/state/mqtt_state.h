@@ -12,6 +12,8 @@ struct MqttState {
   String password;
   String baseTopic;
   bool haDiscovery = false;
+  bool useTls = false;       // Enable TLS encryption for MQTT broker connection
+  bool verifyCert = false;   // Verify broker certificate (requires public CA; disable for self-signed)
   unsigned long lastReconnect = 0;
   bool connected = false;
   unsigned long lastPublish = 0;

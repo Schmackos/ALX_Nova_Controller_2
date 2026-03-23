@@ -302,6 +302,7 @@
     "loadMqttSettings": "readonly",
     "updateMqttConnectionStatus": "readonly",
     "toggleMqttEnabled": "readonly",
+    "toggleMqttTls": "readonly",
     "saveMqttSettings": "readonly",
     "toggleAutoAP": "readonly",
     "handlePhysicalResetProgress": "readonly",

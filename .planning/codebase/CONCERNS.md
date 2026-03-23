@@ -64,6 +64,12 @@
 
 ## Security Considerations
 
+**MQTT Plaintext Transport — TLS Support Added:**
+✅ RESOLVED (2026-03-23): Optional TLS transport via `WiFiClientSecure` with heap-guarded setup (50KB min, 65KB for cert validation). `useTls` + `verifyCert` toggles in MqttState, REST API, WebSocket broadcast, web UI, and settings export/import. `setInsecure()` mode for self-signed brokers. Reuses `GITHUB_ROOT_CA` from `ota_certs.h`. Default: TLS off (backward compatible). Web UI auto-suggests port 8883 when TLS enabled.
+- Issue: MQTT credentials (username/password) and all telemetry/commands sent over plaintext TCP. Network observers could sniff credentials and inject device control commands
+- Files: `src/main.cpp` (WiFiClientSecure global), `src/mqtt_handler.cpp` (setupMqtt TLS logic), `src/state/mqtt_state.h` (useTls, verifyCert fields), `src/globals.h` (extern declarations)
+- Impact: Resolved — users can now enable TLS encryption for MQTT broker connections with optional certificate validation
+
 **PBKDF2 Password Hashing — Automatic Migration Required:**
 - Risk: Legacy accounts use 10,000 PBKDF2 iterations (`p1:` prefix) or plain SHA256 hash. While newer accounts use 50,000 iterations (`p2:` prefix), legacy hashes are slower to crack but still weaker
 - Files: `src/auth_handler.cpp` (lines 35, 100+, auto-migration logic), `src/config.h` (PBKDF2_ITERATIONS constant = 50000)

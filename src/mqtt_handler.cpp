@@ -12,6 +12,7 @@
 #include "websocket_handler.h"
 #include "wifi_manager.h"
 #include "ota_updater.h"
+#include "ota_certs.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #endif
@@ -56,6 +57,8 @@ bool loadMqttSettings() {
   String line5 = file.readStringUntil('\n'); // password
   String line6 = file.readStringUntil('\n'); // base topic
   String line7 = file.readStringUntil('\n'); // HA discovery
+  String line8 = file.readStringUntil('\n'); // useTls
+  String line9 = file.readStringUntil('\n'); // verifyCert
   file.close();
 
   line1.trim();
@@ -65,6 +68,8 @@ bool loadMqttSettings() {
   line5.trim();
   line6.trim();
   line7.trim();
+  line8.trim();
+  line9.trim();
 
   if (line1.length() > 0) {
     appState.mqtt.enabled = (line1.toInt() != 0);
@@ -97,8 +102,16 @@ bool loadMqttSettings() {
     appState.mqtt.haDiscovery = (line7.toInt() != 0);
   }
 
+  if (line8.length() > 0) {
+    appState.mqtt.useTls = (line8.toInt() != 0);
+  }
+
+  if (line9.length() > 0) {
+    appState.mqtt.verifyCert = (line9.toInt() != 0);
+  }
+
   LOG_I("[MQTT] Settings loaded - Enabled: %s, Broker: %s:%d", appState.mqtt.enabled ? "true" : "false", appState.mqtt.broker.c_str(), appState.mqtt.port);
-  LOG_I("[MQTT] Base Topic: %s, HA Discovery: %s", appState.mqtt.baseTopic.c_str(), appState.mqtt.haDiscovery ? "true" : "false");
+  LOG_I("[MQTT] Base Topic: %s, HA Discovery: %s, TLS: %s", appState.mqtt.baseTopic.c_str(), appState.mqtt.haDiscovery ? "true" : "false", appState.mqtt.useTls ? "true" : "false");
 
   return true;
 }
@@ -118,6 +131,8 @@ void saveMqttSettings() {
   file.println(appState.mqtt.password);
   file.println(appState.mqtt.baseTopic);
   file.println(appState.mqtt.haDiscovery ? "1" : "0");
+  file.println(appState.mqtt.useTls ? "1" : "0");
+  file.println(appState.mqtt.verifyCert ? "1" : "0");
   file.close();
 
   LOG_I("[MQTT] Settings saved to LittleFS");
@@ -856,7 +871,38 @@ void setupMqtt() {
   LOG_I("[MQTT] Base Topic: %s", appState.mqtt.baseTopic.c_str());
   LOG_I("[MQTT] HA Discovery: %s", appState.mqtt.haDiscovery ? "enabled" : "disabled");
 
+  // Configure TLS or plaintext transport
+#ifndef NATIVE_TEST
+  if (appState.mqtt.useTls) {
+    uint32_t maxBlock = ESP.getMaxAllocHeap();
+    if (maxBlock < 50000) {
+      LOG_E("[MQTT] Heap too low for TLS (%lu bytes), falling back to plaintext", (unsigned long)maxBlock);
+      mqttWifiClient.setTimeout(MQTT_SOCKET_TIMEOUT_MS);
+      mqttClient.setClient(mqttWifiClient);
+    } else {
+      if (appState.mqtt.verifyCert && maxBlock >= 65000) {
+        mqttWifiClientSecure.setCACert(GITHUB_ROOT_CA);
+        LOG_I("[MQTT] TLS enabled with certificate validation");
+      } else {
+        mqttWifiClientSecure.setInsecure();
+        if (appState.mqtt.verifyCert) {
+          LOG_W("[MQTT] TLS enabled but heap low (%lu bytes), skipping cert validation", (unsigned long)maxBlock);
+        } else {
+          LOG_I("[MQTT] TLS enabled without certificate validation (self-signed broker)");
+        }
+      }
+      mqttWifiClientSecure.setTimeout(MQTT_SOCKET_TIMEOUT_MS);
+      mqttClient.setClient(mqttWifiClientSecure);
+      LOG_I("[MQTT] Using secure connection (port %d)", appState.mqtt.port);
+    }
+  } else {
+    mqttWifiClient.setTimeout(MQTT_SOCKET_TIMEOUT_MS);
+    mqttClient.setClient(mqttWifiClient);
+  }
+#else
   mqttWifiClient.setTimeout(MQTT_SOCKET_TIMEOUT_MS);
+#endif
+
   mqttClient.setServer(appState.mqtt.broker.c_str(), appState.mqtt.port);
   mqttClient.setCallback(mqttCallback);
   mqttClient.setBufferSize(1024); // Increase buffer for HA discovery payloads
@@ -887,6 +933,24 @@ void mqttReconnect() {
   // Pre-establish TCP connection with 1s timeout (default is 3s).
   // If the broker is unreachable this limits the main loop block to ~1s.
   // PubSubClient.connect() will reuse the existing TCP connection.
+  // For TLS connections, use the secure client; plaintext uses the plain client.
+#ifndef NATIVE_TEST
+  bool tcpConnected = appState.mqtt.useTls
+      ? mqttWifiClientSecure.connected()
+      : mqttWifiClient.connected();
+  if (!tcpConnected) {
+    bool tcpOk = appState.mqtt.useTls
+        ? mqttWifiClientSecure.connect(appState.mqtt.broker.c_str(), appState.mqtt.port, 1000)
+        : mqttWifiClient.connect(appState.mqtt.broker.c_str(), appState.mqtt.port, 1000);
+    if (!tcpOk) {
+      LOG_W("[MQTT] TCP connect timeout (1s) to %s:%d", appState.mqtt.broker.c_str(), appState.mqtt.port);
+      appState.mqtt.connected = false;
+      appState.increaseMqttBackoff();
+      LOG_W("[MQTT] Next retry in %lums", appState.mqttBackoffDelay);
+      return;
+    }
+  }
+#else
   if (!mqttWifiClient.connected()) {
     if (!mqttWifiClient.connect(appState.mqtt.broker.c_str(), appState.mqtt.port, 1000)) {
       LOG_W("[MQTT] TCP connect timeout (1s) to %s:%d", appState.mqtt.broker.c_str(), appState.mqtt.port);
@@ -896,6 +960,7 @@ void mqttReconnect() {
       return;
     }
   }
+#endif
 
   String clientId = getMqttDeviceId();
   String lwt = getEffectiveMqttBaseTopic() + "/status";
@@ -982,6 +1047,8 @@ void handleMqttGet() {
   doc["effectiveBaseTopic"] = getEffectiveMqttBaseTopic();
   doc["defaultBaseTopic"] = String("ALX/") + appState.general.deviceSerialNumber;
   doc["haDiscovery"] = appState.mqtt.haDiscovery;
+  doc["useTls"] = appState.mqtt.useTls;
+  doc["verifyCert"] = appState.mqtt.verifyCert;
 
   // Status
   doc["connected"] = appState.mqtt.connected;
@@ -1102,6 +1169,27 @@ void handleMqttUpdate() {
       if (newHADiscovery && mqttClient.connected()) {
         publishHADiscovery();
       }
+    }
+  }
+
+  // Update TLS settings
+  if (doc["useTls"].is<bool>()) {
+    bool newUseTls = doc["useTls"].as<bool>();
+    if (appState.mqtt.useTls != newUseTls) {
+      appState.mqtt.useTls = newUseTls;
+      settingsChanged = true;
+      needReconnect = true;
+      LOG_I("[MQTT] TLS %s", newUseTls ? "enabled" : "disabled");
+    }
+  }
+
+  if (doc["verifyCert"].is<bool>()) {
+    bool newVerifyCert = doc["verifyCert"].as<bool>();
+    if (appState.mqtt.verifyCert != newVerifyCert) {
+      appState.mqtt.verifyCert = newVerifyCert;
+      settingsChanged = true;
+      needReconnect = true;
+      LOG_I("[MQTT] Certificate validation %s", newVerifyCert ? "enabled" : "disabled");
     }
   }
 

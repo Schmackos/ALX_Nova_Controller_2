@@ -165,6 +165,13 @@
                 document.getElementById('appState.mqttUsername').value = data.username || '';
                 document.getElementById('appState.mqttBaseTopic').value = data.baseTopic || '';
                 document.getElementById('appState.mqttHADiscovery').checked = data.haDiscovery || false;
+                if (data.useTls !== undefined) {
+                    document.getElementById('appState.mqttUseTls').checked = data.useTls;
+                    document.getElementById('mqttTlsFields').style.display = data.useTls ? '' : 'none';
+                }
+                if (data.verifyCert !== undefined) {
+                    document.getElementById('appState.mqttVerifyCert').checked = data.verifyCert;
+                }
                 updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
             } else if (data.type === 'audioLevels') {
                 if (!validateWsMessage(data, ['adc'])) return;
