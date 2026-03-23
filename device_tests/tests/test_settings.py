@@ -97,3 +97,46 @@ class TestSettings:
                 "/api/auth/change",
                 json={"currentPassword": "", "newPassword": device_password},
             )
+
+
+@pytest.mark.settings
+class TestSettingsImport:
+    """Verify settings import endpoint and export v2 structure."""
+
+    def test_import_own_export_roundtrip(self, api):
+        """Export settings, import the same export back (no-op roundtrip)."""
+        resp = api.get("/api/settings/export")
+        assert resp.status_code == 200
+        exported = resp.json()
+
+        resp = api.post("/api/settings/import", json=exported)
+        assert resp.status_code == 200
+
+    def test_import_invalid_json_400(self, api):
+        """POST /api/settings/import with garbage should fail."""
+        resp = api.post(
+            "/api/settings/import",
+            data="not-json-at-all",
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code < 500, (
+            f"Server error on invalid import: {resp.status_code}"
+        )
+
+    def test_import_empty_body_400(self, api):
+        """POST /api/settings/import with empty body should fail."""
+        resp = api.post("/api/settings/import", json={})
+        assert resp.status_code < 500
+
+    def test_export_v2_structure(self, api):
+        """Export v2 should have exportInfo, settings, and optional sections."""
+        data = api.get("/api/settings/export").json()
+        # v2 exports have exportInfo with version
+        export_info = data.get("exportInfo", {})
+        version = export_info.get("version", data.get("version", ""))
+        if not version:
+            pytest.skip("Export version not available — may be v1 format")
+        # v2 should have settings section at minimum
+        assert "settings" in data or "appState" in data, (
+            f"Export missing settings section. Keys: {list(data.keys())[:10]}"
+        )

@@ -7,3 +7,6 @@ pyserial>=3.5
 
 # HTTP client for REST API testing
 requests>=2.31
+
+# WebSocket client for WS protocol testing
+websocket-client>=1.6
