@@ -11280,10 +11280,7 @@ function toggleAutoAP() {
                 const el = document.getElementById('audioLevel');
                 if (el) el.textContent = data.audioLevel.toFixed(1) + ' dBFS';
             }
-            if (data.audioVrms !== undefined) {
-                const el = document.getElementById('audioVrms');
-                if (el) el.textContent = data.audioVrms.toFixed(3) + ' V';
-            }
+            // audioVrms now sourced from hardwareStats.audio.adcs[0].vrms (see 24-hardware-stats.js)
             const timerDisplay = document.getElementById('timerDisplay');
             const timerValue = document.getElementById('timerValue');
             if (timerDisplay && timerValue) {
@@ -12516,6 +12513,8 @@ function initFirmwareDragDrop() {
                         document.getElementById('adcI2sErrors').textContent = adcs[0].i2sErrors !== undefined ? adcs[0].i2sErrors : '--';
                         document.getElementById('adcConsecutiveZeros').textContent = adcs[0].consecutiveZeros !== undefined ? adcs[0].consecutiveZeros : '--';
                         document.getElementById('adcTotalBuffers').textContent = adcs[0].totalBuffers !== undefined ? adcs[0].totalBuffers : '--';
+                        var vrmsEl = document.getElementById('audioVrms');
+                        if (vrmsEl && adcs[0].vrms !== undefined) vrmsEl.textContent = adcs[0].vrms.toFixed(3) + ' V';
                         var snr0 = document.getElementById('audioSnr0');
                         if (snr0 && adcs[0].snrDb !== undefined) snr0.textContent = adcs[0].snrDb.toFixed(1);
                         var sfdr0 = document.getElementById('audioSfdr0');

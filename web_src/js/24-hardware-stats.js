@@ -245,6 +245,8 @@
                         document.getElementById('adcI2sErrors').textContent = adcs[0].i2sErrors !== undefined ? adcs[0].i2sErrors : '--';
                         document.getElementById('adcConsecutiveZeros').textContent = adcs[0].consecutiveZeros !== undefined ? adcs[0].consecutiveZeros : '--';
                         document.getElementById('adcTotalBuffers').textContent = adcs[0].totalBuffers !== undefined ? adcs[0].totalBuffers : '--';
+                        var vrmsEl = document.getElementById('audioVrms');
+                        if (vrmsEl && adcs[0].vrms !== undefined) vrmsEl.textContent = adcs[0].vrms.toFixed(3) + ' V';
                         var snr0 = document.getElementById('audioSnr0');
                         if (snr0 && adcs[0].snrDb !== undefined) snr0.textContent = adcs[0].snrDb.toFixed(1);
                         var sfdr0 = document.getElementById('audioSfdr0');

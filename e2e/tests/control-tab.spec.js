@@ -31,7 +31,6 @@ test('smartSensing WS update changes amp status display', async ({ connectedPage
     amplifierState: true,
     signalDetected: true,
     audioLevel: -20.0,
-    audioVrms: 0.5,
     mode: 'smart_auto',
     timerDuration: 15,
     audioThreshold: -60,

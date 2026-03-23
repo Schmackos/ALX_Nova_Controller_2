@@ -157,8 +157,7 @@ function buildSmartSensing(overrides = {}) {
     audioThreshold: -40.0,
     audioLevel: -80.0,
     signalDetected: false,
-    audioSampleRate: 48000,
-    audioVrms: 0.0
+    audioSampleRate: 48000
   }, overrides);
 }
 

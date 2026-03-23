@@ -62,10 +62,7 @@
                 const el = document.getElementById('audioLevel');
                 if (el) el.textContent = data.audioLevel.toFixed(1) + ' dBFS';
             }
-            if (data.audioVrms !== undefined) {
-                const el = document.getElementById('audioVrms');
-                if (el) el.textContent = data.audioVrms.toFixed(3) + ' V';
-            }
+            // audioVrms now sourced from hardwareStats.audio.adcs[0].vrms (see 24-hardware-stats.js)
             const timerDisplay = document.getElementById('timerDisplay');
             const timerValue = document.getElementById('timerValue');
             if (timerDisplay && timerValue) {

@@ -69,7 +69,7 @@ function handleCommand(type, data) {
       return [];
 
     case 'manualOverride':
-      return [{ type: 'smartSensing', ampOn: !!data.on, signalDetected: false, audioLevel: -96.0, audioVrms: 0.0, sensingMode: 2, timerDuration: 15, audioThreshold: -60, timerActive: false, timerRemaining: 0 }];
+      return [{ type: 'smartSensing', ampOn: !!data.on, signalDetected: false, audioLevel: -96.0, sensingMode: 2, timerDuration: 15, audioThreshold: -60, timerActive: false, timerRemaining: 0 }];
 
     case 'updateSensingMode':
       return [{ type: 'smartSensing', sensingMode: data.mode, ampOn: false, signalDetected: false, audioLevel: -96.0, audioVrms: 0.0, timerDuration: 15, audioThreshold: -60, timerActive: false, timerRemaining: 0 }];

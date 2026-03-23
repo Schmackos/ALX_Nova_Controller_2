@@ -46,11 +46,7 @@
 - Guard mechanism intact: `hal_wifi_sdio_active()` checks `connectSuccess || connecting || activeInterface == NET_WIFI` before scanning Bus 0. Emits `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101). Bus 1 (ONBOARD) and Bus 2 (EXPANSION) always safe.
 
 **Deprecated Flat Fields Divergence:**
-- Symptoms: WS broadcast sends both array (`adcs[]`) and flat (`adc1Enabled`) versions. If one path updates but not the other, frontend sees inconsistent state. Example: DSP bypass array updates but legacy flat field doesn't
-- Files: `src/websocket_broadcast.cpp`, `src/smart_sensing.cpp`
-- Trigger: Manual state mutation bypassing the array, or incomplete migration of update logic
-- Workaround: Always check array version in production code. Flat fields are read-only fallback
-- Permanent fix: Remove flat fields entirely (schedule for next major version)
+✅ RESOLVED (2026-03-23): WS flat fields were already removed previously. REST flat fields (`audioRms1`, `audioVrms`, etc.) now also removed from `handleSmartSensingGet()`. WS `audioVrms` convenience field removed — web UI migrated to `hardwareStats.audio.adcs[0].vrms`. `AudioState` struct uses array-only fields. Zero flat field divergence remaining.
 
 **WebSocket Token Pool Exhaustion (16-slot limit):**
 - Symptoms: 17th concurrent WS client cannot authenticate via token — requests hang or 401
