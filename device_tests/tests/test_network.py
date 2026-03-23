@@ -14,14 +14,20 @@ class TestNetwork:
         assert resp.status_code == 200
 
     def test_wifi_status(self, api):
-        """WiFi status endpoint returns valid state."""
-        resp = api.get("/api/wifi/status")
+        """WiFi status endpoint returns valid state.
+
+        The firmware endpoint is ``/api/wifistatus`` (no slash between
+        wifi and status).  The ``mode`` field is lowercase: ``"ap"`` or
+        ``"sta"``.
+        """
+        resp = api.get("/api/wifistatus")
         assert resp.status_code == 200
         data = resp.json()
         # Device should be either connected to a network or in AP mode
         mode = data.get("mode", "")
-        assert mode in ("STA", "AP", "STA+AP", "sta", "ap"), (
-            f"Unexpected WiFi mode: {mode}"
+        assert mode in ("sta", "ap"), (
+            f"Unexpected WiFi mode: '{mode}'. "
+            f"Response keys: {list(data.keys())}"
         )
 
     def test_security_headers_present(self, base_url, auth_session):
