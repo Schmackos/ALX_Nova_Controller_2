@@ -236,6 +236,34 @@ def api(auth_session, base_url, request):
 
 
 # ---------------------------------------------------------------------------
+# WebSocket fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def ws_token(api):
+    """Obtain a one-time WebSocket authentication token (60s TTL)."""
+    resp = api.get("/api/ws-token")
+    assert resp.status_code == 200, f"WS token request failed: {resp.status_code}"
+    data = resp.json()
+    token = data.get("token")
+    assert token, "WS token response missing 'token' field"
+    return token
+
+
+@pytest.fixture
+def ws_client(device_ip, ws_token):
+    """Connected + authenticated WebSocket client.  Auto-closes on teardown."""
+    from utils.ws_client import DeviceWebSocket
+
+    client = DeviceWebSocket(device_ip)
+    client.connect(timeout=10)
+    success = client.authenticate(ws_token, timeout=10)
+    assert success, "WebSocket authentication failed"
+    yield client
+    client.close()
+
+
+# ---------------------------------------------------------------------------
 # Device reboot helper
 # ---------------------------------------------------------------------------
 
