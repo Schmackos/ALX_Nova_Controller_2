@@ -52,9 +52,15 @@ pio test -e native -f test_auth
 
 # Verbose test output
 pio test -e native -v
+
+# Run on-device tests (requires connected ESP32-P4)
+cd device_tests && pytest tests/ --device-port COM8 -v
+
+# Run specific on-device test module
+cd device_tests && pytest tests/test_hal_devices.py -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (~3050 tests across 110 modules). E2E browser tests: 302 tests across 50 Playwright specs. Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_probe_retry`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_hal_es9822pro`, `test_hal_es9843pro`, `test_hal_tdm_deinterleaver`, `test_hal_es9826`, `test_hal_es9821`, `test_hal_es9823pro`, `test_hal_es9820`, `test_hal_es9842pro`, `test_hal_es9840`, `test_hal_es9841`, `test_hal_es9038q2m`, `test_hal_es9039q2m`, `test_hal_es9069q`, `test_hal_es9033q`, `test_hal_es9020_dac`, `test_hal_es9038pro`, `test_hal_es9028pro`, `test_hal_es9039pro`, `test_hal_es9027pro`, `test_hal_es9081`, `test_hal_es9082`, `test_hal_es9017`, `test_hal_tdm_interleaver`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`, `test_heap_monitor`, `test_http_security`, `test_heap_budget`, `test_pipeline_dma_guard`, `test_psram_alloc`, `test_ws_adaptive_rate`, `test_strncpy_safety`, `test_hal_init_result`, `test_hal_atomic_write`, `test_settings_export_v2`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (~3084 tests across 111 modules). E2E browser tests: 302 tests across 50 Playwright specs. Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_probe_retry`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_hal_es9822pro`, `test_hal_es9843pro`, `test_hal_tdm_deinterleaver`, `test_hal_es9826`, `test_hal_es9821`, `test_hal_es9823pro`, `test_hal_es9820`, `test_hal_es9842pro`, `test_hal_es9840`, `test_hal_es9841`, `test_hal_es9038q2m`, `test_hal_es9039q2m`, `test_hal_es9069q`, `test_hal_es9033q`, `test_hal_es9020_dac`, `test_hal_es9038pro`, `test_hal_es9028pro`, `test_hal_es9039pro`, `test_hal_es9027pro`, `test_hal_es9081`, `test_hal_es9082`, `test_hal_es9017`, `test_hal_tdm_interleaver`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`, `test_heap_monitor`, `test_http_security`, `test_heap_budget`, `test_pipeline_dma_guard`, `test_psram_alloc`, `test_ws_adaptive_rate`, `test_strncpy_safety`, `test_hal_init_result`, `test_hal_atomic_write`, `test_settings_export_v2`, `test_health_check`.
 
 ## Architecture
 
@@ -164,6 +170,7 @@ Each subsystem is a separate module in `src/`:
 - **sink_write_utils** — Shared float buffer utilities for all HAL sink drivers: `sink_apply_volume()`, `sink_apply_mute_ramp()` (click-free ramping), `sink_float_to_i2s_int32()` (left-justified conversion for I2S DMA). Lives in `src/sink_write_utils.h/.cpp`
 - **psram_alloc** — Unified PSRAM allocation wrapper with SRAM fallback. `psram_alloc(count, size, label)` attempts PSRAM first, falls back to SRAM with automatic `heap_budget` recording and `DIAG_SYS_PSRAM_ALLOC_FAIL` emission. SRAM fallback is capped at 64KB total (`PSRAM_SRAM_FALLBACK_MAX`) — refuses allocation and emits diagnostic when exceeded. `psram_free(ptr, label)` cleans up. `psram_get_stats()` returns lifetime fallback/failure counts and active byte totals. All ~10 PSRAM allocation sites across the codebase use this wrapper. Lives in `src/psram_alloc.h/.cpp`
 - **psram_api** — REST endpoint `GET /api/psram/status` returning PSRAM health: total, free, usagePercent, fallback/failure counts, warning/critical flags, per-subsystem budget array. Auth-guarded. Registered via `registerPsramApiEndpoints()`. Lives in `src/psram_api.h/.cpp`
+- **health_check** — On-device self-diagnostics: 9 check categories (system, I2C, HAL, I2S, network, MQTT, tasks, storage, audio). Two-phase boot: immediate checks at end of setup(), deferred checks 30s later via flag+poll. Serial output via `LOG_I`/`LOG_W` with `[Health]` prefix. REST: `GET /api/health` (auth required, rate limited). WS broadcast: `healthCheckState` (summary only). Serial command: `HEALTH_CHECK\n`. Lives in `src/health_check.h/.cpp`, REST in `src/health_check_api.cpp`
 - **heap_budget** — Lightweight per-subsystem allocation tracker. Fixed-size array of 32 `HeapBudgetEntry` structs (label, bytes, isPsram). `heap_budget_record()` adds/updates, `heap_budget_remove()` removes entries. No dynamic allocation. Records audio pipeline, DSP, and other subsystem allocations. Exposed via WS `hardwareStats` and REST `/api/diag/snapshot`. Lives in `src/heap_budget.h/.cpp`
 - **websocket subsystem** — Real-time state broadcasting to web clients (port 81, `MAX_WS_CLIENTS=16`). Split across 4 focused files sharing the public API in `websocket_handler.h`:
   - `src/websocket_command.cpp` — WS event handler (`webSocketEvent()`), command dispatch, deferred init state drain
@@ -346,6 +353,18 @@ npx playwright test --debug              # Debug mode with inspector
 - Test tags: `test.describe('@hal @smoke ...', ...)` — filter with `npx playwright test --grep @smoke`
 - API capture: `const cap = captureApiCall(page, '/api/hal/scan', 'POST'); await cap.expectCalled()`
 
+### On-Device Tests (pyserial + pytest)
+Device tests live in `device_tests/` and verify firmware on real ESP32-P4 hardware via serial + network. They use plain pyserial for serial capture and Python requests for REST API smoke tests. Failures auto-create GitHub issues via `gh` CLI when `--create-issues` is passed.
+
+```bash
+cd device_tests
+pip install -r requirements.txt              # First time only
+pytest tests/ --device-port COM8 -v          # Run against connected device
+pytest tests/test_boot_health.py -v          # Single test module
+pytest tests/ --create-issues                # Enable GitHub issue creation
+pytest tests/ --skip-reboot-tests            # Skip destructive reboot tests
+```
+
 ### Mandatory Test Coverage Rules
 
 **Every code change MUST keep tests green.** Before completing any task:
@@ -375,6 +394,16 @@ npx playwright test --debug              # Debug mode with inspector
    - Update `e2e/fixtures/api-responses/` with new/changed response fixtures
    - Add Playwright test if the UI depends on the new endpoint
 
+5. **On-device health check changes** (`src/health_check.cpp`, `device_tests/`):
+   - New HAL driver → add expected device to health check's onboard device list
+   - New REST API endpoint → add to `device_tests/tests/test_network.py` smoke test list
+   - New FreeRTOS task → add to health check's expected task list
+   - New diagnostic subsystem → add health check category if it has a verifiable state
+   - Changed WebSocket protocol → update `device_tests/tests/test_network.py` WS verification
+   - New I2S port usage → update `device_tests/tests/test_audio.py` expected port config
+   - New state in AppState → consider adding health check if it has a pass/fail threshold
+   - New MQTT topic → update `device_tests/tests/test_mqtt.py` if broker-dependent
+
 ### Agent Workflow for Test Maintenance
 
 **Always verify tests after code changes.** Use specialised agents in parallel:
@@ -387,6 +416,7 @@ npx playwright test --debug              # Debug mode with inspector
 | New HAL driver | `hal-driver-scaffold` → `firmware-test-runner` | Scaffold creates test module automatically |
 | New web feature | `web-feature-scaffold` → `test-engineer` | Scaffold creates DOM, then add E2E tests |
 | Bug investigation | `debugger` or `debug` agent | Root cause analysis with test reproduction |
+| New feature with device impact | `firmware-test-runner` + update `device_tests/` | Verify health check covers new hardware state |
 
 **Parallel execution pattern** — when changes span firmware and web UI, launch both in a single message:
 ```
@@ -504,6 +534,7 @@ All modules use `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`) wit
 | `gui_*` | `[GUI]` | Navigation, screen transitions, theme changes |
 | `hal_*` modules | `[HAL]`, `[HAL Discovery]`, `[HAL DB]`, `[HAL API]` | Device lifecycle, discovery, config save/load |
 | `output_dsp` | `[OutputDSP]` | Per-output DSP stage add/remove |
+| `health_check` | `[Health]` | Boot checks (immediate + deferred), periodic re-check (60s), serial command trigger, REST endpoint |
 
 When adding logging to new modules, follow these conventions:
 - Use `LOG_I` for state transitions and significant events (start/stop, connect/disconnect, health changes)
