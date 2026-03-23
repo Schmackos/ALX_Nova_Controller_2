@@ -5557,24 +5557,25 @@ body.night-mode {
         // ===== Session & Authentication =====
         // Cookie is HttpOnly — browser sends it automatically with credentials: 'include'
 
-        // Global fetch wrapper for API calls (handles 401 Unauthorized)
+        // Global fetch wrapper for API calls (handles 401 Unauthorized + 10s timeout)
         async function apiFetch(url, options = {}) {
-            const defaultOptions = {
-                credentials: 'include'
-            };
+            const controller = new AbortController();
+            const timeoutMs = options.timeout || 10000;
+            const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs);
 
             // Merge options with defaults, ensuring headers are properly combined
             const mergedOptions = {
-                ...defaultOptions,
+                credentials: 'include',
                 ...options,
+                signal: controller.signal,
                 headers: {
-                    ...defaultOptions.headers,
                     ...(options.headers || {})
                 }
             };
 
             try {
                 const response = await fetch(url, mergedOptions);
+                clearTimeout(timeoutId);
 
                 if (response.status === 401) {
                     console.warn(`Unauthorized (401) on ${url}. Redirecting...`);
@@ -5610,6 +5611,11 @@ body.night-mode {
                 };
                 return response;
             } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    console.warn('Request timeout:', url);
+                    throw new Error('Request timed out');
+                }
                 console.error(`API Fetch Error [${url}]:`, error);
                 throw error;
             }
@@ -6171,6 +6177,7 @@ body.night-mode {
         function renderInputStrips() {
             var container = document.getElementById('audio-inputs-container');
             if (!container || !audioChannelMap) return;
+            audioTabInitDelegation();  // Ensure delegation is set up when content is rendered
 
             var inputs = audioChannelMap.inputs || [];
             if (container.dataset.rendered === String(inputs.length)) return;  // Already rendered
@@ -6204,19 +6211,19 @@ body.night-mode {
                 html += '  <div class="channel-control-row">';
                 html += '    <label class="channel-control-label">Gain</label>';
                 html += '    <input type="range" class="channel-gain-slider" id="inputGain' + inp.lane + '" min="-72" max="12" step="0.5" value="0"';
-                html += '      oninput="onInputGainChange(' + inp.lane + ',this.value)">';
+                html += '      data-action="input-gain" data-lane="' + inp.lane + '">';
                 html += '    <span class="channel-gain-value" id="inputGainVal' + inp.lane + '">0.0 dB</span>';
                 html += '  </div>';
 
                 // Mute / Phase / Solo buttons
                 html += '  <div class="channel-button-row">';
-                html += '    <button class="channel-btn" id="inputMute' + inp.lane + '" onclick="toggleInputMute(' + inp.lane + ')">Mute</button>';
-                html += '    <button class="channel-btn" id="inputPhase' + inp.lane + '" onclick="toggleInputPhase(' + inp.lane + ')">Phase</button>';
+                html += '    <button class="channel-btn" id="inputMute' + inp.lane + '" data-action="toggle-input-mute" data-lane="' + inp.lane + '">Mute</button>';
+                html += '    <button class="channel-btn" id="inputPhase' + inp.lane + '" data-action="toggle-input-phase" data-lane="' + inp.lane + '">Phase</button>';
                 html += '  </div>';
 
                 // PEQ button
                 html += '  <div class="channel-dsp-row">';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openInputPeq(' + inp.lane + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-input-peq" data-lane="' + inp.lane + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
                 html += '      PEQ';
                 html += '    </button>';
@@ -6233,6 +6240,7 @@ body.night-mode {
         function renderOutputStrips() {
             var container = document.getElementById('audio-outputs-container');
             if (!container || !audioChannelMap) return;
+            audioTabInitDelegation();  // Ensure delegation is set up when content is rendered
 
             var outputs = audioChannelMap.outputs || [];
             if (container.dataset.rendered === String(outputs.length)) return;
@@ -6269,7 +6277,7 @@ body.night-mode {
                     html += '  <div class="channel-control-row">';
                     html += '    <label class="channel-control-label">HW Vol</label>';
                     html += '    <input type="range" class="channel-gain-slider" id="outputHwVol' + out.index + '" min="0" max="100" step="1" value="80"';
-                    html += '      oninput="onOutputHwVolChange(' + out.index + ',this.value)">';
+                    html += '      data-action="output-hw-vol" data-sink="' + out.index + '">';
                     html += '    <span class="channel-gain-value" id="outputHwVolVal' + out.index + '">80%</span>';
                     html += '  </div>';
                 }
@@ -6277,28 +6285,28 @@ body.night-mode {
                 html += '  <div class="channel-control-row">';
                 html += '    <label class="channel-control-label">Gain</label>';
                 html += '    <input type="range" class="channel-gain-slider" id="outputGain' + out.index + '" min="-72" max="12" step="0.5" value="0"';
-                html += '      oninput="onOutputGainChange(' + out.index + ',this.value)">';
+                html += '      data-action="output-gain" data-sink="' + out.index + '">';
                 html += '    <span class="channel-gain-value" id="outputGainVal' + out.index + '">0.0 dB</span>';
                 html += '  </div>';
 
                 // Mute / Phase / Solo
                 html += '  <div class="channel-button-row">';
-                html += '    <button class="channel-btn" id="outputMute' + out.index + '" onclick="toggleOutputMute(' + out.index + ')">' + (hasHwMute ? 'HW Mute' : 'Mute') + '</button>';
-                html += '    <button class="channel-btn" id="outputPhase' + out.index + '" onclick="toggleOutputPhase(' + out.index + ')">Phase</button>';
+                html += '    <button class="channel-btn" id="outputMute' + out.index + '" data-action="toggle-output-mute" data-sink="' + out.index + '">' + (hasHwMute ? 'HW Mute' : 'Mute') + '</button>';
+                html += '    <button class="channel-btn" id="outputPhase' + out.index + '" data-action="toggle-output-phase" data-sink="' + out.index + '">Phase</button>';
                 html += '  </div>';
 
                 // DSP controls
                 html += '  <div class="channel-dsp-section">';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputPeq(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-peq" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
                 html += '      PEQ 10-band</button>';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputCrossover(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-crossover" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>';
                 html += '      Crossover</button>';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputCompressor(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-compressor" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M5,4V7H10.5V19H13.5V7H19V4H5Z"/></svg>';
                 html += '      Compressor</button>';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputLimiter(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-limiter" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2,12A10,10 0 0,1 12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12M4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12M7,12L12,7V17L7,12Z"/></svg>';
                 html += '      Limiter</button>';
 
@@ -6306,7 +6314,7 @@ body.night-mode {
                 html += '    <div class="channel-control-row" style="margin-top:6px;">';
                 html += '      <label class="channel-control-label">Delay</label>';
                 html += '      <input type="number" class="channel-delay-input" id="outputDelay' + out.firstChannel + '" min="0" max="10" step="0.01" value="0.00"';
-                html += '        onchange="onOutputDelayChange(' + out.firstChannel + ',this.value)">';
+                html += '        data-action="output-delay" data-channel="' + out.firstChannel + '">';
                 html += '      <span class="channel-gain-value">ms</span>';
                 html += '    </div>';
                 html += '  </div>';
@@ -6368,7 +6376,7 @@ body.night-mode {
                     var active = gain > 0.0001 || gain < -0.0001;
                     var displayVal = active ? (gain >= 1.0 ? '+' + (20 * Math.log10(gain)).toFixed(1) : (20 * Math.log10(Math.max(gain, 0.0001))).toFixed(1)) : '--';
                     var cellClass = 'matrix-cell' + (active ? ' matrix-active' : '');
-                    html += '<td class="' + cellClass + '" data-out="' + col + '" data-in="' + row + '" onclick="onMatrixCellClick(' + col + ',' + row + ')">';
+                    html += '<td class="' + cellClass + '" data-out="' + col + '" data-in="' + row + '" data-action="matrix-cell">';
                     html += displayVal;
                     html += '</td>';
                 }
@@ -6378,10 +6386,10 @@ body.night-mode {
 
             // Quick presets
             html += '<div class="matrix-presets">';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixPreset1to1()">1:1 Pass</button>';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixPresetClear()">Clear All</button>';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixSave()">Save</button>';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixLoad()">Load</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-preset-1to1">1:1 Pass</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-preset-clear">Clear All</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-save">Save</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-load">Load</button>';
             html += '</div>';
 
             container.innerHTML = html;
@@ -6403,16 +6411,39 @@ body.night-mode {
                 document.body.appendChild(popup);
             }
 
-            popup.innerHTML = '<div class="matrix-gain-popup-inner">' +
+            popup.innerHTML = '<div class="matrix-gain-popup-inner" data-popup-out="' + outCh + '" data-popup-in="' + inCh + '">' +
                 '<label>OUT ' + (outCh + 1) + ' \u2190 IN ' + (inCh + 1) + '</label>' +
-                '<input type="range" id="matrixGainSlider" min="-72" max="12" step="0.5" value="' + currentDb + '" oninput="onMatrixGainSlide(' + outCh + ',' + inCh + ',this.value)">' +
+                '<input type="range" id="matrixGainSlider" min="-72" max="12" step="0.5" value="' + currentDb + '" data-action="matrix-gain-slide" data-out="' + outCh + '" data-in="' + inCh + '">' +
                 '<span id="matrixGainDbVal">' + currentDb + ' dB</span>' +
                 '<div style="display:flex;gap:4px;margin-top:6px;">' +
-                '<button class="btn btn-sm btn-primary" onclick="setMatrixGainDb(' + outCh + ',' + inCh + ',0);closeMatrixPopup()">0 dB</button>' +
-                '<button class="btn btn-sm btn-secondary" onclick="setMatrixGainDb(' + outCh + ',' + inCh + ',-72);closeMatrixPopup()">Off</button>' +
-                '<button class="btn btn-sm btn-secondary" onclick="closeMatrixPopup()">Close</button>' +
+                '<button class="btn btn-sm btn-primary" data-action="matrix-gain-set0" data-out="' + outCh + '" data-in="' + inCh + '">0 dB</button>' +
+                '<button class="btn btn-sm btn-secondary" data-action="matrix-gain-setoff" data-out="' + outCh + '" data-in="' + inCh + '">Off</button>' +
+                '<button class="btn btn-sm btn-secondary" data-action="matrix-popup-close">Close</button>' +
                 '</div></div>';
             popup.style.display = 'block';
+
+            // Ensure popup has event delegation (popup is outside #audio, so handle on it directly)
+            if (!popup.dataset.delegationInit) {
+                popup.dataset.delegationInit = '1';
+                popup.addEventListener('click', function(e) {
+                    var el = e.target.closest('[data-action]');
+                    if (!el) return;
+                    var action = el.dataset.action;
+                    if (action === 'matrix-gain-set0') {
+                        setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), 0);
+                        closeMatrixPopup();
+                    } else if (action === 'matrix-gain-setoff') {
+                        setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), -72);
+                        closeMatrixPopup();
+                    } else if (action === 'matrix-popup-close') {
+                        closeMatrixPopup();
+                    }
+                });
+                popup.addEventListener('input', function(e) {
+                    var el = e.target.closest('[data-action="matrix-gain-slide"]');
+                    if (el) onMatrixGainSlide(parseInt(el.dataset.out), parseInt(el.dataset.in), el.value);
+                });
+            }
         }
 
         function onMatrixGainSlide(outCh, inCh, dbVal) {
@@ -6439,7 +6470,7 @@ body.night-mode {
                     renderMatrixGrid();
                 }
             })
-            .catch(function() {});
+            .catch(function(err) { console.warn('[Audio] Matrix cell update failed:', err); });
             // Optimistic local update for immediate UI feedback
             if (audioChannelMap && audioChannelMap.matrix && audioChannelMap.matrix[outCh]) {
                 audioChannelMap.matrix[outCh][inCh] = Math.pow(10, db / 20);
@@ -6622,6 +6653,88 @@ body.night-mode {
             }
         }
 
+        // ===== Event Delegation for Audio Tab =====
+        // Handles all data-action events from dynamically generated channel strips and matrix
+        function audioTabInitDelegation() {
+            var audioTab = document.getElementById('audio');
+            if (!audioTab || audioTab.dataset.delegationInit) return;
+            audioTab.dataset.delegationInit = '1';
+
+            // Delegated click handler
+            audioTab.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'toggle-input-mute') {
+                    toggleInputMute(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-input-phase') {
+                    toggleInputPhase(parseInt(el.dataset.lane));
+                } else if (action === 'open-input-peq') {
+                    openInputPeq(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-output-mute') {
+                    toggleOutputMute(parseInt(el.dataset.sink));
+                } else if (action === 'toggle-output-phase') {
+                    toggleOutputPhase(parseInt(el.dataset.sink));
+                } else if (action === 'open-output-peq') {
+                    openOutputPeq(parseInt(el.dataset.channel));
+                } else if (action === 'open-output-crossover') {
+                    openOutputCrossover(parseInt(el.dataset.channel));
+                } else if (action === 'open-output-compressor') {
+                    openOutputCompressor(parseInt(el.dataset.channel));
+                } else if (action === 'open-output-limiter') {
+                    openOutputLimiter(parseInt(el.dataset.channel));
+                } else if (action === 'matrix-cell') {
+                    onMatrixCellClick(parseInt(el.dataset.out), parseInt(el.dataset.in));
+                } else if (action === 'matrix-preset-1to1') {
+                    matrixPreset1to1();
+                } else if (action === 'matrix-preset-clear') {
+                    matrixPresetClear();
+                } else if (action === 'matrix-save') {
+                    matrixSave();
+                } else if (action === 'matrix-load') {
+                    matrixLoad();
+                } else if (action === 'matrix-gain-set0') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), 0);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-gain-setoff') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), -72);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-popup-close') {
+                    closeMatrixPopup();
+                }
+            });
+
+            // Delegated input/change handler for sliders and delay inputs
+            audioTab.addEventListener('input', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+                if (action === 'input-gain') {
+                    onInputGainChange(parseInt(el.dataset.lane), el.value);
+                } else if (action === 'output-gain') {
+                    onOutputGainChange(parseInt(el.dataset.sink), el.value);
+                } else if (action === 'output-hw-vol') {
+                    onOutputHwVolChange(parseInt(el.dataset.sink), el.value);
+                } else if (action === 'matrix-gain-slide') {
+                    onMatrixGainSlide(parseInt(el.dataset.out), parseInt(el.dataset.in), el.value);
+                }
+            });
+
+            audioTab.addEventListener('change', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+                if (action === 'output-delay') {
+                    onOutputDelayChange(parseInt(el.dataset.channel), el.value);
+                }
+            });
+        }
+
+        // Initialize delegation when audio tab is first activated
+        document.addEventListener('DOMContentLoaded', function() {
+            audioTabInitDelegation();
+        });
 
 
 //# sourceURL=05-audio-tab.js
@@ -6763,6 +6876,7 @@ body.night-mode {
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var title = target.type === 'input' ? 'Input PEQ — Lane ' + target.channel : 'Output PEQ — Ch ' + target.channel;
@@ -6770,7 +6884,7 @@ body.night-mode {
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">' + title + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -6795,11 +6909,11 @@ body.night-mode {
             // Actions
             html += '<div class="peq-overlay-actions">';
             if (peqOverlayBands.length < maxBands) {
-                html += '  <button class="btn btn-sm btn-primary" onclick="peqAddBand()">Add Band</button>';
+                html += '  <button class="btn btn-sm btn-primary" data-action="peq-add-band">Add Band</button>';
             }
-            html += '  <button class="btn btn-sm btn-secondary" onclick="peqResetAll()">Reset All</button>';
-            html += '  <button class="btn btn-sm btn-primary" onclick="peqApply()">Apply</button>';
-            html += '  <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-reset-all">Reset All</button>';
+            html += '  <button class="btn btn-sm btn-primary" data-action="peq-apply">Apply</button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '</div>';
 
             overlay.innerHTML = html;
@@ -6818,12 +6932,12 @@ body.night-mode {
             }
             var html = '<tr data-band="' + idx + '">';
             html += '<td>' + (idx + 1) + '</td>';
-            html += '<td><select class="peq-input peq-type-sel" onchange="peqUpdateBand(' + idx + ',\'type\',parseInt(this.value))">' + typeOptions + '</select></td>';
-            html += '<td><input type="number" class="peq-input" value="' + (b.freq || 1000) + '" min="20" max="20000" step="1" onchange="peqUpdateBand(' + idx + ',\'freq\',parseFloat(this.value))"></td>';
-            html += '<td><input type="number" class="peq-input" value="' + (b.gain || 0).toFixed(1) + '" min="-24" max="24" step="0.5" onchange="peqUpdateBand(' + idx + ',\'gain\',parseFloat(this.value))"></td>';
-            html += '<td><input type="number" class="peq-input" value="' + (b.Q || 0.707).toFixed(3) + '" min="0.1" max="30" step="0.01" onchange="peqUpdateBand(' + idx + ',\'Q\',parseFloat(this.value))"></td>';
-            html += '<td><input type="checkbox"' + (b.enabled !== false ? ' checked' : '') + ' onchange="peqUpdateBand(' + idx + ',\'enabled\',this.checked)"></td>';
-            html += '<td><button class="channel-btn" onclick="peqRemoveBand(' + idx + ')" style="padding:2px 6px;min-width:0">';
+            html += '<td><select class="peq-input peq-type-sel" data-action="peq-update-band" data-band="' + idx + '" data-field="type" data-parse="int">' + typeOptions + '</select></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.freq || 1000) + '" min="20" max="20000" step="1" data-action="peq-update-band" data-band="' + idx + '" data-field="freq" data-parse="float"></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.gain || 0).toFixed(1) + '" min="-24" max="24" step="0.5" data-action="peq-update-band" data-band="' + idx + '" data-field="gain" data-parse="float"></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.Q || 0.707).toFixed(3) + '" min="0.1" max="30" step="0.01" data-action="peq-update-band" data-band="' + idx + '" data-field="Q" data-parse="float"></td>';
+            html += '<td><input type="checkbox"' + (b.enabled !== false ? ' checked' : '') + ' data-action="peq-update-band" data-band="' + idx + '" data-field="enabled" data-parse="bool"></td>';
+            html += '<td><button class="channel-btn" data-action="peq-remove-band" data-band="' + idx + '" style="padding:2px 6px;min-width:0">';
             html += '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>';
             html += '</button></td>';
             html += '</tr>';
@@ -7087,11 +7201,12 @@ body.night-mode {
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">Crossover — Ch ' + channel + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -7115,8 +7230,8 @@ body.night-mode {
             html += '    <span class="channel-gain-value">Hz</span>';
             html += '  </div>';
             html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
-            html += '    <button class="btn btn-sm btn-primary" onclick="applyXover(' + channel + ')">Apply</button>';
-            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '    <button class="btn btn-sm btn-primary" data-action="xover-apply" data-channel="' + channel + '">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '  </div>';
             html += '</div>';
 
@@ -7152,11 +7267,12 @@ body.night-mode {
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">Compressor — Ch ' + channel + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -7168,8 +7284,8 @@ body.night-mode {
             html += peqControlRow('Knee', 'compKnee', 0, 20, 6, 0.5, 'dB');
             html += peqControlRow('Makeup', 'compMakeup', 0, 24, 0, 0.5, 'dB');
             html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
-            html += '    <button class="btn btn-sm btn-primary" onclick="applyCompressor(' + channel + ')">Apply</button>';
-            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '    <button class="btn btn-sm btn-primary" data-action="compressor-apply" data-channel="' + channel + '">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '  </div>';
             html += '</div>';
 
@@ -7208,11 +7324,12 @@ body.night-mode {
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">Limiter — Ch ' + channel + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -7221,8 +7338,8 @@ body.night-mode {
             html += peqControlRow('Attack', 'limAttack', 0.01, 50, 0.1, 0.01, 'ms');
             html += peqControlRow('Release', 'limRelease', 1, 1000, 50, 1, 'ms');
             html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
-            html += '    <button class="btn btn-sm btn-primary" onclick="applyLimiter(' + channel + ')">Apply</button>';
-            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '    <button class="btn btn-sm btn-primary" data-action="limiter-apply" data-channel="' + channel + '">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '  </div>';
             html += '</div>';
 
@@ -7247,9 +7364,96 @@ body.night-mode {
         function peqControlRow(label, id, min, max, defaultVal, step, unit) {
             return '<div class="channel-control-row" style="margin-bottom:8px;">' +
                 '<label class="channel-control-label" style="min-width:80px">' + label + '</label>' +
-                '<input type="range" class="channel-gain-slider" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + defaultVal + '" oninput="document.getElementById(\'' + id + 'Val\').textContent=this.value">' +
+                '<input type="range" class="channel-gain-slider" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + defaultVal + '" data-action="peq-control-update" data-val-id="' + id + 'Val">' +
                 '<span class="channel-gain-value" id="' + id + 'Val">' + defaultVal + ' ' + unit + '</span>' +
                 '</div>';
+        }
+
+        // ===== Event Delegation for PEQ Overlay =====
+        // Set up once on the overlay element; handles all dynamic child elements
+        function peqOverlayInitDelegation(overlay) {
+            if (overlay.dataset.delegationInit) return;
+            overlay.dataset.delegationInit = '1';
+
+            overlay.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'peq-close') {
+                    closePeqOverlay();
+                } else if (action === 'peq-add-band') {
+                    peqAddBand();
+                } else if (action === 'peq-reset-all') {
+                    peqResetAll();
+                } else if (action === 'peq-apply') {
+                    peqApply();
+                } else if (action === 'peq-remove-band') {
+                    peqRemoveBand(parseInt(el.dataset.band));
+                } else if (action === 'xover-apply') {
+                    applyXover(parseInt(el.dataset.channel));
+                } else if (action === 'compressor-apply') {
+                    applyCompressor(parseInt(el.dataset.channel));
+                } else if (action === 'limiter-apply') {
+                    applyLimiter(parseInt(el.dataset.channel));
+                } else if (action === 'matrix-gain-set0') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), 0);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-gain-setoff') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), -72);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-popup-close') {
+                    closeMatrixPopup();
+                }
+            });
+
+            overlay.addEventListener('change', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'peq-update-band') {
+                    var bandIdx = parseInt(el.dataset.band);
+                    var field = el.dataset.field;
+                    var parse = el.dataset.parse;
+                    var value;
+                    if (parse === 'int') {
+                        value = parseInt(el.value);
+                    } else if (parse === 'float') {
+                        value = parseFloat(el.value);
+                    } else if (parse === 'bool') {
+                        value = el.checked;
+                    } else {
+                        value = el.value;
+                    }
+                    peqUpdateBand(bandIdx, field, value);
+                }
+            });
+
+            overlay.addEventListener('input', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'peq-control-update') {
+                    var valEl = document.getElementById(el.dataset.valId);
+                    if (valEl) valEl.textContent = el.value;
+                } else if (action === 'peq-update-band') {
+                    // For number inputs, update in real-time on input too
+                    var bandIdx = parseInt(el.dataset.band);
+                    var field = el.dataset.field;
+                    var parse = el.dataset.parse;
+                    var value;
+                    if (parse === 'int') {
+                        value = parseInt(el.value);
+                    } else if (parse === 'float') {
+                        value = parseFloat(el.value);
+                    } else {
+                        value = el.value;
+                    }
+                    if (!isNaN(value)) peqUpdateBand(bandIdx, field, value);
+                }
+            });
         }
 
 //# sourceURL=06-peq-overlay.js
@@ -8292,6 +8496,7 @@ body.night-mode {
         function renderHalDevices() {
             var container = document.getElementById('hal-device-list');
             if (!container) return;
+            halInitDelegation();  // Ensure delegation is set up when content is rendered
 
             var scanBtn = document.getElementById('hal-rescan-btn');
             if (scanBtn) {
@@ -8369,24 +8574,24 @@ body.night-mode {
             var h = '<div class="card hal-device-card ' + stateClass + (expanded ? ' expanded' : '') + '">';
 
             // Header row - clickable to expand
-            h += '<div class="hal-device-header" onclick="halToggleExpand(' + d.slot + ')">';
+            h += '<div class="hal-device-header" data-action="hal-toggle-expand" data-slot="' + d.slot + '">';
             h += '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="' + ti.icon + '"/></svg>';
             h += '<span class="hal-device-name">' + escapeHtml(displayName) + '</span>';
             if (d.type === 6 && d.temperature !== undefined) {
                 h += '<span class="hal-temp-reading">' + d.temperature.toFixed(1) + ' &deg;C</span>';
             }
             h += '<span class="status-dot status-' + si.cls + '" title="' + si.label + '"></span>';
-            // Icon action buttons — left of toggle, stopPropagation so card doesn't expand
-            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();halStartEdit(' + d.slot + ')" title="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
+            // Icon action buttons — left of toggle, data-stop-propagation so card doesn't expand
+            h += '<button class="hal-icon-btn" data-action="hal-start-edit" data-slot="' + d.slot + '" data-stop-propagation="1" title="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
             if (d.discovery !== 0) {  // Can't remove builtins
-                h += '<button class="hal-icon-btn hal-icon-btn-danger" onclick="event.stopPropagation();halConfirmRemove(' + d.slot + ',\'' + escapeHtml(displayName) + '\')" title="Remove device"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
+                h += '<button class="hal-icon-btn hal-icon-btn-danger" data-action="hal-confirm-remove" data-slot="' + d.slot + '" data-name="' + escapeHtml(displayName) + '" data-stop-propagation="1" title="Remove device"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
             }
-            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();halReinitDevice(' + d.slot + ')" title="Re-initialize"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></button>';
-            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();exportDeviceYaml(' + d.slot + ')" title="Export YAML"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>';
+            h += '<button class="hal-icon-btn" data-action="hal-reinit" data-slot="' + d.slot + '" data-stop-propagation="1" title="Re-initialize"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></button>';
+            h += '<button class="hal-icon-btn" data-action="hal-export-yaml" data-slot="' + d.slot + '" data-stop-propagation="1" title="Export YAML"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>';
             // Enable/disable toggle — visible on card without needing to open edit form
             var togChecked = (d.cfgEnabled !== false) ? 'checked' : '';
-            h += '<label class="hal-enable-toggle" title="' + (d.cfgEnabled !== false ? 'Enabled — click to disable' : 'Disabled — click to enable') + '" onclick="event.stopPropagation()">';
-            h += '<input type="checkbox" ' + togChecked + ' onchange="halToggleDeviceEnabled(' + d.slot + ',this.checked)">';
+            h += '<label class="hal-enable-toggle" title="' + (d.cfgEnabled !== false ? 'Enabled — click to disable' : 'Disabled — click to enable') + '" data-stop-propagation="1">';
+            h += '<input type="checkbox" ' + togChecked + ' data-action="hal-toggle-enabled" data-slot="' + d.slot + '">';
             h += '<span class="hal-toggle-track"></span></label>';
             h += '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="hal-expand-icon' + (expanded ? ' rotated' : '') + '" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
             h += '</div>';
@@ -8482,7 +8687,7 @@ body.night-mode {
             h += '</div>';
 
             if (tips.length > 0) {
-                h += '<div class="hal-error-tips-toggle" tabindex="0" role="button" aria-expanded="false" onclick="halToggleErrorTips(' + d.slot + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();halToggleErrorTips(' + d.slot + ')}">';
+                h += '<div class="hal-error-tips-toggle" tabindex="0" role="button" aria-expanded="false" data-action="hal-toggle-tips" data-slot="' + d.slot + '">';
                 h += '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" class="hal-tips-chevron"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
                 h += ' Troubleshooting tips</div>';
                 h += '<div class="hal-error-tips" id="hal-error-tips-' + d.slot + '" style="display:none">';
@@ -8724,8 +8929,8 @@ body.night-mode {
 
             // Save/Cancel
             h += '<div class="hal-form-buttons">';
-            h += '<button class="btn btn-primary btn-sm" onclick="halSaveConfig(' + d.slot + ')">Save</button>';
-            h += '<button class="btn btn-sm" onclick="halCancelEdit()">Cancel</button>';
+            h += '<button class="btn btn-primary btn-sm" data-action="hal-save-config" data-slot="' + d.slot + '">Save</button>';
+            h += '<button class="btn btn-sm" data-action="hal-cancel-edit">Cancel</button>';
             h += '</div>';
 
             h += '</div>';
@@ -8955,6 +9160,7 @@ body.night-mode {
                 })
                 .catch(function(err) {
                     console.error('Failed to load HAL devices:', err);
+                    showToast('Failed to load device list: ' + err.message, 'error');
                 });
             loadHalSettings();
         }
@@ -8966,7 +9172,7 @@ body.night-mode {
                     var cb = document.getElementById('halAutoDiscovery');
                     if (cb) cb.checked = d.halAutoDiscovery !== false;
                 })
-                .catch(function() {});
+                .catch(function(err) { console.warn('[HAL] Failed to load settings:', err); });
         }
 
         function setHalAutoDiscovery(enabled) {
@@ -9185,7 +9391,7 @@ body.night-mode {
                         var addr = typeof item === 'object' ? (item.address || item.addr || 0) : item;
                         var bus = typeof item === 'object' ? (item.bus !== undefined ? item.bus : 2) : 2;
                         var addrHex = '0x' + addr.toString(16).toUpperCase().padStart(2, '0');
-                        h += '<button class="hal-cc-chip" onclick="halCcSelectAddr(' + addr + ',' + bus + ',this)" data-addr="' + addr + '" data-bus="' + bus + '">';
+                        h += '<button class="hal-cc-chip" data-action="hal-cc-select-addr" data-addr="' + addr + '" data-bus="' + bus + '">';
                         h += addrHex;
                         h += '<span class="hal-cc-chip-bus">Bus ' + bus + '</span>';
                         h += '</button>';
@@ -9258,7 +9464,7 @@ body.night-mode {
             tr.id = 'halCcReg' + idx;
             tr.innerHTML = '<td><input type="text" id="halCcRegAddr' + idx + '" placeholder="0x00" value="0x"></td>' +
                 '<td><input type="text" id="halCcRegVal' + idx + '" placeholder="0x00" value="0x"></td>' +
-                '<td><button class="hal-cc-regdel" onclick="halCcRemoveInitReg(' + idx + ')" title="Remove">&times;</button></td>';
+                '<td><button class="hal-cc-regdel" data-action="hal-cc-remove-reg" data-idx="' + idx + '" title="Remove">&times;</button></td>';
             body.appendChild(tr);
         }
 
@@ -9454,6 +9660,81 @@ body.night-mode {
             var url = 'https://github.com/ALX-Audio/ALX_Nova_Controller_2/issues/new?title=' + title + '&body=' + body + '&labels=custom-device';
             window.open(url, '_blank');
         }
+
+        // ===== Event Delegation for HAL Device List =====
+        // Set up once on the devices tab to handle all dynamically rendered hal cards and custom device UI
+        function halInitDelegation() {
+            var tabEl = document.getElementById('devices');
+            if (!tabEl || tabEl.dataset.halDelegationInit) return;
+            tabEl.dataset.halDelegationInit = '1';
+
+            tabEl.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                // Stop propagation for icon buttons inside headers
+                if (el.dataset.stopPropagation) {
+                    e.stopPropagation();
+                }
+
+                if (action === 'hal-toggle-expand') {
+                    halToggleExpand(parseInt(el.dataset.slot));
+                } else if (action === 'hal-start-edit') {
+                    e.stopPropagation();
+                    halStartEdit(parseInt(el.dataset.slot));
+                } else if (action === 'hal-confirm-remove') {
+                    e.stopPropagation();
+                    halConfirmRemove(parseInt(el.dataset.slot), el.dataset.name);
+                } else if (action === 'hal-reinit') {
+                    e.stopPropagation();
+                    halReinitDevice(parseInt(el.dataset.slot));
+                } else if (action === 'hal-export-yaml') {
+                    e.stopPropagation();
+                    exportDeviceYaml(parseInt(el.dataset.slot));
+                } else if (action === 'hal-save-config') {
+                    halSaveConfig(parseInt(el.dataset.slot));
+                } else if (action === 'hal-cancel-edit') {
+                    halCancelEdit();
+                } else if (action === 'hal-toggle-tips') {
+                    halToggleErrorTips(parseInt(el.dataset.slot));
+                } else if (action === 'hal-cc-select-addr') {
+                    halCcSelectAddr(parseInt(el.dataset.addr), parseInt(el.dataset.bus), el);
+                } else if (action === 'hal-cc-remove-reg') {
+                    halCcRemoveInitReg(parseInt(el.dataset.idx));
+                }
+            });
+
+            // Handle keyboard for tips toggle (accessibility)
+            tabEl.addEventListener('keydown', function(e) {
+                var el = e.target.closest('[data-action="hal-toggle-tips"]');
+                if (!el) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    halToggleErrorTips(parseInt(el.dataset.slot));
+                }
+            });
+
+            // Handle the enable toggle checkbox change (needs to stop propagation on label click)
+            tabEl.addEventListener('change', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                if (el.dataset.action === 'hal-toggle-enabled') {
+                    halToggleDeviceEnabled(parseInt(el.dataset.slot), el.checked);
+                }
+            });
+
+            // Stop propagation on labels with data-stop-propagation so header click-expand doesn't trigger
+            tabEl.addEventListener('click', function(e) {
+                var label = e.target.closest('label[data-stop-propagation]');
+                if (label) e.stopPropagation();
+            }, true);  // capture phase to intercept before the header handler
+        }
+
+        // Initialize delegation on DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', function() {
+            halInitDelegation();
+        });
 
 //# sourceURL=15-hal-devices.js
 

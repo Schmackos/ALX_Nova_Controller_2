@@ -71,6 +71,7 @@
         function renderInputStrips() {
             var container = document.getElementById('audio-inputs-container');
             if (!container || !audioChannelMap) return;
+            audioTabInitDelegation();  // Ensure delegation is set up when content is rendered
 
             var inputs = audioChannelMap.inputs || [];
             if (container.dataset.rendered === String(inputs.length)) return;  // Already rendered
@@ -104,19 +105,19 @@
                 html += '  <div class="channel-control-row">';
                 html += '    <label class="channel-control-label">Gain</label>';
                 html += '    <input type="range" class="channel-gain-slider" id="inputGain' + inp.lane + '" min="-72" max="12" step="0.5" value="0"';
-                html += '      oninput="onInputGainChange(' + inp.lane + ',this.value)">';
+                html += '      data-action="input-gain" data-lane="' + inp.lane + '">';
                 html += '    <span class="channel-gain-value" id="inputGainVal' + inp.lane + '">0.0 dB</span>';
                 html += '  </div>';
 
                 // Mute / Phase / Solo buttons
                 html += '  <div class="channel-button-row">';
-                html += '    <button class="channel-btn" id="inputMute' + inp.lane + '" onclick="toggleInputMute(' + inp.lane + ')">Mute</button>';
-                html += '    <button class="channel-btn" id="inputPhase' + inp.lane + '" onclick="toggleInputPhase(' + inp.lane + ')">Phase</button>';
+                html += '    <button class="channel-btn" id="inputMute' + inp.lane + '" data-action="toggle-input-mute" data-lane="' + inp.lane + '">Mute</button>';
+                html += '    <button class="channel-btn" id="inputPhase' + inp.lane + '" data-action="toggle-input-phase" data-lane="' + inp.lane + '">Phase</button>';
                 html += '  </div>';
 
                 // PEQ button
                 html += '  <div class="channel-dsp-row">';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openInputPeq(' + inp.lane + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-input-peq" data-lane="' + inp.lane + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
                 html += '      PEQ';
                 html += '    </button>';
@@ -133,6 +134,7 @@
         function renderOutputStrips() {
             var container = document.getElementById('audio-outputs-container');
             if (!container || !audioChannelMap) return;
+            audioTabInitDelegation();  // Ensure delegation is set up when content is rendered
 
             var outputs = audioChannelMap.outputs || [];
             if (container.dataset.rendered === String(outputs.length)) return;
@@ -169,7 +171,7 @@
                     html += '  <div class="channel-control-row">';
                     html += '    <label class="channel-control-label">HW Vol</label>';
                     html += '    <input type="range" class="channel-gain-slider" id="outputHwVol' + out.index + '" min="0" max="100" step="1" value="80"';
-                    html += '      oninput="onOutputHwVolChange(' + out.index + ',this.value)">';
+                    html += '      data-action="output-hw-vol" data-sink="' + out.index + '">';
                     html += '    <span class="channel-gain-value" id="outputHwVolVal' + out.index + '">80%</span>';
                     html += '  </div>';
                 }
@@ -177,28 +179,28 @@
                 html += '  <div class="channel-control-row">';
                 html += '    <label class="channel-control-label">Gain</label>';
                 html += '    <input type="range" class="channel-gain-slider" id="outputGain' + out.index + '" min="-72" max="12" step="0.5" value="0"';
-                html += '      oninput="onOutputGainChange(' + out.index + ',this.value)">';
+                html += '      data-action="output-gain" data-sink="' + out.index + '">';
                 html += '    <span class="channel-gain-value" id="outputGainVal' + out.index + '">0.0 dB</span>';
                 html += '  </div>';
 
                 // Mute / Phase / Solo
                 html += '  <div class="channel-button-row">';
-                html += '    <button class="channel-btn" id="outputMute' + out.index + '" onclick="toggleOutputMute(' + out.index + ')">' + (hasHwMute ? 'HW Mute' : 'Mute') + '</button>';
-                html += '    <button class="channel-btn" id="outputPhase' + out.index + '" onclick="toggleOutputPhase(' + out.index + ')">Phase</button>';
+                html += '    <button class="channel-btn" id="outputMute' + out.index + '" data-action="toggle-output-mute" data-sink="' + out.index + '">' + (hasHwMute ? 'HW Mute' : 'Mute') + '</button>';
+                html += '    <button class="channel-btn" id="outputPhase' + out.index + '" data-action="toggle-output-phase" data-sink="' + out.index + '">Phase</button>';
                 html += '  </div>';
 
                 // DSP controls
                 html += '  <div class="channel-dsp-section">';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputPeq(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-peq" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
                 html += '      PEQ 10-band</button>';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputCrossover(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-crossover" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>';
                 html += '      Crossover</button>';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputCompressor(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-compressor" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M5,4V7H10.5V19H13.5V7H19V4H5Z"/></svg>';
                 html += '      Compressor</button>';
-                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputLimiter(' + out.firstChannel + ')">';
+                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-limiter" data-channel="' + out.firstChannel + '">';
                 html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2,12A10,10 0 0,1 12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12M4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12M7,12L12,7V17L7,12Z"/></svg>';
                 html += '      Limiter</button>';
 
@@ -206,7 +208,7 @@
                 html += '    <div class="channel-control-row" style="margin-top:6px;">';
                 html += '      <label class="channel-control-label">Delay</label>';
                 html += '      <input type="number" class="channel-delay-input" id="outputDelay' + out.firstChannel + '" min="0" max="10" step="0.01" value="0.00"';
-                html += '        onchange="onOutputDelayChange(' + out.firstChannel + ',this.value)">';
+                html += '        data-action="output-delay" data-channel="' + out.firstChannel + '">';
                 html += '      <span class="channel-gain-value">ms</span>';
                 html += '    </div>';
                 html += '  </div>';
@@ -268,7 +270,7 @@
                     var active = gain > 0.0001 || gain < -0.0001;
                     var displayVal = active ? (gain >= 1.0 ? '+' + (20 * Math.log10(gain)).toFixed(1) : (20 * Math.log10(Math.max(gain, 0.0001))).toFixed(1)) : '--';
                     var cellClass = 'matrix-cell' + (active ? ' matrix-active' : '');
-                    html += '<td class="' + cellClass + '" data-out="' + col + '" data-in="' + row + '" onclick="onMatrixCellClick(' + col + ',' + row + ')">';
+                    html += '<td class="' + cellClass + '" data-out="' + col + '" data-in="' + row + '" data-action="matrix-cell">';
                     html += displayVal;
                     html += '</td>';
                 }
@@ -278,10 +280,10 @@
 
             // Quick presets
             html += '<div class="matrix-presets">';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixPreset1to1()">1:1 Pass</button>';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixPresetClear()">Clear All</button>';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixSave()">Save</button>';
-            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixLoad()">Load</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-preset-1to1">1:1 Pass</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-preset-clear">Clear All</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-save">Save</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-load">Load</button>';
             html += '</div>';
 
             container.innerHTML = html;
@@ -303,16 +305,39 @@
                 document.body.appendChild(popup);
             }
 
-            popup.innerHTML = '<div class="matrix-gain-popup-inner">' +
+            popup.innerHTML = '<div class="matrix-gain-popup-inner" data-popup-out="' + outCh + '" data-popup-in="' + inCh + '">' +
                 '<label>OUT ' + (outCh + 1) + ' \u2190 IN ' + (inCh + 1) + '</label>' +
-                '<input type="range" id="matrixGainSlider" min="-72" max="12" step="0.5" value="' + currentDb + '" oninput="onMatrixGainSlide(' + outCh + ',' + inCh + ',this.value)">' +
+                '<input type="range" id="matrixGainSlider" min="-72" max="12" step="0.5" value="' + currentDb + '" data-action="matrix-gain-slide" data-out="' + outCh + '" data-in="' + inCh + '">' +
                 '<span id="matrixGainDbVal">' + currentDb + ' dB</span>' +
                 '<div style="display:flex;gap:4px;margin-top:6px;">' +
-                '<button class="btn btn-sm btn-primary" onclick="setMatrixGainDb(' + outCh + ',' + inCh + ',0);closeMatrixPopup()">0 dB</button>' +
-                '<button class="btn btn-sm btn-secondary" onclick="setMatrixGainDb(' + outCh + ',' + inCh + ',-72);closeMatrixPopup()">Off</button>' +
-                '<button class="btn btn-sm btn-secondary" onclick="closeMatrixPopup()">Close</button>' +
+                '<button class="btn btn-sm btn-primary" data-action="matrix-gain-set0" data-out="' + outCh + '" data-in="' + inCh + '">0 dB</button>' +
+                '<button class="btn btn-sm btn-secondary" data-action="matrix-gain-setoff" data-out="' + outCh + '" data-in="' + inCh + '">Off</button>' +
+                '<button class="btn btn-sm btn-secondary" data-action="matrix-popup-close">Close</button>' +
                 '</div></div>';
             popup.style.display = 'block';
+
+            // Ensure popup has event delegation (popup is outside #audio, so handle on it directly)
+            if (!popup.dataset.delegationInit) {
+                popup.dataset.delegationInit = '1';
+                popup.addEventListener('click', function(e) {
+                    var el = e.target.closest('[data-action]');
+                    if (!el) return;
+                    var action = el.dataset.action;
+                    if (action === 'matrix-gain-set0') {
+                        setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), 0);
+                        closeMatrixPopup();
+                    } else if (action === 'matrix-gain-setoff') {
+                        setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), -72);
+                        closeMatrixPopup();
+                    } else if (action === 'matrix-popup-close') {
+                        closeMatrixPopup();
+                    }
+                });
+                popup.addEventListener('input', function(e) {
+                    var el = e.target.closest('[data-action="matrix-gain-slide"]');
+                    if (el) onMatrixGainSlide(parseInt(el.dataset.out), parseInt(el.dataset.in), el.value);
+                });
+            }
         }
 
         function onMatrixGainSlide(outCh, inCh, dbVal) {
@@ -339,7 +364,7 @@
                     renderMatrixGrid();
                 }
             })
-            .catch(function() {});
+            .catch(function(err) { console.warn('[Audio] Matrix cell update failed:', err); });
             // Optimistic local update for immediate UI feedback
             if (audioChannelMap && audioChannelMap.matrix && audioChannelMap.matrix[outCh]) {
                 audioChannelMap.matrix[outCh][inCh] = Math.pow(10, db / 20);
@@ -522,4 +547,86 @@
             }
         }
 
+        // ===== Event Delegation for Audio Tab =====
+        // Handles all data-action events from dynamically generated channel strips and matrix
+        function audioTabInitDelegation() {
+            var audioTab = document.getElementById('audio');
+            if (!audioTab || audioTab.dataset.delegationInit) return;
+            audioTab.dataset.delegationInit = '1';
+
+            // Delegated click handler
+            audioTab.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'toggle-input-mute') {
+                    toggleInputMute(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-input-phase') {
+                    toggleInputPhase(parseInt(el.dataset.lane));
+                } else if (action === 'open-input-peq') {
+                    openInputPeq(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-output-mute') {
+                    toggleOutputMute(parseInt(el.dataset.sink));
+                } else if (action === 'toggle-output-phase') {
+                    toggleOutputPhase(parseInt(el.dataset.sink));
+                } else if (action === 'open-output-peq') {
+                    openOutputPeq(parseInt(el.dataset.channel));
+                } else if (action === 'open-output-crossover') {
+                    openOutputCrossover(parseInt(el.dataset.channel));
+                } else if (action === 'open-output-compressor') {
+                    openOutputCompressor(parseInt(el.dataset.channel));
+                } else if (action === 'open-output-limiter') {
+                    openOutputLimiter(parseInt(el.dataset.channel));
+                } else if (action === 'matrix-cell') {
+                    onMatrixCellClick(parseInt(el.dataset.out), parseInt(el.dataset.in));
+                } else if (action === 'matrix-preset-1to1') {
+                    matrixPreset1to1();
+                } else if (action === 'matrix-preset-clear') {
+                    matrixPresetClear();
+                } else if (action === 'matrix-save') {
+                    matrixSave();
+                } else if (action === 'matrix-load') {
+                    matrixLoad();
+                } else if (action === 'matrix-gain-set0') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), 0);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-gain-setoff') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), -72);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-popup-close') {
+                    closeMatrixPopup();
+                }
+            });
+
+            // Delegated input/change handler for sliders and delay inputs
+            audioTab.addEventListener('input', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+                if (action === 'input-gain') {
+                    onInputGainChange(parseInt(el.dataset.lane), el.value);
+                } else if (action === 'output-gain') {
+                    onOutputGainChange(parseInt(el.dataset.sink), el.value);
+                } else if (action === 'output-hw-vol') {
+                    onOutputHwVolChange(parseInt(el.dataset.sink), el.value);
+                } else if (action === 'matrix-gain-slide') {
+                    onMatrixGainSlide(parseInt(el.dataset.out), parseInt(el.dataset.in), el.value);
+                }
+            });
+
+            audioTab.addEventListener('change', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+                if (action === 'output-delay') {
+                    onOutputDelayChange(parseInt(el.dataset.channel), el.value);
+                }
+            });
+        }
+
+        // Initialize delegation when audio tab is first activated
+        document.addEventListener('DOMContentLoaded', function() {
+            audioTabInitDelegation();
+        });
 

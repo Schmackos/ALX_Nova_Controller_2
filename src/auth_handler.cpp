@@ -563,7 +563,7 @@ bool isDefaultPassword() {
 // Handler: Login
 void handleLogin() {
   if (server.method() != HTTP_POST) {
-    server_send(405, "text/plain", "Method Not Allowed");
+    server_send(405, "application/json", "{\"error\":\"Method not allowed\"}");
     return;
   }
 
@@ -683,7 +683,7 @@ void handleLogin() {
 // Handler: Logout
 void handleLogout() {
   if (server.method() != HTTP_POST) {
-    server_send(405, "text/plain", "Method Not Allowed");
+    server_send(405, "application/json", "{\"error\":\"Method not allowed\"}");
     return;
   }
 
@@ -734,7 +734,7 @@ void handlePasswordChange() {
     return;
 
   if (server.method() != HTTP_POST) {
-    server_send(405, "text/plain", "Method Not Allowed");
+    server_send(405, "application/json", "{\"error\":\"Method not allowed\"}");
     return;
   }
 
