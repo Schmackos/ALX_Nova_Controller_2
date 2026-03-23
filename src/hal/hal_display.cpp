@@ -43,7 +43,7 @@ HalInitResult HalDisplay::init()
     mgr.claimPin(_rst,  HAL_BUS_SPI, 0, _slot);
     mgr.claimPin(_bl,   HAL_BUS_SPI, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:Display] init — ST7735S TFT ready");
     return hal_init_ok();
 }
@@ -57,7 +57,7 @@ void HalDisplay::deinit()
     mgr.releasePin(_dc);
     mgr.releasePin(_rst);
     mgr.releasePin(_bl);
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:Display] deinit — ST7735S TFT removed");
 }

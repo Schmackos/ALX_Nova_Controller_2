@@ -144,7 +144,7 @@ HalInitResult HalEs9826::init() {
     // ---- 9. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9826] Ready (i2s port=%u gain=%ddB filter=%u)",
           port, _gainDb, _filterPreset);
@@ -154,7 +154,7 @@ HalInitResult HalEs9826::init() {
 void HalEs9826::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
     _initialized   = false;
     _inputSrcReady = false;

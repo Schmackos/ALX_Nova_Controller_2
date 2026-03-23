@@ -100,7 +100,7 @@ bool HalTdmInterleaver::init(uint8_t i2sPort) {
 
     _writeIdx    = 0;
     _lastFrames  = 0;
-    _ready       = true;   // Ready as soon as buffers are allocated (TX path, no pre-fill needed)
+    _ready = true;   // Ready as soon as buffers are allocated (TX path, no pre-fill needed)
     _initialized = true;
 
     LOG_I("[HAL:TDMIL] Interleaver ready: port=%u pair=%u bytes each, tdm=%u bytes",
@@ -121,7 +121,7 @@ void HalTdmInterleaver::deinit() {
     }
     psram_free(_tdmBuf, "tdm_il_out");
     _tdmBuf      = nullptr;
-    _ready       = false;
+    _ready = false;
     _initialized = false;
 
     // Release instance slot so another device may claim it

@@ -41,7 +41,7 @@ HalInitResult HalBuzzer::init()
     buzzer_init(_pin);
 
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:Buzzer] init — GPIO%d", _pin);
     return hal_init_ok();
 }
@@ -50,7 +50,7 @@ void HalBuzzer::deinit()
 {
     buzzer_deinit();
     HalDeviceManager::instance().releasePin(_pin);
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:Buzzer] deinit");
 }

@@ -178,7 +178,7 @@ HalInitResult HalEs9082::init() {
     // ---- 15. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9082] Ready (vol=%u%% muted=%d filter=%u sinks=4)",
           _volume, (int)_muted, _filterPreset);
@@ -188,7 +188,7 @@ HalInitResult HalEs9082::init() {
 void HalEs9082::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
 #ifndef NATIVE_TEST
     _writeReg(ES9082_REG_FILTER_MUTE, ES9082_MUTE_BIT);

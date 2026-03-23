@@ -141,7 +141,7 @@ HalInitResult HalEs9033Q::init() {
     // ---- 11. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9033Q] Ready (vol=%u%% muted=%d filter=%u linedrv=%d)",
           _volume, (int)_muted, _filterPreset, (int)_lineDriverEnabled);
@@ -151,7 +151,7 @@ HalInitResult HalEs9033Q::init() {
 void HalEs9033Q::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
     // Mute outputs before disabling
     _writeReg(ES9033Q_REG_VOLUME_L, ES9033Q_VOL_MUTE);

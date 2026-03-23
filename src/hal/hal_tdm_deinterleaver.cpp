@@ -125,7 +125,7 @@ bool HalTdmDeinterleaver::init(uint8_t i2sPort) {
 
     _writeIdx      = 0;
     _lastFrameCount = 0;
-    _ready         = false;
+    _ready = false;
     _initialized   = true;
 
     LOG_I("[HAL:TDM] Deinterleaver ready: port=%u bufs=%u bytes each, raw=%u bytes",
@@ -146,7 +146,7 @@ void HalTdmDeinterleaver::deinit() {
     }
     psram_free(_rawBuf, "tdm_raw");
     _rawBuf      = nullptr;
-    _ready       = false;
+    _ready = false;
     _initialized = false;
 
     // Release the instance slot so another device may claim it

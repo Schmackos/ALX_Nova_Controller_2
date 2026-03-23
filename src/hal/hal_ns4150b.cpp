@@ -54,7 +54,7 @@ HalInitResult HalNs4150b::init()
     digitalWrite(_paPin, LOW);  // Start disabled — DAC readiness gates enable
 #endif
     _enabled = false;
-    _ready = true;
+    setReady(true);
     _state = HAL_STATE_AVAILABLE;
     LOG_I("[HAL:NS4150B] init — amplifier ready on GPIO%d (disabled, awaiting DAC)", _paPin);
     return hal_init_ok();
@@ -66,7 +66,7 @@ void HalNs4150b::deinit()
     digitalWrite(_paPin, LOW);  // Disable amplifier
 #endif
     _enabled = false;
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     HalDeviceManager::instance().releasePin(_paPin);
     LOG_I("[HAL:NS4150B] deinit — amplifier disabled on GPIO%d", _paPin);

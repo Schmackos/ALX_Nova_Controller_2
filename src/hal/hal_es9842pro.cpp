@@ -238,7 +238,7 @@ HalInitResult HalEs9842pro::init() {
     // ---- 12. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9842PRO] Ready — TDM mode, port=%u DIN=GPIO%d gain=%ddB hpf=%d filter=%u",
           port, dinPinRaw, _gainDb, (int)_hpfEnabled, _filterPreset);
@@ -250,7 +250,7 @@ HalInitResult HalEs9842pro::init() {
 void HalEs9842pro::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
 #ifndef NATIVE_TEST
     // Power down: disable TDM output (reg 0x00 = 0x00)

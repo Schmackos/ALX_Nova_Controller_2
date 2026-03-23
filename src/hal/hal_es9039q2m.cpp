@@ -147,7 +147,7 @@ HalInitResult HalEs9039q2m::init() {
     // ---- 12. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9039Q2M] Ready (vol=%u%% muted=%d filter=%u clkGear=0x%02X)",
           _volume, (int)_muted, _filterPreset, clkGear);
@@ -157,7 +157,7 @@ HalInitResult HalEs9039q2m::init() {
 void HalEs9039q2m::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
     // Disable I2S TX and silence the DAC before removal
     _disableI2sTx();

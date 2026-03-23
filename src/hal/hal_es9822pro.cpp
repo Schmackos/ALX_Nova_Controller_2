@@ -241,7 +241,7 @@ HalInitResult HalEs9822pro::init() {
     // ---- 15. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9822PRO] Ready (i2s port=%u gain=%ddB hpf=%d filter=%u)",
           port, _gainDb, (int)_hpfEnabled, _filterPreset);
@@ -251,7 +251,7 @@ HalInitResult HalEs9822pro::init() {
 void HalEs9822pro::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
 #ifndef NATIVE_TEST
     // Power down: disable ADC clocks (reg 0x01 = 0x00)

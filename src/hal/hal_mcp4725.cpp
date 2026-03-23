@@ -48,7 +48,7 @@ HalInitResult HalMcp4725::init()
         _state = HAL_STATE_ERROR;
         return hal_init_fail(DIAG_HAL_INIT_FAILED, "DAC write failed");
     }
-    _ready = true;
+    setReady(true);
     _state = HAL_STATE_AVAILABLE;
     LOG_I("[HAL:MCP4725] init OK — 0x%02X, output at 0V", _i2cAddr);
     return hal_init_ok();
@@ -64,7 +64,7 @@ void HalMcp4725::deinit()
     Wire.endTransmission();
 #endif
     _code  = 0;
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:MCP4725] deinit — 0x%02X", _i2cAddr);
 }
@@ -85,7 +85,7 @@ bool HalMcp4725::healthCheck()
     uint8_t err = Wire.endTransmission();
     if (err != 0) {
         LOG_I("[HAL:MCP4725] healthCheck FAIL — no ACK at 0x%02X", _i2cAddr);
-        _ready = false;
+        setReady(false);
         _state = HAL_STATE_UNAVAILABLE;
         return false;
     }

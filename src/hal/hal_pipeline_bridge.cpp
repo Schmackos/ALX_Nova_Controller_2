@@ -373,7 +373,7 @@ void hal_pipeline_on_device_available(uint8_t slot) {
         if (_halSlotToSinkSlot[slot] < 0) {
             LOG_E("[HAL:Bridge] Sink registration failed for %s (HAL slot %u) — forcing not-ready",
                   name, slot);
-            dev->_ready = false;
+            dev->setReady(false);
         }
     }
     int8_t sinkSlot = _halSlotToSinkSlot[slot]; // Read back mapping (set by activate)
@@ -447,7 +447,7 @@ void hal_pipeline_on_device_available(uint8_t slot) {
 }
 
 // ---------------------------------------------------------------------------
-// on_device_unavailable — transient failure; volatile _ready=false is enough
+// on_device_unavailable — transient failure; volatile setReady(false) is enough
 // ---------------------------------------------------------------------------
 void hal_pipeline_on_device_unavailable(uint8_t slot) {
     if (slot >= HAL_MAX_DEVICES) return;

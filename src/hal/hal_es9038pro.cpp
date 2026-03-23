@@ -179,7 +179,7 @@ HalInitResult HalEs9038pro::init() {
     // ---- 15. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9038PRO] Ready (vol=%u%% muted=%d filter=%u sinks=4)",
           _volume, (int)_muted, _filterPreset);
@@ -189,7 +189,7 @@ HalInitResult HalEs9038pro::init() {
 void HalEs9038pro::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
     // Mute all channels before shutdown
 #ifndef NATIVE_TEST

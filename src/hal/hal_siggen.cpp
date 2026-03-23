@@ -84,7 +84,7 @@ HalInitResult HalSigGen::init() {
     }
     siggen_init(pwmPin);
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:SigGen] Initialized (instance %u, priority %u, pwm=%d)",
           _descriptor.instanceId, _initPriority, pwmPin);
     return hal_init_ok();
@@ -92,7 +92,7 @@ HalInitResult HalSigGen::init() {
 
 void HalSigGen::deinit() {
     siggen_deinit();
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:SigGen] Deinitialized");
 }

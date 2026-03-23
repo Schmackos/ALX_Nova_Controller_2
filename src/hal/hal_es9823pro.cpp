@@ -236,7 +236,7 @@ HalInitResult HalEs9823pro::init() {
     // ---- 14. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9823PRO] Ready (%s i2s port=%u gain=%ddB hpf=%d filter=%u)",
           _isMonolithic ? "ES9823MPRO" : "ES9823PRO",
@@ -247,7 +247,7 @@ HalInitResult HalEs9823pro::init() {
 void HalEs9823pro::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
 #ifndef NATIVE_TEST
     // Power down: disable ADC clocks (reg 0x01 = 0x00)

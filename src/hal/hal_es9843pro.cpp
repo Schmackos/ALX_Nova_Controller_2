@@ -237,7 +237,7 @@ HalInitResult HalEs9843pro::init() {
     // ---- 14. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9843PRO] Ready — TDM mode, port=%u DIN=GPIO%d gain=%ddB hpf=%d filter=%u",
           port, dinPinRaw, _gainDb, (int)_hpfEnabled, _filterPreset);
@@ -249,7 +249,7 @@ HalInitResult HalEs9843pro::init() {
 void HalEs9843pro::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
 #ifndef NATIVE_TEST
     // Power down: disable all ADC channels (reg 0x00 = 0x00)

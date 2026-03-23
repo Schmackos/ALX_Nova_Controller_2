@@ -38,7 +38,7 @@ HalInitResult HalButton::init()
     HalDeviceManager::instance().claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
 
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:Button] init — GPIO%d", _pin);
     return hal_init_ok();
 }
@@ -46,7 +46,7 @@ HalInitResult HalButton::init()
 void HalButton::deinit()
 {
     HalDeviceManager::instance().releasePin(_pin);
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:Button] deinit");
 }

@@ -85,7 +85,7 @@ HalInitResult HalPcm1808::init() {
     _inputSrcReady = true;
 
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:PCM1808] Ready (I2S via i2s_audio_configure_adc, instance %u)",
           _descriptor.instanceId);
@@ -93,7 +93,7 @@ HalInitResult HalPcm1808::init() {
 }
 
 void HalPcm1808::deinit() {
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     _rxHandle = nullptr;
     LOG_I("[HAL:PCM1808] Deinitialized");

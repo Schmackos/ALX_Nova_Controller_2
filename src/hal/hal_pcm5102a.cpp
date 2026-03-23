@@ -89,7 +89,7 @@ HalInitResult HalPcm5102a::init() {
     _i2sTxEnabled = true;
 
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:PCM5102A] Ready (I2S TX enabled, sr=%luHz)", (unsigned long)_sampleRate);
     return hal_init_ok();
@@ -112,7 +112,7 @@ void HalPcm5102a::deinit() {
         _i2sTxEnabled = false;
     }
 
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     _txHandle = nullptr;
     _muteRampState = 1.0f;  // HC-6: Reset mute ramp state on deactivation

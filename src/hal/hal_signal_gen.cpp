@@ -47,7 +47,7 @@ HalInitResult HalSignalGen::init()
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
     siggen_init(_pin);
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:SigGen] init — Signal Generator ready on GPIO%d", _pin);
     return hal_init_ok();
 }
@@ -57,7 +57,7 @@ void HalSignalGen::deinit()
     siggen_deinit();
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.releasePin(_pin);
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:SigGen] deinit — Signal Generator removed");
 }

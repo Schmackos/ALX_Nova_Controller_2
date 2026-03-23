@@ -130,7 +130,7 @@ HalInitResult HalEs9821::init() {
     // ---- 8. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9821] Ready (i2s port=%u filter=%u)", port, _filterPreset);
     return hal_init_ok();
@@ -139,7 +139,7 @@ HalInitResult HalEs9821::init() {
 void HalEs9821::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
     _initialized   = false;
     _inputSrcReady = false;

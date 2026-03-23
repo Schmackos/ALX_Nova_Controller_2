@@ -36,7 +36,7 @@ HalInitResult HalRelay::init()
 #endif
     _enabled = false;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:Relay] init — Amplifier Relay ready on GPIO%d", _pin);
     return hal_init_ok();
 }
@@ -54,7 +54,7 @@ void HalRelay::deinit()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.releasePin(_pin);
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:Relay] deinit — Amplifier Relay removed");
 }

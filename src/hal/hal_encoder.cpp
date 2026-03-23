@@ -42,7 +42,7 @@ HalInitResult HalEncoder::init()
     mgr.claimPin(_pinB,  HAL_BUS_GPIO, 0, _slot);
     mgr.claimPin(_pinSw, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:Encoder] init — Rotary Encoder ready (A=%d, B=%d, SW=%d)", _pinA, _pinB, _pinSw);
     return hal_init_ok();
 }
@@ -53,7 +53,7 @@ void HalEncoder::deinit()
     mgr.releasePin(_pinA);
     mgr.releasePin(_pinB);
     mgr.releasePin(_pinSw);
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:Encoder] deinit — Rotary Encoder removed");
 }

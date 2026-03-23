@@ -141,7 +141,7 @@ HalInitResult HalEs9069Q::init() {
     // ---- 11. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9069Q] Ready (vol=%u%% muted=%d filter=%u mqa=%d)",
           _volume, (int)_muted, _filterPreset, (int)_mqaEnabled);
@@ -151,7 +151,7 @@ HalInitResult HalEs9069Q::init() {
 void HalEs9069Q::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
     // Mute outputs before disabling
     _writeReg(ES9069Q_REG_VOLUME_L, ES9069Q_VOL_MUTE);

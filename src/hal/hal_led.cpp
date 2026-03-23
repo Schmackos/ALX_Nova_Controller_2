@@ -35,7 +35,7 @@ HalInitResult HalLed::init()
     digitalWrite(_pin, LOW);
 #endif
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:LED] init — Status LED ready on GPIO%d", _pin);
     return hal_init_ok();
 }
@@ -51,7 +51,7 @@ void HalLed::deinit()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.releasePin(_pin);
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:LED] deinit — Status LED removed");
 }

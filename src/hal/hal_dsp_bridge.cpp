@@ -29,13 +29,13 @@ HalInitResult HalDspBridge::init() {
     // dsp_pipeline is already initialised by audio_pipeline_init()
     // Just mark ourselves available
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:DspBridge] DSP pipeline bridge ready");
     return hal_init_ok();
 }
 
 void HalDspBridge::deinit() {
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
 }
 

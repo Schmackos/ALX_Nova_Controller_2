@@ -297,7 +297,7 @@ HalInitResult HalEs8311::init() {
     _initialized = true;
     _muted = false;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES8311] Initialization complete — I2S TX port 2 enabled, PA enabled, vol=%d%%", _volume);
     return hal_init_ok();
@@ -329,7 +329,7 @@ void HalEs8311::deinit() {
 #endif
 
     _initialized = false;
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     _muteRampState = 1.0f;  // HC-6: Reset mute ramp state on deactivation
 

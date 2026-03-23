@@ -128,7 +128,7 @@ HalInitResult HalEs9020Dac::init() {
     // ---- 10. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9020] Ready (filter=%u vol=%u mute=%d apll=off)",
           _filterPreset, _volume, (int)_muted);
@@ -138,7 +138,7 @@ HalInitResult HalEs9020Dac::init() {
 void HalEs9020Dac::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
     // Mute output before tearing down
     _writeReg(ES9020_REG_VOLUME, ES9020_VOL_MUTE);

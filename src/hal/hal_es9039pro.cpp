@@ -192,7 +192,7 @@ HalInitResult HalEs9039pro::init() {
     // ---- 15. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
 
     LOG_I("[HAL:ES9039PRO] Ready (%s vol=%u%% muted=%d filter=%u sinks=4)",
           _isMpro ? "MPRO" : "PRO", _volume, (int)_muted, _filterPreset);
@@ -202,7 +202,7 @@ HalInitResult HalEs9039pro::init() {
 void HalEs9039pro::deinit() {
     if (!_initialized) return;
 
-    _ready = false;
+    setReady(false);
 
 #ifndef NATIVE_TEST
     _writeReg(ES9039PRO_REG_FILTER_MUTE, ES9039PRO_MUTE_BIT);

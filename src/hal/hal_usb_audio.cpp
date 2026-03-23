@@ -83,7 +83,7 @@ HalInitResult HalUsbAudio::init() {
     (void)pid;  // Future: pass to TinyUSB descriptor config
 #endif
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     LOG_I("[HAL:USB Audio] Initialized (instance %u, priority %u)",
           _descriptor.instanceId, _initPriority);
     return hal_init_ok();
@@ -93,7 +93,7 @@ void HalUsbAudio::deinit() {
 #ifndef NATIVE_TEST
     usb_audio_deinit();
 #endif
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:USB Audio] Deinitialized");
 }

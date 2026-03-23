@@ -80,7 +80,7 @@ HalInitResult HalTempSensor::init()
         LOG_W("[HAL:TempSensor] init OK but initial read failed: err=0x%x", err);
     }
 
-    _ready = true;
+    setReady(true);
     _state = HAL_STATE_AVAILABLE;
     return hal_init_ok();
 #else
@@ -106,7 +106,7 @@ void HalTempSensor::deinit()
     }
 #endif
 #endif
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     _lastTemp = 0.0f;
 }
@@ -125,7 +125,7 @@ bool HalTempSensor::healthCheck()
 #if CONFIG_IDF_TARGET_ESP32P4
     if (_handle == nullptr) {
         _state = HAL_STATE_UNAVAILABLE;
-        _ready = false;
+        setReady(false);
         return false;
     }
 
@@ -135,7 +135,7 @@ bool HalTempSensor::healthCheck()
     if (err != ESP_OK) {
         LOG_W("[HAL:TempSensor] healthCheck read failed: err=0x%x", err);
         _state = HAL_STATE_UNAVAILABLE;
-        _ready = false;
+        setReady(false);
         return false;
     }
 
@@ -143,13 +143,13 @@ bool HalTempSensor::healthCheck()
     if (temp < -30.0f || temp > 125.0f) {
         LOG_W("[HAL:TempSensor] healthCheck out of range: %.1f C", temp);
         _state = HAL_STATE_UNAVAILABLE;
-        _ready = false;
+        setReady(false);
         return false;
     }
 
     _lastTemp = temp;
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
+    setReady(true);
     return true;
 #else
     return false;
