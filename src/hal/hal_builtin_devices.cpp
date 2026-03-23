@@ -3,6 +3,7 @@
 #include "hal_builtin_devices.h"
 #include "hal_driver_registry.h"
 #include "hal_types.h"
+#include "hal_device_db.h"  // HAL_DB_MAX_ENTRIES for static_assert
 #include "hal_es8311.h"
 #include "hal_pcm5102a.h"
 #include "hal_pcm1808.h"
@@ -194,5 +195,14 @@ void hal_register_builtins() {
     HAL_REGISTER(COMPAT_ES9082,    HAL_DEV_DAC,     0,      factory_es9082);     // HyperStream IV, 120dB, 48-QFN ASP2
     HAL_REGISTER(COMPAT_ES9017,    HAL_DEV_DAC,     0,      factory_es9017);     // HyperStream IV, 120dB, ES9027PRO drop-in
 }
+
+// Compile-time capacity check — fails the build if more drivers are
+// added than the registry/DB can hold, preventing silent runtime overflow.
+// Update HAL_BUILTIN_DRIVER_COUNT when adding new HAL_REGISTER() calls.
+#define HAL_BUILTIN_DRIVER_COUNT 39  // 38 without USB_AUDIO_ENABLED
+static_assert(HAL_BUILTIN_DRIVER_COUNT <= HAL_MAX_DRIVERS,
+              "HAL_BUILTIN_DRIVER_COUNT exceeds HAL_MAX_DRIVERS — increase in hal_types.h");
+static_assert(HAL_BUILTIN_DRIVER_COUNT <= HAL_DB_MAX_ENTRIES,
+              "HAL_BUILTIN_DRIVER_COUNT exceeds HAL_DB_MAX_ENTRIES — increase in hal_device_db.h");
 
 #endif // DAC_ENABLED

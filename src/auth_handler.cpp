@@ -50,11 +50,7 @@ bool timingSafeCompare(const String &a, const String &b) {
   // Length mismatch: still not secret for password hashes (fixed-length hex)
   if (lenA != lenB) return false;
 
-#ifndef NATIVE_TEST
-  // ESP32: use mbedTLS guaranteed constant-time comparison
-  return mbedtls_ct_memcmp(a.c_str(), b.c_str(), lenA) == 0;
-#else
-  // Native tests: volatile XOR fallback (mbedTLS not available)
+  // Constant-time XOR comparison — no dependency on mbedTLS
   volatile uint8_t result = 0;
   const char *pA = a.c_str();
   const char *pB = b.c_str();
@@ -62,7 +58,6 @@ bool timingSafeCompare(const String &a, const String &b) {
     result |= (uint8_t)pA[i] ^ (uint8_t)pB[i];
   }
   return result == 0;
-#endif
 }
 
 // Hash password using SHA256, returns 64-char hex string

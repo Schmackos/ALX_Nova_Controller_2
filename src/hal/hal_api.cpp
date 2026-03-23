@@ -79,7 +79,7 @@ void registerHalApiEndpoints(WebServer& server) {
     // GET /api/hal/devices — list all registered devices
     server.on("/api/hal/devices", HTTP_GET, [&server]() {
         if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
-            server_send(server, 429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
+            server_send(429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
             return;
         }
         JsonDocument doc;

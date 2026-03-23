@@ -209,14 +209,14 @@ HalInitResult HalEs9843pro::init() {
         LOG_W("[HAL:ES9843PRO] No DATA_IN pin configured — set pinData in HAL config");
         // Non-fatal: continue init so I2C registers are programmed.  TDM reads
         // will return 0 frames until the user provides the correct pin and reinits.
-        dinPinRaw = 0;  // I2S_GPIO_UNUSED equivalent for log readability
+        dinPinRaw = 0;  // GPIO_NUM_NC equivalent for log readability
     }
 
 #ifndef NATIVE_TEST
     // Enable I2S TDM RX using port-generic API (4 slots: CH1/CH2/CH3/CH4)
     bool tdmOk = i2s_port_enable_rx((uint8_t)port, I2S_MODE_TDM, 4,
                                      (gpio_num_t)dinPinRaw,
-                                     I2S_GPIO_UNUSED,
+                                     GPIO_NUM_NC,
                                      (gpio_num_t)I2S_BCK_PIN,
                                      (gpio_num_t)I2S_LRC_PIN);
     if (!tdmOk) {

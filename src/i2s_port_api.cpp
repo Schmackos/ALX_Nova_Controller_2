@@ -45,14 +45,14 @@ void registerI2sPortApiEndpoints(WebServer& server) {
     // GET /api/i2s/ports — list all I2S port status (or single port with ?id=N)
     server.on("/api/i2s/ports", HTTP_GET, [&server]() {
         if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
-            server_send(server, 429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
+            server_send(429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
             return;
         }
         // Single-port query
         if (server.hasArg("id")) {
             int id = server.arg("id").toInt();
             if (id < 0 || id >= I2S_PORT_COUNT) {
-                server_send(server, 400, "application/json", "{\"error\":\"Invalid port id\"}");
+                server_send(400, "application/json", "{\"error\":\"Invalid port id\"}");
                 return;
             }
             JsonDocument doc;
@@ -60,7 +60,7 @@ void registerI2sPortApiEndpoints(WebServer& server) {
             _buildPortJson(port, (uint8_t)id);
             String json;
             serializeJson(doc, json);
-            server_send(server, 200, "application/json", json);
+            server_send(200, "application/json", json);
             return;
         }
 
@@ -74,7 +74,7 @@ void registerI2sPortApiEndpoints(WebServer& server) {
         doc["sampleRate"] = i2s_audio_get_sample_rate();
         String json;
         serializeJson(doc, json);
-        server_send(server, 200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     LOG_I("[I2S API] Endpoints registered");

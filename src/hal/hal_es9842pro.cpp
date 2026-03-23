@@ -218,7 +218,7 @@ HalInitResult HalEs9842pro::init() {
 #ifndef NATIVE_TEST
     bool tdmOk = i2s_port_enable_rx((uint8_t)port, I2S_MODE_TDM, 4,
                                      (gpio_num_t)dinPinRaw,
-                                     I2S_GPIO_UNUSED,
+                                     GPIO_NUM_NC,
                                      (gpio_num_t)I2S_BCK_PIN,
                                      (gpio_num_t)I2S_LRC_PIN);
     if (!tdmOk) {

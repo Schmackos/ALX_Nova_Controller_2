@@ -1857,7 +1857,7 @@ I2sPortInfo i2s_port_get_info(uint8_t port) { I2sPortInfo info = {}; info.port =
 
 #endif // CONFIG_IDF_TARGET_ESP32P4
 
-#else
+#ifdef NATIVE_TEST
 // Native test stubs
 static int _nativeNumAdcs = 1;
 void i2s_audio_init() {}
