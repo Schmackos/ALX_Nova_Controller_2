@@ -53,14 +53,14 @@ pio test -e native -f test_auth
 # Verbose test output
 pio test -e native -v
 
-# Run on-device tests (requires connected ESP32-P4)
-cd device_tests && pytest tests/ --device-port COM8 -v
+# Run on-device tests (requires connected ESP32-P4 + TEST_MODE firmware)
+cd device_tests && pytest tests/ --device-port COM8 --device-ip <DEVICE_IP> -m "not slow" -v
 
 # Run specific on-device test module
-cd device_tests && pytest tests/test_hal_devices.py -v
+cd device_tests && pytest tests/test_hal_devices.py --device-port COM8 --device-ip <DEVICE_IP> -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (~3084 tests across 111 modules). E2E browser tests: 302 tests across 50 Playwright specs. Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_probe_retry`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_hal_es9822pro`, `test_hal_es9843pro`, `test_hal_tdm_deinterleaver`, `test_hal_es9826`, `test_hal_es9821`, `test_hal_es9823pro`, `test_hal_es9820`, `test_hal_es9842pro`, `test_hal_es9840`, `test_hal_es9841`, `test_hal_es9038q2m`, `test_hal_es9039q2m`, `test_hal_es9069q`, `test_hal_es9033q`, `test_hal_es9020_dac`, `test_hal_es9038pro`, `test_hal_es9028pro`, `test_hal_es9039pro`, `test_hal_es9027pro`, `test_hal_es9081`, `test_hal_es9082`, `test_hal_es9017`, `test_hal_tdm_interleaver`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`, `test_heap_monitor`, `test_http_security`, `test_heap_budget`, `test_pipeline_dma_guard`, `test_psram_alloc`, `test_ws_adaptive_rate`, `test_strncpy_safety`, `test_hal_init_result`, `test_hal_atomic_write`, `test_settings_export_v2`, `test_health_check`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (~3125 C++ tests across 114 modules). E2E browser tests: 304 tests across 52 Playwright specs. On-device tests: 105 tests across 9 modules (see [On-Device Tests](#on-device-tests-pyserial--pytest)). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_probe_retry`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_hal_es9822pro`, `test_hal_es9843pro`, `test_hal_tdm_deinterleaver`, `test_hal_es9826`, `test_hal_es9821`, `test_hal_es9823pro`, `test_hal_es9820`, `test_hal_es9842pro`, `test_hal_es9840`, `test_hal_es9841`, `test_hal_es9038q2m`, `test_hal_es9039q2m`, `test_hal_es9069q`, `test_hal_es9033q`, `test_hal_es9020_dac`, `test_hal_es9038pro`, `test_hal_es9028pro`, `test_hal_es9039pro`, `test_hal_es9027pro`, `test_hal_es9081`, `test_hal_es9082`, `test_hal_es9017`, `test_hal_tdm_interleaver`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`, `test_heap_monitor`, `test_http_security`, `test_heap_budget`, `test_pipeline_dma_guard`, `test_psram_alloc`, `test_ws_adaptive_rate`, `test_strncpy_safety`, `test_hal_init_result`, `test_hal_atomic_write`, `test_settings_export_v2`, `test_health_check`, `test_dsp_audio`, `test_hal_advanced`.
 
 ## Architecture
 
@@ -358,12 +358,14 @@ Device tests live in `device_tests/` and verify firmware on real ESP32-P4 hardwa
 
 ```bash
 cd device_tests
-pip install -r requirements.txt              # First time only
-pytest tests/ --device-port COM8 -v          # Run against connected device
-pytest tests/test_boot_health.py -v          # Single test module
-pytest tests/ --create-issues                # Enable GitHub issue creation
-pytest tests/ --skip-reboot-tests            # Skip destructive reboot tests
+pip install -r requirements.txt                                      # First time only
+pytest tests/ --device-port COM8 --device-ip <DEVICE_IP> -v          # Run against connected device
+pytest tests/ --device-port COM8 --device-ip <DEVICE_IP> -m "not slow" -v  # Skip slow tests
+pytest tests/test_hal_advanced.py --device-port COM8 --device-ip <DEVICE_IP> -v  # Single module
+pytest tests/ --create-issues                                        # Enable GitHub issue creation
 ```
+
+Available markers: `boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `reboot`, `slow`. Filter: `pytest -m "hal" -v`.
 
 ### Mandatory Test Coverage Rules
 

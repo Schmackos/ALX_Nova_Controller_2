@@ -107,43 +107,73 @@ Failed checks also call `diag_emit()` with the appropriate diagnostic code so fa
 
 ## Running Tests
 
-The pytest harness lives in `test/device/`. Install dependencies once:
+The pytest harness lives in `device_tests/`. Install dependencies once:
 
 ```bash
-cd test/device
+cd device_tests
 pip install -r requirements.txt
 ```
 
-Run the full suite against the board on COM8:
+Run the full suite against the board:
 
 ```bash
-pytest --port COM8 --baud 115200 --device-ip 192.168.1.100
+pytest tests/ --device-port COM8 --device-ip 192.168.178.229 --device-password test1234 -v
 ```
 
-Run a specific category:
+Run without slow tests (recommended for iterative development):
 
 ```bash
-pytest -k "system" --port COM8 --device-ip 192.168.1.100
-pytest -k "hal" --port COM8 --device-ip 192.168.1.100
-pytest -k "audio" --port COM8 --device-ip 192.168.1.100
+pytest tests/ --device-port COM8 --device-ip 192.168.178.229 -m "not slow" -v
 ```
 
-Run with verbose output to see serial log lines alongside test results:
+Run a specific module:
 
 ```bash
-pytest -v --port COM8 --device-ip 192.168.1.100 --show-serial
+pytest tests/test_hal_advanced.py --device-port COM8 --device-ip 192.168.178.229 -v
 ```
 
-The harness waits up to 60 seconds for the board to emit the deferred-phase completion marker before timing out. If the board does not reach the deferred phase within the timeout, the entire deferred category is marked as a single timeout failure.
+### CLI Options
 
-**Environment variables** (alternative to CLI flags):
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--device-port` | `COM8` | Serial port for the ESP32-P4 |
+| `--device-ip` | `192.168.4.1` | Device IP address (AP mode default) |
+| `--device-password` | `test1234` | Web UI password (TEST\_MODE default) |
+| `--baud` | `115200` | Serial baud rate |
+| `-m "not slow"` | — | Skip slow tests (HAL scan, reboot) |
+| `--create-issues` | — | Auto-create GitHub issues on failure |
+| `--timeout` | `120` | Per-test timeout in seconds |
+
+## Test Modules
+
+The device test suite contains **105 tests across 9 modules** in `device_tests/tests/`:
+
+| Module | Tests | Category | What It Validates |
+|--------|-------|----------|-------------------|
+| `test_boot_health.py` | 8 | Boot | Serial errors, auth init, settings loaded, HAL discovery, heap, crash log, uptime |
+| `test_health_check.py` | 12 | Health | `GET /api/health` response schema, verdict, counts, per-check fields, duration, deferred phase |
+| `test_hal_devices.py` | 6 | HAL | Device list, onboard present, no errors, valid configs, DB presets, pin conflicts |
+| `test_hal_advanced.py` | 31 | HAL | DB completeness, scan behavior, config updates, validation boundaries, reinit, CRUD lifecycle, custom devices, error handling |
+| `test_dsp_audio.py` | 24 | Audio | DSP config/metrics/bypass/presets, signal generator, pipeline matrix, DAC, THD, diagnostics |
+| `test_audio.py` | 8 | Audio | I2S ports, pipeline matrix, DAC status, PSRAM, DMA, pause state, heap budget |
+| `test_network.py` | 6 | Network | Reachable, WiFi status, security headers, auth required, auth status, WS port |
+| `test_mqtt.py` | 4 | MQTT | Config readable, connected if configured, HA discovery, diagnostics (3 skip when not configured) |
+| `test_settings.py` | 5 | Settings | Get, export, darkMode toggle, reboot persistence (@slow), auth change validation |
+
+### Pytest Markers
+
+Filter tests by category using markers defined in `pytest.ini`:
 
 ```bash
-export ALX_PORT=COM8
-export ALX_BAUD=115200
-export ALX_IP=192.168.1.100
-pytest
+pytest tests/ -m "boot" -v              # Boot health only
+pytest tests/ -m "hal" -v               # All HAL tests
+pytest tests/ -m "audio" -v             # DSP + audio tests
+pytest tests/ -m "not slow" -v          # Skip slow tests (scan, reboot)
+pytest tests/ -m "not reboot" -v        # Skip reboot tests
+pytest tests/ -m "health" -v            # Health check endpoint only
 ```
+
+Available markers: `boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `reboot`, `slow`.
 
 ## TEST\_MODE Build Flag
 
@@ -216,32 +246,40 @@ The device will boot with password `test1234` and serial output confirms:
 
 To add a check to the `health_check` module:
 
-1. **Add a result field** to the appropriate result struct in `src/health_check.h` (e.g., `HealthCheckResultSystem`, `HealthCheckResultNetwork`).
+1. **Append a new entry** to the flat `checks[]` array in `src/health_check.cpp`. Each entry is a `HealthCheckItem` with three fields: `name` (check identifier string), `status` (`"pass"`, `"warn"`, `"fail"`, or `"skip"`), and `detail` (human-readable string up to 64 characters). There are no nested category structs — all checks live in a single flat array.
 
-2. **Implement the check** in `src/health_check.cpp` inside the correct phase function. Follow the existing pattern:
+2. **Implement the check** in the correct phase function. Follow the existing pattern:
 
 ```cpp
-// In health_check_run_immediate() for system/storage/task checks
-result.myCheck.pass = (some_condition == expected);
-snprintf(result.myCheck.detail, sizeof(result.myCheck.detail),
-         "expected %d got %d", expected, actual);
-if (!result.myCheck.pass) {
-    diag_emit(DIAG_MY_CHECK_FAIL, result.myCheck.detail);
+// In health_check_run_immediate() for system/storage checks
+// In health_check_poll_deferred() for network/HAL/audio checks
+HealthCheckItem item;
+item.name = "my_check";
+if (some_condition) {
+    item.status = "pass";
+    snprintf(item.detail, sizeof(item.detail), "value=%d OK", actual);
+} else {
+    item.status = "fail";
+    snprintf(item.detail, sizeof(item.detail), "expected %d got %d", expected, actual);
+    diag_emit(DIAG_MY_CHECK_FAIL, item.detail);
 }
-LOG_I("[HealthCheck] my_check: %s — %s",
-      result.myCheck.pass ? "PASS" : "FAIL", result.myCheck.detail);
+LOG_I("[HealthCheck] my_check: %s — %s", item.status, item.detail);
+_checks.push_back(item);
 ```
 
-3. **Expose via REST** — update `src/health_check_api.cpp` to include the new field in the `GET /api/health` JSON response.
+3. **Expose via REST** — the `GET /api/health` serialiser in `src/health_check_api.cpp` iterates `_checks[]` automatically. New entries appear in the `checks[]` array without further changes.
 
-4. **Expose via WebSocket** — update `sendHealthCheckState()` in `src/websocket_broadcast.cpp` to include the new field in the `healthCheck` broadcast.
+4. **Expose via WebSocket** — `sendHealthCheckState()` in `src/websocket_broadcast.cpp` serialises the same `_checks[]` array. No additional changes needed for new flat entries.
 
-5. **Add a pytest test** in `test/device/test_health_<category>.py`:
+5. **Add a pytest test** in `device_tests/tests/test_health_check.py`. Access the new check by `name` from the flat `checks` list:
 
 ```python
 def test_my_check_passes(health_api):
     result = health_api.get_health()
-    assert result["myCheck"]["pass"] is True, result["myCheck"]["detail"]
+    check = next(c for c in result["checks"] if c["name"] == "my_check")
+    assert check["status"] == "pass", check["detail"]
 ```
 
 6. **Add a diagnostic code** in `src/diag_error_codes.h` if the check warrants a distinct code (follow the existing `DIAG_*` naming convention and numeric range for the category).
+
+7. **Add a pytest marker** to `device_tests/pytest.ini` if the new check belongs to a new category not already covered by the existing markers (`boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`).
