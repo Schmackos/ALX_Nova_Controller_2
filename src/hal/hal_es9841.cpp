@@ -6,11 +6,11 @@
 // per-channel HPF at same offsets as ES9842PRO, TDM output.
 
 #include "hal_es9841.h"
+#include "hal_ess_sabre_adc_base.h"
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
 #include <Wire.h>
-#include "hal_ess_sabre_adc_base.h"  // for extern TwoWire Wire2
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../i2s_audio.h"
@@ -51,48 +51,12 @@ inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
 
 // ===== Constructor =====
 
-HalEs9841::HalEs9841() : HalAudioDevice() {
+HalEs9841::HalEs9841() : HalEssSabreAdcBase() {
     hal_init_descriptor(_descriptor, "ess,es9841", "ES9841", "ESS Technology",
         HAL_DEV_ADC, 4, 0x40, HAL_BUS_I2C, HAL_I2C_BUS_EXP,
         HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K,
         HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL);
     _initPriority = HAL_PRIORITY_HARDWARE;
-}
-
-// ===== I2C helpers =====
-
-bool HalEs9841::_writeReg(uint8_t reg, uint8_t val) {
-#ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write(reg);
-    _wire->write(val);
-    uint8_t err = _wire->endTransmission();
-    if (err != 0) {
-        LOG_E("[HAL:ES9841] I2C write failed: reg=0x%02X val=0x%02X err=%d", reg, val, err);
-        return false;
-    }
-    return true;
-#else
-    (void)reg; (void)val;
-    return true;
-#endif
-}
-
-uint8_t HalEs9841::_readReg(uint8_t reg) {
-#ifndef NATIVE_TEST
-    if (!_wire) return 0xFF;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write(reg);
-    _wire->endTransmission(false);
-    _wire->requestFrom(_i2cAddr, (uint8_t)1);
-    if (_wire->available()) return _wire->read();
-    LOG_E("[HAL:ES9841] I2C read failed: reg=0x%02X", reg);
-    return 0xFF;
-#else
-    (void)reg;
-    return 0x00;
-#endif
 }
 
 // ===== HalDevice lifecycle =====
@@ -112,29 +76,15 @@ bool HalEs9841::probe() {
 
 HalInitResult HalEs9841::init() {
     // ---- 1. Read per-device config overrides from HAL Device Manager ----
-    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
-    if (cfg && cfg->valid) {
-        if (cfg->i2cAddr != 0)     _i2cAddr     = cfg->i2cAddr;
-        if (cfg->i2cBusIndex != 0) _i2cBusIndex = cfg->i2cBusIndex;
-        if (cfg->pinSda >= 0)      _sdaPin      = cfg->pinSda;
-        if (cfg->pinScl >= 0)      _sclPin      = cfg->pinScl;
-        if (cfg->sampleRate > 0)   _sampleRate  = cfg->sampleRate;
-        if (cfg->bitDepth > 0)     _bitDepth    = cfg->bitDepth;
-        if (cfg->pgaGain <= 42)    _gainDb      = cfg->pgaGain;
-        _hpfEnabled   = cfg->hpfEnabled;
-        _filterPreset = cfg->filterMode;
-    }
+    _applyConfigOverrides();
+    // Note: ES9841 supports 0-42 dB — no additional gain clamp needed
 
     LOG_I("[HAL:ES9841] Initializing (I2C addr=0x%02X bus=%u SDA=%d SCL=%d sr=%luHz bits=%u)",
           _i2cAddr, _i2cBusIndex, _sdaPin, _sclPin, (unsigned long)_sampleRate, _bitDepth);
 
 #ifndef NATIVE_TEST
-    switch (_i2cBusIndex) {
-        case 1:  _wire = &Wire1; break;
-        case 2:  _wire = &Wire2; break;
-        default: _wire = &Wire;  break;
-    }
-    _wire->begin((int)_sdaPin, (int)_sclPin, (uint32_t)400000);
+    // ---- 2+3. Select and initialize TwoWire instance ----
+    _selectWire();
     LOG_I("[HAL:ES9841] I2C initialized (bus %u SDA=%d SCL=%d 400kHz)",
           _i2cBusIndex, _sdaPin, _sclPin);
 #endif
@@ -187,6 +137,7 @@ HalInitResult HalEs9841::init() {
               (uint8_t)((preset << ES9841_FILTER_SHIFT) & ES9841_FILTER_MASK));
 
     // ---- 11. Configure I2S2 TDM and deinterleaver ----
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
     uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
     int8_t dinPinRaw = (cfg && cfg->valid && cfg->pinData > 0) ? cfg->pinData : -1;
     if (dinPinRaw < 0) {
