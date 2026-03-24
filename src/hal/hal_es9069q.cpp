@@ -8,8 +8,6 @@
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
-#include "hal_ess_sabre_adc_base.h"  // for extern TwoWire Wire2
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../drivers/es9069q_regs.h"
@@ -68,9 +66,7 @@ HalEs9069Q::HalEs9069Q() : HalEssSabreDacBase() {
 
 bool HalEs9069Q::probe() {
 #ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    if (_wire->endTransmission() != 0) return false;
+    if (!_bus().probe(_i2cAddr)) return false;
     uint8_t chipId = _readReg(ES9069Q_REG_CHIP_ID);
     return (chipId == ES9069Q_CHIP_ID);
 #else
@@ -181,7 +177,7 @@ void HalEs9069Q::dumpConfig() {
 
 bool HalEs9069Q::healthCheck() {
 #ifndef NATIVE_TEST
-    if (!_wire || !_initialized) return false;
+    if (!_initialized) return false;
     uint8_t id = _readReg(ES9069Q_REG_CHIP_ID);
     return (id == ES9069Q_CHIP_ID);
 #else

@@ -9,8 +9,6 @@
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
-#include "hal_cirrus_dac_base.h"  // for extern TwoWire Wire2
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../drivers/cs4399_regs.h"
@@ -78,9 +76,7 @@ HalCs4399::HalCs4399() : HalCirrusDacBase() {
 
 bool HalCs4399::probe() {
 #ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    if (_wire->endTransmission() != 0) return false;
+    if (!_bus().probe(_i2cAddr)) return false;
     uint8_t chipId = _readRegPaged(CS4399_REG_DEVID_REVID);
     return (chipId == CS4399_CHIP_ID);
 #else
@@ -215,7 +211,7 @@ void HalCs4399::dumpConfig() {
 
 bool HalCs4399::healthCheck() {
 #ifndef NATIVE_TEST
-    if (!_wire || !_initialized) return false;
+    if (!_initialized) return false;
     uint8_t id = _readRegPaged(CS4399_REG_DEVID_REVID);
     return (id == CS4399_CHIP_ID);
 #else

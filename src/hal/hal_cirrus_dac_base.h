@@ -20,13 +20,9 @@
 
 #include "hal_audio_device.h"
 #include "hal_audio_interfaces.h"
+#include "hal_i2c_bus.h"
 #include "../drivers/cirrus_dac_common.h"
 #include "../audio_output_sink.h"
-
-#ifndef NATIVE_TEST
-#include <Wire.h>
-extern TwoWire Wire2;  // Defined in hal_ess_sabre_adc_base.cpp
-#endif
 
 class HalCirrusDacBase : public HalAudioDevice, public HalAudioDacInterface {
 public:
@@ -62,14 +58,17 @@ public:
     uint8_t getFilterPreset() const { return _filterPreset; }
 
 protected:
+    // --- I2C bus accessor ---
+    HalI2cBus& _bus() { return HalI2cBus::get(_i2cBusIndex); }
+
     // --- I2C helpers: 8-bit register addressing (CS4398) ---
-    bool    _writeReg8(uint8_t reg, uint8_t val);
-    uint8_t _readReg8(uint8_t reg);
+    bool    _writeReg8(uint8_t reg, uint8_t val)    { return _bus().writeReg(_i2cAddr, reg, val); }
+    uint8_t _readReg8(uint8_t reg)                  { return _bus().readReg(_i2cAddr, reg); }
 
     // --- I2C helpers: 16-bit paged register addressing (CS43198, CS43131, CS4399, CS43130) ---
     // Sends 2-byte register address (high byte, low byte) then 1-byte data
-    bool    _writeRegPaged(uint16_t reg, uint8_t val);
-    uint8_t _readRegPaged(uint16_t reg);
+    bool    _writeRegPaged(uint16_t reg, uint8_t val) { return _bus().writeRegPaged(_i2cAddr, reg, val); }
+    uint8_t _readRegPaged(uint16_t reg)               { return _bus().readRegPaged(_i2cAddr, reg); }
 
     // --- Config override reading ---
     void _applyConfigOverrides();
@@ -100,10 +99,6 @@ public:
     float    _muteRampState = 1.0f;  // Mute ramp envelope (public: accessed by static write callback)
 protected:
     int8_t   _doutPin      = -1;    // I2S DOUT GPIO (from HalDeviceConfig.pinData)
-
-#ifndef NATIVE_TEST
-    TwoWire* _wire = nullptr;
-#endif
 };
 
 #endif // DAC_ENABLED

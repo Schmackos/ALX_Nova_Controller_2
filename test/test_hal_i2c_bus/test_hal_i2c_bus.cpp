@@ -112,6 +112,11 @@ public:
         return _wire().endTransmission() == 0;
     }
 
+    uint8_t probeGetError(uint8_t addr) {
+        _wire().beginTransmission(addr);
+        return _wire().endTransmission();
+    }
+
     bool writeBytes(uint8_t addr, const uint8_t* data, uint8_t len) {
         _wire().beginTransmission(addr);
         _wire().write(data, len);

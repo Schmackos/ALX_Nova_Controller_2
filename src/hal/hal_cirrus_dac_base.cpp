@@ -9,91 +9,15 @@
 #include "../sink_write_utils.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../config.h"   // ES8311_I2S_MCLK_PIN / SCLK_PIN / LRCK_PIN defaults
-// Wire2 is defined in hal_ess_sabre_adc_base.cpp — we extern it in the header
 #else
 #define LOG_I(fmt, ...) ((void)0)
 #define LOG_W(fmt, ...) ((void)0)
 #define LOG_E(fmt, ...) ((void)0)
 #define LOG_D(fmt, ...) ((void)0)
 #endif
-
-// ===== I2C helpers: 8-bit register addressing (CS4398) =====
-
-bool HalCirrusDacBase::_writeReg8(uint8_t reg, uint8_t val) {
-#ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write(reg);
-    _wire->write(val);
-    uint8_t err = _wire->endTransmission();
-    if (err != 0) {
-        LOG_E("[HAL:Cirrus-DAC] I2C write8 failed: reg=0x%02X val=0x%02X err=%d", reg, val, err);
-        return false;
-    }
-    return true;
-#else
-    (void)reg; (void)val;
-    return true;
-#endif
-}
-
-uint8_t HalCirrusDacBase::_readReg8(uint8_t reg) {
-#ifndef NATIVE_TEST
-    if (!_wire) return 0xFF;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write(reg);
-    _wire->endTransmission(false);
-    _wire->requestFrom(_i2cAddr, (uint8_t)1);
-    if (_wire->available()) return _wire->read();
-    LOG_E("[HAL:Cirrus-DAC] I2C read8 failed: reg=0x%02X", reg);
-    return 0xFF;
-#else
-    (void)reg;
-    return 0x00;
-#endif
-}
-
-// ===== I2C helpers: 16-bit paged register addressing (CS43198, CS43131, CS4399, CS43130) =====
-
-bool HalCirrusDacBase::_writeRegPaged(uint16_t reg, uint8_t val) {
-#ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write((uint8_t)((reg >> 8) & 0xFF));  // Address high byte
-    _wire->write((uint8_t)(reg & 0xFF));          // Address low byte
-    _wire->write(val);
-    uint8_t err = _wire->endTransmission();
-    if (err != 0) {
-        LOG_E("[HAL:Cirrus-DAC] I2C writePaged failed: reg=0x%04X val=0x%02X err=%d", reg, val, err);
-        return false;
-    }
-    return true;
-#else
-    (void)reg; (void)val;
-    return true;
-#endif
-}
-
-uint8_t HalCirrusDacBase::_readRegPaged(uint16_t reg) {
-#ifndef NATIVE_TEST
-    if (!_wire) return 0xFF;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write((uint8_t)((reg >> 8) & 0xFF));
-    _wire->write((uint8_t)(reg & 0xFF));
-    _wire->endTransmission(false);
-    _wire->requestFrom(_i2cAddr, (uint8_t)1);
-    if (_wire->available()) return _wire->read();
-    LOG_E("[HAL:Cirrus-DAC] I2C readPaged failed: reg=0x%04X", reg);
-    return 0xFF;
-#else
-    (void)reg;
-    return 0x00;
-#endif
-}
 
 // ===== Config override reading =====
 
@@ -116,15 +40,7 @@ void HalCirrusDacBase::_applyConfigOverrides() {
 // ===== Wire selection =====
 
 void HalCirrusDacBase::_selectWire() {
-#ifndef NATIVE_TEST
-    switch (_i2cBusIndex) {
-        case 0:  _wire = &Wire;  break;
-        case 1:  _wire = &Wire1; break;
-        case 2:  _wire = &Wire2; break;
-        default: _wire = &Wire2; break;
-    }
-    _wire->begin((int)_sdaPin, (int)_sclPin, (uint32_t)CIRRUS_DAC_I2C_FREQ_HZ);
-#endif
+    _bus().begin(_sdaPin, _sclPin, (uint32_t)CIRRUS_DAC_I2C_FREQ_HZ);
 }
 
 // ===== Sample rate validation =====

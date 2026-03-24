@@ -19,13 +19,8 @@
 
 #include "hal_audio_device.h"
 #include "hal_audio_interfaces.h"
+#include "hal_i2c_bus.h"
 #include "../drivers/ess_sabre_common.h"
-
-#ifndef NATIVE_TEST
-#include <Wire.h>
-// Wire2 is not predefined in ESP32-P4 Arduino — defined in hal_ess_sabre_adc_base.cpp
-extern TwoWire Wire2;
-#endif
 
 class HalEssSabreAdcBase : public HalAudioDevice, public HalAudioAdcInterface {
 public:
@@ -50,17 +45,22 @@ public:
     virtual uint32_t adcGetSampleRate() const        override = 0;
 
 protected:
-    // --- I2C helpers (implemented in .cpp, shared by all derived classes) ---
-    bool    _writeReg(uint8_t reg, uint8_t val);
-    uint8_t _readReg(uint8_t reg);
-    bool    _writeReg16(uint8_t regLsb, uint16_t val);  // LSB write then MSB (MSB write latches both)
+    // --- I2C bus accessor — returns the HalI2cBus for this device's bus index ---
+    HalI2cBus& _bus() { return HalI2cBus::get(_i2cBusIndex); }
+
+    // --- I2C helpers (forwarded to HalI2cBus, shared by all derived classes) ---
+    // These retain the same signature so derived drivers need no changes.
+    bool    _writeReg(uint8_t reg, uint8_t val)            { return _bus().writeReg(_i2cAddr, reg, val); }
+    uint8_t _readReg(uint8_t reg)                          { return _bus().readReg(_i2cAddr, reg); }
+    bool    _writeReg16(uint8_t regLsb, uint16_t val)      { return _bus().writeReg16(_i2cAddr, regLsb, val); }
 
     // --- Config override reading (steps 1-3 of init()) ---
     // Reads HalDeviceConfig overrides into member fields. Call at start of init().
     void _applyConfigOverrides();
 
-    // --- Wire selection based on _i2cBusIndex ---
-    // Must be called after _applyConfigOverrides() and before I2C operations.
+    // --- Wire selection and bus init ---
+    // Initialises the I2C bus via HalI2cBus::begin(). Must be called after
+    // _applyConfigOverrides() and before I2C operations.
     void _selectWire();
 
     // --- Sample rate validation ---
@@ -78,10 +78,6 @@ protected:
     uint8_t  _filterPreset = 0;
     bool     _hpfEnabled   = true;
     bool     _initialized  = false;
-
-#ifndef NATIVE_TEST
-    TwoWire* _wire = nullptr;
-#endif
 };
 
 #endif // DAC_ENABLED

@@ -9,7 +9,6 @@
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../i2s_audio.h"
@@ -68,10 +67,7 @@ HalEs9820::HalEs9820() : HalEssSabreAdcBase() {
 
 bool HalEs9820::probe() {
 #ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    uint8_t err = _wire->endTransmission();
-    if (err != 0) return false;
+    if (!_bus().probe(_i2cAddr)) return false;
     uint8_t chipId = _readReg(ES9820_REG_CHIP_ID);
     return (chipId == ES9820_CHIP_ID);
 #else
@@ -198,7 +194,7 @@ void HalEs9820::dumpConfig() {
 
 bool HalEs9820::healthCheck() {
 #ifndef NATIVE_TEST
-    if (!_wire || !_initialized) return false;
+    if (!_initialized) return false;
     uint8_t id = _readReg(ES9820_REG_CHIP_ID);
     return (id == ES9820_CHIP_ID);
 #else

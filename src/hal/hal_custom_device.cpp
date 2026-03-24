@@ -3,7 +3,7 @@
 #include "hal_device_manager.h"
 #include "hal_types.h"
 #include "hal_discovery.h"     // hal_wifi_sdio_active()
-#include "hal_ess_sabre_adc_base.h" // for extern TwoWire Wire2
+#include "hal_i2c_bus.h"
 #include "../audio_pipeline.h"
 #include "../sink_write_utils.h"
 #include "../i2s_audio.h"
@@ -11,7 +11,6 @@
 #ifndef NATIVE_TEST
 #include <LittleFS.h>
 #include <ArduinoJson.h>
-#include <Wire.h>
 #include "../debug_serial.h"
 #else
 #define LOG_I(t, ...) ((void)0)
@@ -177,21 +176,9 @@ bool HalCustomDevice::_probeI2c() {
         return false;
     }
 
-    // Select Wire instance for bus (Bus 0=Wire, Bus 1=Wire1, Bus 2=Wire2)
-    TwoWire* wire = &Wire;
-    switch (busIndex) {
-        case HAL_I2C_BUS_EXT:      wire = &Wire;   break;
-        case HAL_I2C_BUS_ONBOARD:  wire = &Wire1;  break;
-        case HAL_I2C_BUS_EXP:
-        default:                   wire = &Wire2;  break;
-    }
-
-    wire->beginTransmission(i2cAddr);
-    uint8_t err = wire->endTransmission();
-    if (err != 0) {
+    if (!HalI2cBus::get(busIndex).probe(i2cAddr)) {
         char msg[48];
-        snprintf(msg, sizeof(msg), "I2C probe NACK at 0x%02X bus %u (err %u)",
-                 i2cAddr, busIndex, err);
+        snprintf(msg, sizeof(msg), "I2C probe NACK at 0x%02X bus %u", i2cAddr, busIndex);
         setLastError(msg);
         LOG_W("[HAL:Custom]", "%s: %s", _descriptor.compatible, msg);
         return false;
@@ -203,9 +190,7 @@ bool HalCustomDevice::_probeI2c() {
 #else
     // NATIVE_TEST: report success for I2C devices that have an address in mock
     if (_descriptor.i2cAddr != 0) {
-        Wire.beginTransmission(_descriptor.i2cAddr);
-        uint8_t err = Wire.endTransmission();
-        if (err != 0) {
+        if (!HalI2cBus::get(HAL_I2C_BUS_EXP).probe(_descriptor.i2cAddr)) {
             setLastError("I2C probe NACK (mock)");
             return false;
         }
@@ -228,29 +213,18 @@ bool HalCustomDevice::_runInitSequence() {
         if (cfg->i2cBusIndex != 0) busIndex = cfg->i2cBusIndex;
     }
 
-    TwoWire* wire = &Wire;
-    switch (busIndex) {
-        case HAL_I2C_BUS_EXT:      wire = &Wire;  break;
-        case HAL_I2C_BUS_ONBOARD:  wire = &Wire1; break;
-        case HAL_I2C_BUS_EXP:
-        default:                   wire = &Wire2; break;
-    }
+    HalI2cBus& bus = HalI2cBus::get(busIndex);
 
     // Cap per-write timeout to 10 ms to prevent a non-responsive device from
     // blocking the main loop for up to 1.6 s (32 writes × default 50 ms timeout).
-    uint32_t savedTimeout = wire->getTimeout();
-    wire->setTimeout(10);
+    bus.setTimeout(10);
 
     bool seqOk = true;
     for (int i = 0; i < _initSeqCount; i++) {
-        wire->beginTransmission(i2cAddr);
-        wire->write(_initSeq[i].reg);
-        wire->write(_initSeq[i].val);
-        uint8_t err = wire->endTransmission();
-        if (err != 0) {
+        if (!bus.writeReg(i2cAddr, _initSeq[i].reg, _initSeq[i].val)) {
             char msg[48];
-            snprintf(msg, sizeof(msg), "Init seq write failed at reg 0x%02X (err %u)",
-                     _initSeq[i].reg, err);
+            snprintf(msg, sizeof(msg), "Init seq write failed at reg 0x%02X",
+                     _initSeq[i].reg);
             setLastError(msg);
             LOG_E("[HAL:Custom]", "%s: %s", _descriptor.name, msg);
             seqOk = false;
@@ -258,22 +232,17 @@ bool HalCustomDevice::_runInitSequence() {
         }
     }
 
-    wire->setTimeout(savedTimeout);
-
     if (!seqOk) return false;
     LOG_I("[HAL:Custom]", "%s: init sequence complete (%d regs)", _descriptor.name, _initSeqCount);
     return true;
 #else
     // NATIVE_TEST: simulate the writes through Wire mock
     for (int i = 0; i < _initSeqCount; i++) {
-        Wire.beginTransmission(_descriptor.i2cAddr);
-        Wire.write(_initSeq[i].reg);
-        Wire.write(_initSeq[i].val);
-        uint8_t err = Wire.endTransmission();
-        if (err != 0) {
+        if (!HalI2cBus::get(HAL_I2C_BUS_EXP).writeReg(_descriptor.i2cAddr,
+                                                        _initSeq[i].reg, _initSeq[i].val)) {
             char msg[48];
-            snprintf(msg, sizeof(msg), "Init seq write failed at reg 0x%02X (err %u)",
-                     _initSeq[i].reg, err);
+            snprintf(msg, sizeof(msg), "Init seq write failed at reg 0x%02X",
+                     _initSeq[i].reg);
             setLastError(msg);
             return false;
         }

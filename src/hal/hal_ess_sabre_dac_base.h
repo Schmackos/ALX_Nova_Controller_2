@@ -20,13 +20,9 @@
 
 #include "hal_audio_device.h"
 #include "hal_audio_interfaces.h"
+#include "hal_i2c_bus.h"
 #include "../drivers/ess_sabre_common.h"
 #include "../audio_output_sink.h"
-
-#ifndef NATIVE_TEST
-#include <Wire.h>
-extern TwoWire Wire2;  // Defined in hal_ess_sabre_adc_base.cpp
-#endif
 
 class HalEssSabreDacBase : public HalAudioDevice, public HalAudioDacInterface {
 public:
@@ -62,16 +58,19 @@ public:
     uint8_t getFilterPreset() const { return _filterPreset; }
 
 protected:
-    // --- I2C helpers (implemented in .cpp, shared by all derived classes) ---
-    bool    _writeReg(uint8_t reg, uint8_t val);
-    uint8_t _readReg(uint8_t reg);
-    bool    _writeReg16(uint8_t regLsb, uint16_t val);  // LSB write then MSB
+    // --- I2C bus accessor ---
+    HalI2cBus& _bus() { return HalI2cBus::get(_i2cBusIndex); }
+
+    // --- I2C helpers (forwarded to HalI2cBus, shared by all derived classes) ---
+    bool    _writeReg(uint8_t reg, uint8_t val)       { return _bus().writeReg(_i2cAddr, reg, val); }
+    uint8_t _readReg(uint8_t reg)                     { return _bus().readReg(_i2cAddr, reg); }
+    bool    _writeReg16(uint8_t regLsb, uint16_t val) { return _bus().writeReg16(_i2cAddr, regLsb, val); }
 
     // --- Config override reading ---
     // Reads HalDeviceConfig overrides into member fields. Call at start of init().
     void _applyConfigOverrides();
 
-    // --- Wire selection based on _i2cBusIndex ---
+    // --- Wire selection / bus init ---
     void _selectWire();
 
     // --- Sample rate validation ---
@@ -97,10 +96,6 @@ public:
     float    _muteRampState = 1.0f;  // Mute ramp envelope [0.0 .. 1.0] (public: accessed by static write callback)
 protected:
     int8_t   _doutPin      = -1;    // I2S DOUT GPIO (from HalDeviceConfig.pinData)
-
-#ifndef NATIVE_TEST
-    TwoWire* _wire = nullptr;
-#endif
 };
 
 #endif // DAC_ENABLED

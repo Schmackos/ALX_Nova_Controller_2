@@ -13,8 +13,6 @@
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
-#include "hal_cirrus_dac_base.h"
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../drivers/cs4398_regs.h"
@@ -82,9 +80,7 @@ HalCs4398::HalCs4398() : HalCirrusDacBase() {
 
 bool HalCs4398::probe() {
 #ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    if (_wire->endTransmission() != 0) return false;
+    if (!_bus().probe(_i2cAddr)) return false;
     uint8_t chipId = _readReg8(CS4398_REG_CHIP_ID);
     // Upper nibble contains the chip family ID; mask off the revision nibble.
     return ((chipId & 0xF0) == (CS4398_CHIP_ID & 0xF0));
@@ -212,7 +208,7 @@ void HalCs4398::dumpConfig() {
 
 bool HalCs4398::healthCheck() {
 #ifndef NATIVE_TEST
-    if (!_wire || !_initialized) return false;
+    if (!_initialized) return false;
     uint8_t id = _readReg8(CS4398_REG_CHIP_ID);
     return ((id & 0xF0) == (CS4398_CHIP_ID & 0xF0));
 #else
