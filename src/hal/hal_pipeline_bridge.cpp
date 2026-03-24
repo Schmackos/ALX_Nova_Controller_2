@@ -338,8 +338,8 @@ void hal_pipeline_deactivate_device(uint8_t halSlot) {
 
     // Broadcast updated state
 #ifndef NATIVE_TEST
-    as.markHalDeviceDirty();
-    as.markChannelMapDirty();
+    appState.markHalDeviceDirty();
+    appState.markChannelMapDirty();
 #endif
 }
 
