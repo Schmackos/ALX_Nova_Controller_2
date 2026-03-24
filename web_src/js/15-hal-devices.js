@@ -481,7 +481,7 @@
         }
 
         function halToggleDeviceEnabled(slot, enabled) {
-            fetch('/api/hal/devices', {
+            apiFetch('/api/hal/devices', {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({slot: slot, enabled: enabled})
@@ -566,7 +566,7 @@
             var pinFmtEl = document.getElementById('halCfgPinFmt');
             if (pinFmtEl) cfg.pinFmt = parseInt(pinFmtEl.value);
 
-            fetch('/api/hal/devices', {
+            apiFetch('/api/hal/devices', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cfg)
@@ -585,7 +585,7 @@
         }
 
         function halReinitDevice(slot) {
-            fetch('/api/hal/devices/reinit', {
+            apiFetch('/api/hal/devices/reinit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ slot: slot })
@@ -604,7 +604,7 @@
         }
 
         function halRemoveDevice(slot) {
-            fetch('/api/hal/devices', {
+            apiFetch('/api/hal/devices', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ slot: slot })
@@ -623,7 +623,7 @@
         }
 
         function halAddFromPreset() {
-            fetch('/api/hal/db/presets')
+            apiFetch('/api/hal/db/presets')
                 .then(function(r) {
                     if (!r.ok) throw new Error('Server error ' + r.status);
                     return r.json();
@@ -644,7 +644,7 @@
             var sel = document.getElementById('halAddPresetSelect');
             if (!sel || !sel.value) { showToast('Select a device first', true); return; }
 
-            fetch('/api/hal/devices', {
+            apiFetch('/api/hal/devices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ compatible: sel.value })
@@ -664,7 +664,7 @@
             if (halScanning) return;  // Prevent double-click
             halScanning = true;
             renderHalDevices();
-            fetch('/api/hal/scan', { method: 'POST' })
+            apiFetch('/api/hal/scan', { method: 'POST' })
                 .then(function(r) {
                     if (r.status === 409) {
                         showToast('Scan already in progress');
@@ -689,7 +689,7 @@
         }
 
         function loadHalDeviceList() {
-            fetch('/api/hal/devices')
+            apiFetch('/api/hal/devices')
                 .then(function(r) { return r.json(); })
                 .then(function(devices) {
                     halDevices = devices;
@@ -703,7 +703,7 @@
         }
 
         function loadHalSettings() {
-            fetch('/api/hal/settings')
+            apiFetch('/api/hal/settings')
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     var cb = document.getElementById('halAutoDiscovery');
@@ -713,7 +713,7 @@
         }
 
         function setHalAutoDiscovery(enabled) {
-            fetch('/api/hal/settings', {
+            apiFetch('/api/hal/settings', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ halAutoDiscovery: enabled })
@@ -753,7 +753,7 @@
                         return;
                     }
                     // Register with server
-                    fetch('/api/hal/devices', {
+                    apiFetch('/api/hal/devices', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(parsed)
@@ -827,7 +827,7 @@
 
         function halUploadCustomDevice() {
             if (!halCustomFileContent) return;
-            fetch('/api/hal/devices/custom', {
+            apiFetch('/api/hal/devices/custom', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: halCustomFileContent
@@ -911,7 +911,7 @@
             var container = document.getElementById('halCcAddrChips');
             if (!container) return;
             container.innerHTML = '<span class="hal-cc-chip-skip">Loading...</span>';
-            fetch('/api/hal/scan/unmatched')
+            apiFetch('/api/hal/scan/unmatched')
                 .then(function(r) {
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json();
@@ -1142,7 +1142,7 @@
             var data = halCcValidate();
             if (!data) return;
 
-            fetch('/api/hal/devices/custom/create', {
+            apiFetch('/api/hal/devices/custom/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)

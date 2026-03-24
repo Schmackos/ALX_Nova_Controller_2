@@ -69,7 +69,9 @@ static void _custom_dac_write(const int32_t* buf, int stereoFrames) {
             HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(dev->getSlot());
             if (cfg && cfg->valid && cfg->i2sPort != 255) txPort = cfg->i2sPort;
         }
-        i2s_port_write(txPort, txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
+        if (!i2s_port_write(txPort, txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20) || bytesWritten == 0) {
+            LOG_W("[HAL:Custom]", "I2S write failed: port=%u bytes=%u", txPort, (unsigned)bytesWritten);
+        }
 
         src += chunk;
         remaining -= chunk;
@@ -175,11 +177,11 @@ bool HalCustomDevice::_probeI2c() {
         return false;
     }
 
-    // Select Wire instance for bus
+    // Select Wire instance for bus (Bus 0=Wire, Bus 1=Wire1, Bus 2=Wire2)
     TwoWire* wire = &Wire;
     switch (busIndex) {
-        case HAL_I2C_BUS_EXT:      wire = &Wire1;  break;
-        case HAL_I2C_BUS_ONBOARD:  wire = &Wire;   break;
+        case HAL_I2C_BUS_EXT:      wire = &Wire;   break;
+        case HAL_I2C_BUS_ONBOARD:  wire = &Wire1;  break;
         case HAL_I2C_BUS_EXP:
         default:                   wire = &Wire2;  break;
     }
@@ -228,8 +230,8 @@ bool HalCustomDevice::_runInitSequence() {
 
     TwoWire* wire = &Wire;
     switch (busIndex) {
-        case HAL_I2C_BUS_EXT:      wire = &Wire1; break;
-        case HAL_I2C_BUS_ONBOARD:  wire = &Wire;  break;
+        case HAL_I2C_BUS_EXT:      wire = &Wire;  break;
+        case HAL_I2C_BUS_ONBOARD:  wire = &Wire1; break;
         case HAL_I2C_BUS_EXP:
         default:                   wire = &Wire2; break;
     }

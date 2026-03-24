@@ -3,6 +3,7 @@
 
 #include "hal_api.h"
 #include "../http_security.h"
+#include "../auth_handler.h"
 #include "../rate_limiter.h"
 #include "hal_device_manager.h"
 #include "hal_device_db.h"
@@ -78,10 +79,7 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
 void registerHalApiEndpoints(WebServer& server) {
     // GET /api/hal/devices — list all registered devices
     server.on("/api/hal/devices", HTTP_GET, [&server]() {
-        if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
-            server_send(429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
-            return;
-        }
+        if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
 
@@ -102,6 +100,7 @@ void registerHalApiEndpoints(WebServer& server) {
     // Poll GET /api/hal/devices or watch the "halDeviceState" WebSocket
     // broadcast (scanning=false) to know when the scan is complete.
     server.on("/api/hal/scan", HTTP_POST, [&server]() {
+        if (!requireAuth()) return;
         if (appState._halScanInProgress) {
             server_send(409, "application/json", "{\"error\":\"Scan already in progress\"}");
             return;
@@ -154,6 +153,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // GET /api/hal/db — list device database entries
     server.on("/api/hal/db", HTTP_GET, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
 
@@ -176,6 +176,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // GET /api/hal/db/presets — list available device presets
     server.on("/api/hal/db/presets", HTTP_GET, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
 
@@ -195,6 +196,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // POST /api/hal/devices — manually register a device by compatible string
     server.on("/api/hal/devices", HTTP_POST, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
         if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
@@ -261,6 +263,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // PUT /api/hal/devices — update device config
     server.on("/api/hal/devices", HTTP_PUT, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
         if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
@@ -345,6 +348,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // DELETE /api/hal/devices — remove a device
     server.on("/api/hal/devices", HTTP_DELETE, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
         if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
@@ -388,6 +392,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // POST /api/hal/devices/reinit — re-initialize a device
     server.on("/api/hal/devices/reinit", HTTP_POST, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
         if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
@@ -433,6 +438,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // GET /api/hal/settings — auto-discovery toggle
     server.on("/api/hal/settings", HTTP_GET, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         doc["halAutoDiscovery"] = appState.halAutoDiscovery;
         String json;
@@ -442,6 +448,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // PUT /api/hal/settings — save auto-discovery toggle
     server.on("/api/hal/settings", HTTP_PUT, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain")) == DeserializationError::Ok) {
             if (doc["halAutoDiscovery"].is<bool>()) {
@@ -454,6 +461,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // GET /api/hal/devices/custom — list custom device schemas stored in LittleFS
     server.on("/api/hal/devices/custom", HTTP_GET, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc["schemas"].to<JsonArray>();
 
@@ -477,6 +485,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // POST /api/hal/devices/custom — upload a JSON device schema
     server.on("/api/hal/devices/custom", HTTP_POST, [&server]() {
+        if (!requireAuth()) return;
         String bodyBuf = server.arg("plain");
 
         JsonDocument doc;
@@ -513,6 +522,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // DELETE /api/hal/devices/custom — remove a schema by name query param (?name=<compatible>)
     server.on("/api/hal/devices/custom", HTTP_DELETE, [&server]() {
+        if (!requireAuth()) return;
         if (!server.hasArg("name")) {
             server_send(400, "application/json", "{\"error\":\"Missing name parameter\"}");
             return;
@@ -538,6 +548,7 @@ void registerHalApiEndpoints(WebServer& server) {
     // Auto-generates compatible: "custom," + slugified(name).
     // Returns 201 with slot, name, state.
     server.on("/api/hal/devices/custom/create", HTTP_POST, [&server]() {
+        if (!requireAuth()) return;
         JsonDocument body;
         DeserializationError err = deserializeJson(body, server.arg("plain"));
         if (err) {
@@ -696,6 +707,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // GET /api/hal/scan/unmatched — return unmatched I2C addresses from last scan
     server.on("/api/hal/scan/unmatched", HTTP_GET, [&server]() {
+        if (!requireAuth()) return;
         HalUnmatchedAddr buf[HAL_UNMATCHED_MAX];
         int n = hal_get_unmatched_addresses(buf, HAL_UNMATCHED_MAX);
 
