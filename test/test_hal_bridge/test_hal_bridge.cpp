@@ -27,6 +27,7 @@
 #include "../../src/hal/hal_types.h"
 #include "../../src/hal/hal_device.h"
 #include "../../src/hal/hal_audio_device.h"
+#include "../../src/audio_input_source.h"
 
 // Inline the .cpp files
 #include "../test_mocks/Preferences.h"
@@ -156,6 +157,75 @@ public:
         out->channelCount = 2;
         out->halSlot = _slot;
         return true;
+    }
+};
+
+// ===== Multi-sink DAC test device (like ES9038PRO with 4 stereo pairs) =====
+class TestMultiSinkDevice : public HalDevice {
+public:
+    int sinkCount;
+    int deinitCount;
+
+    TestMultiSinkDevice(const char* compat, int numSinks = 4) {
+        strncpy(_descriptor.compatible, compat, 31);
+        _descriptor.compatible[31] = '\0';
+        strncpy(_descriptor.name, compat, 32);
+        _descriptor.name[32] = '\0';
+        _descriptor.type = HAL_DEV_DAC;
+        _descriptor.channelCount = (uint8_t)(numSinks * 2);
+        _descriptor.capabilities = HAL_CAP_DAC_PATH;
+        _initPriority = HAL_PRIORITY_HARDWARE;
+        sinkCount = numSinks;
+        deinitCount = 0;
+    }
+    bool probe() override { return true; }
+    HalInitResult init() override { return hal_init_ok(); }
+    void deinit() override { deinitCount++; }
+    void dumpConfig() override {}
+    bool healthCheck() override { return true; }
+    int getSinkCount() const override { return sinkCount; }
+    bool buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) override {
+        if (idx >= sinkCount) return false;
+        *out = AUDIO_OUTPUT_SINK_INIT;
+        out->name = _descriptor.name;
+        out->firstChannel = (uint8_t)(sinkSlot * 2);
+        out->channelCount = 2;
+        out->halSlot = _slot;
+        return true;
+    }
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
+        return buildSinkAt(0, sinkSlot, out);
+    }
+};
+
+// ===== Multi-source ADC test device (like ES9843PRO with 2 stereo pairs) =====
+class TestMultiSourceDevice : public HalDevice {
+public:
+    AudioInputSource _sources[2];
+
+    TestMultiSourceDevice(const char* compat) {
+        strncpy(_descriptor.compatible, compat, 31);
+        _descriptor.compatible[31] = '\0';
+        strncpy(_descriptor.name, compat, 32);
+        _descriptor.name[32] = '\0';
+        _descriptor.type = HAL_DEV_ADC;
+        _descriptor.channelCount = 4;
+        _descriptor.capabilities = HAL_CAP_ADC_PATH;
+        _initPriority = HAL_PRIORITY_HARDWARE;
+        memset(_sources, 0, sizeof(_sources));
+    }
+    bool probe() override { return true; }
+    HalInitResult init() override { return hal_init_ok(); }
+    void deinit() override {}
+    void dumpConfig() override {}
+    bool healthCheck() override { return true; }
+    int getInputSourceCount() const override { return 2; }
+    const AudioInputSource* getInputSourceAt(int idx) const override {
+        if (idx < 0 || idx >= 2) return nullptr;
+        return &_sources[idx];
+    }
+    const AudioInputSource* getInputSource() const override {
+        return &_sources[0];
     }
 };
 
@@ -1286,6 +1356,112 @@ void test_bridge_activate_buildSink_failure_clears_mapping() {
     TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));
 }
 
+// ===== Group 10: Multi-sink/source edge cases =====
+
+void test_fragmented_multi_sink_reuse(void) {
+    // Register 3 x 4-sink devices, filling slots [0-3], [4-7], [8-11]
+    TestMultiSinkDevice dac0("dac-quad-0");
+    TestMultiSinkDevice dac1("dac-quad-1");
+    TestMultiSinkDevice dac2("dac-quad-2");
+
+    int slot0 = mgr->registerDevice(&dac0, HAL_DISC_BUILTIN);
+    int slot1 = mgr->registerDevice(&dac1, HAL_DISC_BUILTIN);
+    int slot2 = mgr->registerDevice(&dac2, HAL_DISC_BUILTIN);
+
+    dac0._state = HAL_STATE_AVAILABLE;
+    dac1._state = HAL_STATE_AVAILABLE;
+    dac2._state = HAL_STATE_AVAILABLE;
+    hal_pipeline_activate_device(slot0);
+    hal_pipeline_activate_device(slot1);
+    hal_pipeline_activate_device(slot2);
+
+    TEST_ASSERT_EQUAL(12, hal_pipeline_output_count());  // 3 * 4
+    int8_t sinkSlot1 = hal_pipeline_get_sink_slot(slot1);
+    TEST_ASSERT_EQUAL(4, sinkSlot1);  // Middle device starts at slot 4
+
+    // Remove middle device
+    hal_pipeline_deactivate_device(slot1);
+    TEST_ASSERT_EQUAL(8, hal_pipeline_output_count());  // 2 * 4
+
+    // Register new 4-sink device — should reuse freed slots [4-7]
+    TestMultiSinkDevice dac3("dac-quad-3");
+    int slot3 = mgr->registerDevice(&dac3, HAL_DISC_BUILTIN);
+    dac3._state = HAL_STATE_AVAILABLE;
+    hal_pipeline_activate_device(slot3);
+
+    int8_t newSlot = hal_pipeline_get_sink_slot(slot3);
+    TEST_ASSERT_EQUAL(4, newSlot);  // Reuses first free consecutive run
+    TEST_ASSERT_EQUAL(12, hal_pipeline_output_count());
+}
+
+void test_sink_overflow_at_capacity(void) {
+    // Fill all 16 sink slots with 4 x 4-sink devices
+    TestMultiSinkDevice dacs[4] = {
+        TestMultiSinkDevice("dac-fill-0"),
+        TestMultiSinkDevice("dac-fill-1"),
+        TestMultiSinkDevice("dac-fill-2"),
+        TestMultiSinkDevice("dac-fill-3")
+    };
+
+    for (int i = 0; i < 4; i++) {
+        int s = mgr->registerDevice(&dacs[i], HAL_DISC_BUILTIN);
+        dacs[i]._state = HAL_STATE_AVAILABLE;
+        hal_pipeline_activate_device(s);
+    }
+    TEST_ASSERT_EQUAL(16, hal_pipeline_output_count());
+
+    // 5th device should fail — no room
+    TestMultiSinkDevice dacOverflow("dac-overflow");
+    int overflowSlot = mgr->registerDevice(&dacOverflow, HAL_DISC_BUILTIN);
+    dacOverflow._state = HAL_STATE_AVAILABLE;
+    hal_pipeline_activate_device(overflowSlot);
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(overflowSlot));
+    TEST_ASSERT_EQUAL(16, hal_pipeline_output_count());  // Unchanged
+}
+
+void test_simultaneous_multi_sink_and_multi_source(void) {
+    // 2 x 4-sink DACs + 2 x 2-source ADCs simultaneously
+    TestMultiSinkDevice dacA("dac-multi-a");
+    TestMultiSinkDevice dacB("dac-multi-b");
+    TestMultiSourceDevice adcA("adc-multi-a");
+    TestMultiSourceDevice adcB("adc-multi-b");
+
+    int sA = mgr->registerDevice(&dacA, HAL_DISC_BUILTIN);
+    int sB = mgr->registerDevice(&dacB, HAL_DISC_BUILTIN);
+    int sC = mgr->registerDevice(&adcA, HAL_DISC_BUILTIN);
+    int sD = mgr->registerDevice(&adcB, HAL_DISC_BUILTIN);
+
+    dacA._state = HAL_STATE_AVAILABLE;
+    dacB._state = HAL_STATE_AVAILABLE;
+    adcA._state = HAL_STATE_AVAILABLE;
+    adcB._state = HAL_STATE_AVAILABLE;
+
+    hal_pipeline_activate_device(sA);
+    hal_pipeline_activate_device(sB);
+    hal_pipeline_on_device_available(sC);
+    hal_pipeline_on_device_available(sD);
+
+    // 8 sink slots (2 * 4)
+    TEST_ASSERT_EQUAL(8, hal_pipeline_output_count());
+    // 4 input lanes (2 * 2)
+    TEST_ASSERT_EQUAL(4, hal_pipeline_input_count());
+
+    // Verify no overlap — DAC slots and ADC lanes assigned independently
+    int8_t dacASlot = hal_pipeline_get_sink_slot(sA);
+    int8_t dacBSlot = hal_pipeline_get_sink_slot(sB);
+    int8_t adcALane = hal_pipeline_get_input_lane(sC);
+    int8_t adcBLane = hal_pipeline_get_input_lane(sD);
+
+    TEST_ASSERT_GREATER_OR_EQUAL(0, dacASlot);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, dacBSlot);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, adcALane);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, adcBLane);
+    // DAC slots should be separate
+    TEST_ASSERT_NOT_EQUAL(dacASlot, dacBSlot);
+    // ADC lanes should be separate
+    TEST_ASSERT_NOT_EQUAL(adcALane, adcBLane);
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     (void)argc;
@@ -1375,6 +1551,11 @@ int main(int argc, char** argv) {
     RUN_TEST(test_on_device_available_uses_activate_path);
     RUN_TEST(test_on_device_removed_uses_deactivate_path);
     RUN_TEST(test_bridge_activate_buildSink_failure_clears_mapping);
+
+    // Group 10: Multi-sink/source edge cases
+    RUN_TEST(test_fragmented_multi_sink_reuse);
+    RUN_TEST(test_sink_overflow_at_capacity);
+    RUN_TEST(test_simultaneous_multi_sink_and_multi_source);
 
     return UNITY_END();
 }

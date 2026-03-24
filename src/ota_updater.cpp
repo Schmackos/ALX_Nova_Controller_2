@@ -6,6 +6,7 @@
 #include "debug_serial.h"
 #include "utils.h"
 #include "buzzer_handler.h"
+#include "audio_pipeline.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -1229,7 +1230,7 @@ static void otaDownloadTask(void* param) {
     ESP.restart();
   } else {
     LOG_W("[OTA] Update failed");
-    appState.audio.paused = false;  // Resume audio capture
+    audio_pipeline_resume();  // Resume audio capture
     appState.ota.inProgress = false;
     appState.ota.updateDiscoveredTime = 0;
     appState.setFSMState(STATE_IDLE);
@@ -1255,8 +1256,7 @@ void startOTADownloadTask() {
   appState.markOTADirty();
 
   // Pause audio capture to prevent I2S driver conflicts during OTA
-  appState.audio.paused = true;
-  vTaskDelay(pdMS_TO_TICKS(50));  // Ensure audio task exits i2s_read()
+  audio_pipeline_request_pause(100);
 
   BaseType_t result = xTaskCreatePinnedToCore(
     otaDownloadTask, "OTA_DL", TASK_STACK_SIZE_OTA,
@@ -1265,7 +1265,7 @@ void startOTADownloadTask() {
 
   if (result != pdPASS) {
     LOG_E("[OTA] Failed to create download task");
-    appState.audio.paused = false;  // Resume audio if task creation failed
+    audio_pipeline_resume();  // Resume audio if task creation failed
     appState.ota.inProgress = false;
     setOTAProgress("error", "Failed to start update task", 0);
     appState.setFSMState(STATE_IDLE);

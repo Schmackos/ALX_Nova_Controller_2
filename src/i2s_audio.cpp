@@ -1346,9 +1346,12 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
     LOG_I("[Audio] Changing sample rate: %lu -> %lu Hz", _currentSampleRate, rate);
 
-    // Pause audio task during channel teardown/recreate
-    AppState::getInstance().audio.paused = true;
-    vTaskDelay(pdMS_TO_TICKS(60));
+    // Pause audio task during channel teardown/recreate.
+    // If caller already paused (e.g., hal_settings.cpp), skip to avoid double semaphore take.
+    bool wasPaused = AppState::getInstance().audio.paused;
+    if (!wasPaused) {
+        audio_pipeline_request_pause(100);
+    }
 
     // Teardown all channels (configure functions handle this, but be explicit)
     if (_rx_handle_adc1) { i2s_channel_disable(_rx_handle_adc1); i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL; }
@@ -1399,7 +1402,9 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     }
 #endif // CONFIG_IDF_TARGET_ESP32P4
 
-    AppState::getInstance().audio.paused = false;
+    if (!wasPaused) {
+        audio_pipeline_resume();
+    }
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
     return true;
 }

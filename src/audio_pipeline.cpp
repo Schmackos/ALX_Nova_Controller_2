@@ -1078,6 +1078,28 @@ void audio_pipeline_remove_sink(int slot) {
           slot, name ? name : "?", (int)_sinkCount);
 }
 
+// ===== Cross-core Pause/Resume Protocol =====
+
+#ifndef NATIVE_TEST
+bool audio_pipeline_request_pause(uint32_t timeout_ms) {
+    AppState& as = AppState::getInstance();
+    as.audio.paused = true;
+    if (as.audio.taskPausedAck) {
+        BaseType_t took = xSemaphoreTake(as.audio.taskPausedAck,
+                                          pdMS_TO_TICKS(timeout_ms));
+        if (took != pdTRUE) {
+            LOG_W("[Audio] Pause semaphore timeout (%lums)", (unsigned long)timeout_ms);
+            return false;
+        }
+    }
+    return true;
+}
+
+void audio_pipeline_resume() {
+    AppState::getInstance().audio.paused = false;
+}
+#endif
+
 // ===== Matrix Persistence =====
 
 void audio_pipeline_save_matrix() {

@@ -45,6 +45,9 @@ inline void audio_pipeline_remove_sink(int slot) {
     _mock_remove_sink_count++;
     _mock_last_remove_sink_slot = slot;
 }
+// Stubs for pause/resume helpers in native test builds
+inline bool audio_pipeline_request_pause(uint32_t timeout_ms = 50) { (void)timeout_ms; return true; }
+inline void audio_pipeline_resume() {}
 // Reset all mock counters -- called from test setUp()
 inline void hal_pipeline_reset_mock_counters() {
     _mock_set_sink_count = 0;
@@ -306,13 +309,7 @@ void hal_pipeline_deactivate_device(uint8_t halSlot) {
     const char* name = dev ? dev->getDescriptor().name : "unknown";
 
     // HC-2: Take audioPaused semaphore ONCE before deinit batch
-#ifndef NATIVE_TEST
-    AppState& as = AppState::getInstance();
-    as.audio.paused = true;
-    if (as.audio.taskPausedAck) {
-        xSemaphoreTake(as.audio.taskPausedAck, pdMS_TO_TICKS(50));
-    }
-#endif
+    audio_pipeline_request_pause(50);
 
     // Device deinit (HC-3: device only touches its own TX path, never RX/MCLK)
     if (dev) {
@@ -330,9 +327,7 @@ void hal_pipeline_deactivate_device(uint8_t halSlot) {
     _halSlotSinkCount[halSlot]  = 0;
 
     // Release audioPaused
-#ifndef NATIVE_TEST
-    as.audio.paused = false;
-#endif
+    audio_pipeline_resume();
 
     _updateActiveCounts();
 
@@ -602,7 +597,10 @@ void hal_pipeline_sync() {
 int hal_pipeline_output_count() {
     int count = 0;
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        if (_halSlotToSinkSlot[i] >= 0) count++;
+        if (_halSlotToSinkSlot[i] >= 0) {
+            int n = (int)_halSlotSinkCount[i];
+            count += (n > 0) ? n : 1;
+        }
     }
     return count;
 }

@@ -14,11 +14,24 @@ public:
   std::string host;
   uint16_t port = 0;
 
+  // Failure injection
+  bool _connectResult = true;
+  uint16_t _timeout = 0;
+
+  void setConnectResult(bool result) { _connectResult = result; }
+  void setTimeout(uint16_t ms) { _timeout = ms; }
+
   bool connect(const char *host, uint16_t port) {
     this->host = host;
     this->port = port;
+    if (!_connectResult) return false;
     isConnected = true;
     return true;
+  }
+
+  bool connect(const char *host, uint16_t port, uint32_t timeout) {
+    (void)timeout;
+    return connect(host, port);
   }
 
   void stop() { isConnected = false; }
@@ -44,6 +57,15 @@ public:
   static std::map<std::string, std::string> publishedMessages;
   static std::vector<std::string> subscribedTopics;
 
+  // Failure injection
+  bool _connectResult = true;
+  bool _publishResult = true;
+
+  void setConnectResult(bool result) { _connectResult = result; }
+  void setPublishResult(bool result) { _publishResult = result; }
+  void simulateDisconnect() { isConnected = false; }
+  void setBufferSize(uint16_t size) { (void)size; }  // No-op mock
+
   PubSubClient() : client(nullptr), callback(nullptr) {}
 
   PubSubClient(WiFiClient &wifiClient)
@@ -65,6 +87,7 @@ public:
       return false;
     }
     clientId = id;
+    if (!_connectResult) return false;
     if (client) {
       if (!client->connect(broker.c_str(), brokerPort)) {
         return false;
@@ -72,6 +95,24 @@ public:
     }
     isConnected = true;
     return true;
+  }
+
+  // LWT connect (5-arg form)
+  bool connect(const char *id, const char *willTopic, uint8_t willQos,
+               bool willRetain, const char *willMessage) {
+    (void)willTopic; (void)willQos; (void)willRetain; (void)willMessage;
+    return connect(id);
+  }
+
+  // LWT + auth connect (7-arg form)
+  bool connect(const char *id, const char *user, const char *pass,
+               const char *willTopic, uint8_t willQos, bool willRetain,
+               const char *willMessage) {
+    (void)willTopic; (void)willQos; (void)willRetain; (void)willMessage;
+    if (!user || !pass) return false;
+    username = user;
+    password = pass;
+    return connect(id);
   }
 
   bool connect(const char *id, const char *user, const char *pass) {
@@ -94,8 +135,14 @@ public:
     if (!isConnected || !topic || !payload) {
       return false;
     }
+    if (!_publishResult) return false;
     publishedMessages[std::string(topic)] = std::string(payload);
     return true;
+  }
+
+  bool publish(const char *topic, const char *payload, bool retained) {
+    (void)retained;
+    return publish(topic, payload);
   }
 
   bool publish(const char *topic, const uint8_t *payload,
@@ -103,6 +150,7 @@ public:
     if (!isConnected || !topic) {
       return false;
     }
+    if (!_publishResult) return false;
     std::string payloadStr(reinterpret_cast<const char *>(payload), plength);
     publishedMessages[std::string(topic)] = payloadStr;
     return true;

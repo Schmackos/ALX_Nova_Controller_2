@@ -190,10 +190,9 @@ void hal_apply_config(uint8_t slot) {
                                   ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR);
         // Re-enable I2S devices: reinit I2S with potentially changed pin config
         if (ok && desc.bus.type == HAL_BUS_I2S) {
-            appState.audio.paused = true;
-            vTaskDelay(pdMS_TO_TICKS(30));
+            audio_pipeline_request_pause(50);
             i2s_audio_set_sample_rate(appState.audio.sampleRate);
-            appState.audio.paused = false;
+            audio_pipeline_resume();
         }
         LOG_I("[HAL:Settings] Device slot %u %s", slot, ok ? "re-enabled" : "re-enable failed");
         appState.markHalDeviceDirty();
@@ -204,10 +203,9 @@ void hal_apply_config(uint8_t slot) {
 
     if (desc.bus.type == HAL_BUS_I2S) {
         // Pause audio pipeline, reconfigure I2S with new pins, resume
-        appState.audio.paused = true;
-        vTaskDelay(pdMS_TO_TICKS(30));
+        audio_pipeline_request_pause(50);
         i2s_audio_set_sample_rate(appState.audio.sampleRate);
-        appState.audio.paused = false;
+        audio_pipeline_resume();
         LOG_I("[HAL:Settings] I2S device slot %u reconfigured (hot)", slot);
     } else {
         HalDeviceState prevState = dev->_state;

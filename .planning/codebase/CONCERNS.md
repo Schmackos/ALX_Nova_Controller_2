@@ -138,10 +138,9 @@
 ## Fragile Areas
 
 **HAL Device Slot Assignment — Manual Slot Logic:**
-- Files: `src/hal/hal_device_manager.cpp`, `src/hal/hal_pipeline_bridge.cpp` (280+ lines managing ordinal counting)
-- Why fragile: Capability-bit ordinal counting (`HAL_CAP_DAC_PATH`, `HAL_CAP_ADC_PATH`) determines sink/lane slot assignment. Multi-instance devices (e.g., ES9038PRO with 4 sinks, ES9843PRO with 2 sources) use `_halSlotSinkCount[]` / `_halSlotAdcLaneCount[]` to pack consecutive slots. If capability bits drift or count logic wrong, audio routing silently fails or routers to wrong slot
-- Safe modification: Any change to multi-instance slot logic requires unit tests for each device count scenario (1×2ch, 2×4ch, 1×8ch combinations). Existing test: `test_hal_multi_instance/`
-- Test coverage: Multi-instance tested, but single-lane boundary cases (e.g., lane 14/15 overflow) not explicitly tested. Add regression test for matrix bounds validation
+✅ RESOLVED (2026-03-24): Added 3 edge case tests: fragmented multi-sink reuse, sink overflow at capacity (16 slots), simultaneous multi-sink+multi-source. Fixed `hal_pipeline_output_count()` to sum `_halSlotSinkCount` for multi-sink devices. 66 total bridge tests now cover all identified gaps.
+- Files: `src/hal/hal_pipeline_bridge.cpp` (output_count fix), `test/test_hal_bridge/test_hal_bridge.cpp` (+3 tests)
+- Safe modification: Bitmap-based allocation + comprehensive tests. Capabilities are static per device. Risk: LOW.
 
 **Pipeline Matrix Bounds Validation (3 boundary checks):**
 - Files: `src/audio_pipeline.cpp` (lines 842–858 for `set_source()`, 989–1007 for `set_sink()`)
@@ -150,10 +149,9 @@
 - Test coverage: `test_pipeline_bounds/` + `test_matrix_bounds/` verify overflow rejection. Good coverage
 
 **I2S Driver Reinstall Handshake (audioPaused flag + binary semaphore):**
-- Files: `src/audio_pipeline.cpp` (pipeline task observes paused flag), `src/dac_hal.cpp` (DAC deinit sets paused + semaphore), `src/config.h` (task definition)
-- Why fragile: DAC must uninstall I2S driver at runtime (e.g., toggling DAC on/off). Audio pipeline task may be mid-`i2s_read()`. Solution: Set `paused=true`, wait for task to acknowledge via semaphore, THEN uninstall. If either side missing: race condition → MCU crash
-- Safe modification: This is locked in. Never remove the semaphore handshake. Never skip `xSemaphoreTake()` in DAC deinit. Documented in CLAUDE.md "Current Gotchas"
-- Test coverage: `test_dac_hal/` exercises toggle logic, but race conditions (hard to test without real multitasking) not explicitly covered. Risk: MEDIUM (low probability but high impact if wrong)
+✅ RESOLVED (2026-03-24): Centralized into `audio_pipeline_request_pause()`/`audio_pipeline_resume()` helpers. All 5 callers now use the semaphore handshake (was only 1 of 5). LOG_W on timeout. `wasPaused` guard in `i2s_audio_set_sample_rate()` prevents double semaphore take. 4 new pause protocol tests added.
+- Files fixed: `src/audio_pipeline.h/.cpp` (new API), `src/hal/hal_pipeline_bridge.cpp`, `src/hal/hal_settings.cpp` (2 sites), `src/i2s_audio.cpp`, `src/ota_updater.cpp` (3 sites)
+- Safe modification: All callers use helpers. Never set `appState.audio.paused` directly outside `audio_pipeline.cpp`.
 
 **HAL Device State Machine (10 states, 5 transitions):**
 - Files: `src/hal/hal_device.h` (HalDeviceState enum), `src/hal/hal_device_manager.cpp` (state transitions)
@@ -264,10 +262,9 @@
 - Recommendation: Add `test_heap_budget/` edge cases: (1) fill all 32 entries, (2) remove entry that doesn't exist (should be no-op), (3) duplicate labels (should update, not add)
 
 **MQTT Broker Unreachability Recovery:**
-- What's not tested: Broker disappears mid-publish (TCP reset), socket timeout triggers, reconnect backoff with pending config change
-- Files: `src/mqtt_task.cpp` (20 Hz loop with socket timeout), `src/mqtt_handler.cpp` (mqttClient.loop())
-- Risk: MEDIUM — if broker is flaky, MQTT task may stall Core 0 periodically. Not tested under real network congestion
-- Recommendation: E2E test with unreachable broker (route to blackhole), verify Core 0 is not starved >500ms
+✅ RESOLVED (2026-03-24): Added 7 tests for backoff state machine: progression 5→10→20→40→60s, cap at 60s, reset on success, skip-during-backoff, proceed-after-backoff, TCP connect failure propagation, publish-after-disconnect. PubSubClient mock extended with failure injection (`setConnectResult`, `setPublishResult`, `simulateDisconnect`).
+- Files: `test/test_mqtt/test_mqtt_handler.cpp` (+7 tests), `test/test_mocks/PubSubClient.h` (failure injection)
+- Remaining: Real network congestion (broker disappears mid-publish) not testable in native tests — requires on-device testing.
 
 **WebSocket Auth Exhaustion (17+ concurrent clients):**
 ✅ RESOLVED (2026-03-23): New test_websocket_auth module (15 tests) covers pool exhaustion, TTL expiry, single-use, slot reuse, millis wraparound.
