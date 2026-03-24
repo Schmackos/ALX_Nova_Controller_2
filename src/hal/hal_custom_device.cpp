@@ -68,7 +68,8 @@ static void _custom_dac_write(const int32_t* buf, int stereoFrames) {
             HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(dev->getSlot());
             if (cfg && cfg->valid && cfg->i2sPort != 255) txPort = cfg->i2sPort;
         }
-        if (!i2s_port_write(txPort, txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20) || bytesWritten == 0) {
+        i2s_port_write(txPort, txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
+        if (bytesWritten == 0) {
             LOG_W("[HAL:Custom]", "I2S write failed: port=%u bytes=%u", txPort, (unsigned)bytesWritten);
         }
 

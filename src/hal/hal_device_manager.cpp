@@ -154,7 +154,7 @@ uint8_t HalDeviceManager::getCount() const {
 void HalDeviceManager::initAll() {
     // Restore persistent fault counters before any device init so health-check
     // retry logic sees the correct accumulated fault history from previous boots.
-    hal_fault_load_all();
+    loadFaultCounters();
 
     // Collect non-null devices into a sortable array
     HalDevice* sorted[HAL_MAX_DEVICES];
@@ -253,7 +253,7 @@ void HalDeviceManager::healthCheckAll() {
                     dev->setReady(false);
                     dev->_state = HAL_STATE_ERROR;
                     _faultCount[i]++;
-                    hal_fault_save(static_cast<uint8_t>(i));
+                    saveFaultCounter(static_cast<uint8_t>(i));
                     diag_emit(DIAG_HAL_REINIT_EXHAUSTED, DIAG_SEV_CRIT,
                               static_cast<uint8_t>(i), dev->getDescriptor().name, "retries exhausted");
                     // 1a: Always fire callback on ERROR — bridge removal is idempotent.
@@ -381,7 +381,7 @@ void HalDeviceManager::_resetRetryState(uint8_t slot) {
 // Namespace "hal_faults", keys "f00".."f31" (slot index zero-padded to 2 digits).
 // Guards ensure no-op builds on native test targets where Preferences is unavailable.
 
-void HalDeviceManager::hal_fault_load_all() {
+void HalDeviceManager::loadFaultCounters() {
 #ifndef NATIVE_TEST
     Preferences prefs;
     if (!prefs.begin("hal_faults", true)) return;  // read-only open
@@ -398,7 +398,7 @@ void HalDeviceManager::hal_fault_load_all() {
 #endif
 }
 
-void HalDeviceManager::hal_fault_save(uint8_t slot) {
+void HalDeviceManager::saveFaultCounter(uint8_t slot) {
 #ifndef NATIVE_TEST
     if (slot >= HAL_MAX_DEVICES) return;
     Preferences prefs;
@@ -410,7 +410,7 @@ void HalDeviceManager::hal_fault_save(uint8_t slot) {
 #endif
 }
 
-void HalDeviceManager::hal_fault_clear_all() {
+void HalDeviceManager::clearFaultCounters() {
 #ifndef NATIVE_TEST
     Preferences prefs;
     if (!prefs.begin("hal_faults", false)) return;

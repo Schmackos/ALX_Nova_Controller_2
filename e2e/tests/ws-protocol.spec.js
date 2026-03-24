@@ -8,7 +8,7 @@
  * @ws @smoke
  */
 
-const { test: base, expect } = require('@playwright/test');
+const { test, expect } = require('@playwright/test');
 const { buildInitialState } = require('../helpers/ws-helpers');
 
 test.describe('@ws @smoke WebSocket Protocol Version', () => {

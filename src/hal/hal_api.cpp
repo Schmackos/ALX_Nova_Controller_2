@@ -714,7 +714,7 @@ void registerHalApiEndpoints(WebServer& server) {
     // POST /api/hal/devices/faults/clear — reset all persistent fault counters (field service)
     server.on("/api/hal/devices/faults/clear", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
-        HalDeviceManager::instance().hal_fault_clear_all();
+        HalDeviceManager::instance().clearFaultCounters();
         LOG_I("[HAL:API] Fault counters cleared by field service request");
         json_response(server, 200);
     });

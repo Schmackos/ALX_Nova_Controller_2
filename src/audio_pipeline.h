@@ -47,14 +47,15 @@ void audio_pipeline_notify_dsp_swap();
 // Read from main-loop context via audio_pipeline_get_timing() — values are
 // snap-read uint32/float so no synchronisation primitive is needed on ESP32-P4.
 struct PipelineTimingMetrics {
-    uint32_t totalFrameUs;    // Total pipeline iteration time (us)
+    uint32_t totalFrameUs;    // Matrix+outputDSP+sink time (backward compat, us)
     uint32_t matrixMixUs;     // Matrix mixing stage time (us)
     uint32_t outputDspUs;     // Output DSP stage time (us)
-    float    totalCpuPercent; // Total pipeline CPU load (0-100 %)
+    float    totalCpuPercent; // CPU load based on totalFrameUs (0-100 %)
     // Per-stage breakdown (added in foundation hardening)
     uint32_t inputReadUs;     // All-lane I2S read time (us)
     uint32_t perInputDspUs;   // Per-input DSP processing time (us)
     uint32_t sinkWriteUs;     // All-sink write time (us)
+    uint32_t totalE2eUs;      // Full end-to-end: input read through sink write (us)
 };
 
 PipelineTimingMetrics audio_pipeline_get_timing();

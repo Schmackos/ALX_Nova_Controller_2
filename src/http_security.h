@@ -28,11 +28,26 @@ inline void server_send(int code) {
 // Structured JSON response envelope: {"success":true/false[,"data":...][,"error":"..."]}.
 // Use for new REST endpoints to ensure consistent response shape.
 // Do NOT retrofit existing endpoints — changes would break existing clients.
+// `data` must be pre-serialized JSON (object/array). `error` is escaped for safety.
 inline void json_response(WebServer& server, int code, const char* data = nullptr, const char* error = nullptr) {
     String json = "{\"success\":";
     json += (code >= 200 && code < 300) ? "true" : "false";
     if (data)  { json += ",\"data\":";    json += data;  }
-    if (error) { json += ",\"error\":\""; json += error; json += "\""; }
+    if (error) {
+        json += ",\"error\":\"";
+        // Escape special JSON characters to prevent malformed output
+        for (const char* p = error; *p; ++p) {
+            switch (*p) {
+                case '"':  json += "\\\""; break;
+                case '\\': json += "\\\\"; break;
+                case '\n': json += "\\n";  break;
+                case '\r': json += "\\r";  break;
+                case '\t': json += "\\t";  break;
+                default:   json += *p;     break;
+            }
+        }
+        json += "\"";
+    }
     json += "}";
     server_send(code, "application/json", json);
 }
