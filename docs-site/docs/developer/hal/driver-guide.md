@@ -116,8 +116,8 @@ Choose your base class:
 | `HalAudioDevice` | Audio output or input hardware that needs `configure()`, `setVolume()`, `setMute()` |
 | `HalAudioDevice` + `HalAudioDacInterface` | DAC-only output device (PCM5102A, MCP4725) |
 | `HalAudioDevice` + `HalAudioCodecInterface` | Combined codec with both DAC and ADC paths (ES8311) |
-| `HalEssSabreAdcBase` | ESS SABRE ADC expansion devices — provides shared I2C helpers, `_applyConfigOverrides()`, `_selectWire()`. Inherits `HalAudioDevice` + `HalAudioAdcInterface`. |
-| `HalEssSabreDacBase` | ESS SABRE DAC expansion devices — provides shared I2C helpers, `_applyConfigOverrides()`, `_selectWire()`, `_enableI2sTx()` / `_disableI2sTx()`. Inherits `HalAudioDevice` + `HalAudioDacInterface`. |
+| `HalEssSabreAdcBase` | ESS SABRE ADC expansion devices — delegates I2C to `HalI2cBus` via `_bus()`, `_applyConfigOverrides()`. Inherits `HalAudioDevice` + `HalAudioAdcInterface`. |
+| `HalEssSabreDacBase` | ESS SABRE DAC expansion devices — delegates I2C to `HalI2cBus` via `_bus()`, `_applyConfigOverrides()`, `_enableI2sTx()` / `_disableI2sTx()`. Inherits `HalAudioDevice` + `HalAudioDacInterface`. |
 
 ## Step-by-Step: Adding a New Driver
 
@@ -750,16 +750,16 @@ Set `isHardwareAdc = true` only for physical I2S ADC devices (PCM1808 pattern). 
 
 ## Expansion ADC Driver Pattern (ESS SABRE Family)
 
-When adding a new ESS SABRE ADC expansion driver, inherit from `HalEssSabreAdcBase` instead of `HalAudioDevice` directly. The base class provides shared I2C helpers and config override reading that all family members use identically.
+When adding a new ESS SABRE ADC expansion driver, inherit from `HalEssSabreAdcBase` instead of `HalAudioDevice` directly. The base class delegates all I2C access to `HalI2cBus` and provides config override reading that all family members use identically.
 
 ### Base class helpers
 
 `HalEssSabreAdcBase` (in `src/hal/hal_ess_sabre_adc_base.h`) provides:
 
-- `_writeReg(reg, val)` — 8-bit register write via I2C
-- `_readReg(reg)` — 8-bit register read via I2C
-- `_writeReg16(regLsb, val)` — 16-bit write, LSB register first, MSB register latches both (used for volume)
-- `_selectWire()` — selects the correct `TwoWire` instance based on `_i2cBusIndex`
+- `_bus()` — returns `HalI2cBus::get(_i2cBusIndex)` for thread-safe I2C access (per-bus FreeRTOS mutex)
+- `_bus().writeReg(addr, reg, val)` — 8-bit register write via I2C
+- `_bus().readReg(addr, reg)` — 8-bit register read via I2C
+- `_bus().writeReg16(addr, regLsb, val)` — 16-bit write, LSB register first, MSB register latches both (used for volume)
 - `_applyConfigOverrides()` — reads `HalDeviceConfig` into the common member fields (`_i2cAddr`, `_sdaPin`, `_sclPin`, `_i2cBusIndex`, `_sampleRate`, `_bitDepth`). Call this at the start of `init()` before any I2C transactions.
 - `_validateSampleRate(hz, supported[], count)` — returns `true` if `hz` appears in the device-specific supported rate array.
 
@@ -809,7 +809,7 @@ HalMyEssAdc::HalMyEssAdc() : HalEssSabreAdcBase() {
 
 HalInitResult HalMyEssAdc::init() {
     _applyConfigOverrides();   // reads HalDeviceConfig into _i2cAddr, _sdaPin, etc.
-    _selectWire();             // sets _wire to Wire or Wire2 based on _i2cBusIndex
+    // _bus() provides thread-safe I2C via HalI2cBus::get(_i2cBusIndex)
     // ... I2C register init sequence ...
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
@@ -915,7 +915,7 @@ HalMyEssDac::HalMyEssDac() : HalEssSabreDacBase() {
 
 HalInitResult HalMyEssDac::init() {
     _applyConfigOverrides();   // reads HalDeviceConfig into _i2cAddr, _sdaPin, etc.
-    _selectWire();             // sets _wire to Wire or Wire2 based on _i2cBusIndex
+    // _bus() provides thread-safe I2C via HalI2cBus::get(_i2cBusIndex)
     // ... I2C register init sequence (soft reset, I2S format, initial volume) ...
     if (!_enableI2sTx()) {
         return hal_init_fail(DIAG_ERR_I2S_INIT, "I2S TX enable failed");
@@ -979,7 +979,7 @@ private:
 ```cpp
 // In init():
 _applyConfigOverrides();
-_selectWire();
+// _bus() provides thread-safe I2C via HalI2cBus::get(_i2cBusIndex)
 // ... I2C register init sequence ...
 if (!_tdm.init(i2sPort)) {
     return hal_init_fail(DIAG_ERR_ALLOC, "TDM interleaver alloc failed");
@@ -1036,19 +1036,18 @@ Use `ESS_SABRE_DAC_I2C_ADDR_BASE` (0x48) in the descriptor. Create per-device re
 
 ## I2C Driver Pattern
 
-For devices with an I2C control interface (ES8311, MCP4725), `probe()` does a register read to verify the chip responds and returns the expected device ID. Keep probe fast — it runs during boot discovery and may be called on every rescan.
+For devices with an I2C control interface (ES8311, MCP4725), `probe()` does a register read to verify the chip responds and returns the expected device ID. Keep probe fast — it runs during boot discovery and may be called on every rescan. All I2C access should go through `HalI2cBus::get(busIndex)` which provides per-bus mutex locking and SDIO guard for Bus 0.
 
 ```cpp
 bool HalMyI2cDac::probe() {
 #ifndef NATIVE_TEST
-    Wire.beginTransmission(_i2cAddr);
-    int err = Wire.endTransmission();
-    if (err != 0) {
-        LOG_W("[HAL:MyI2cDac] No ACK at 0x%02X (err=%d)", _i2cAddr, err);
+    auto& bus = HalI2cBus::get(_i2cBusIndex);
+    if (!bus.probe(_i2cAddr)) {
+        LOG_W("[HAL:MyI2cDac] No ACK at 0x%02X", _i2cAddr);
         return false;
     }
     // Optional: read chip ID register for positive identification
-    uint8_t chipId = _readReg(REG_CHIP_ID);
+    uint8_t chipId = bus.readReg(_i2cAddr, REG_CHIP_ID);
     if (chipId != EXPECTED_CHIP_ID) {
         LOG_W("[HAL:MyI2cDac] Unexpected chip ID 0x%02X", chipId);
         return false;
@@ -1060,8 +1059,7 @@ bool HalMyI2cDac::probe() {
 bool HalMyI2cDac::healthCheck() {
 #ifndef NATIVE_TEST
     // Single I2C transaction to verify the device is still alive
-    Wire.beginTransmission(_i2cAddr);
-    return (Wire.endTransmission() == 0);
+    return HalI2cBus::get(_i2cBusIndex).probe(_i2cAddr);
 #else
     return _ready;
 #endif
@@ -1069,7 +1067,7 @@ bool HalMyI2cDac::healthCheck() {
 ```
 
 :::warning I2C bus selection
-Bus 0 (GPIO 48/54) shares SDIO lines with the WiFi co-processor. Scanning or transacting on this bus while WiFi is active causes `sdmmc_send_cmd` errors and an MCU reset. For new expansion devices, always target Bus 2 (GPIO 28/29) which is always safe. The HAL discovery layer skips Bus 0 automatically when WiFi is connected, but driver `init()` and `healthCheck()` do not have this guard — handle it in the driver if your device must use Bus 0.
+Bus 0 (GPIO 48/54) shares SDIO lines with the WiFi co-processor. Scanning or transacting on this bus while WiFi is active causes `sdmmc_send_cmd` errors and an MCU reset. For new expansion devices, always target Bus 2 (GPIO 28/29) which is always safe. All I2C access should go through `HalI2cBus::get(busIndex)` which checks `isSdioBlocked()` automatically for Bus 0. Never use raw Wire globals directly — use `HalI2cBus` for correct bus mapping and thread-safe mutex locking.
 :::
 
 ## Logging Convention
