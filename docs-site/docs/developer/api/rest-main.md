@@ -479,7 +479,7 @@ Checks the GitHub Releases API for a firmware version newer than the running `FI
   "current": "1.15.0",
   "latest": "1.16.0",
   "updateAvailable": true,
-  "releaseUrl": "https://github.com/owner/repo/releases/tag/v1.16.0"
+  "releaseUrl": "https://github.com/Schmackos/ALX_Nova_Controller_2/releases/tag/v1.16.0"
 }
 ```
 
