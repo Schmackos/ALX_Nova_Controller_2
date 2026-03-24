@@ -28,6 +28,7 @@ int hal_get_unmatched_addresses(HalUnmatchedAddr* out, int maxOut) {
 #include "../app_state.h"
 #include "../diag_journal.h"
 #include <sdkconfig.h>
+#include <Wire.h>
 #else
 #define LOG_I(tag, ...) ((void)0)
 #define LOG_W(tag, ...) ((void)0)
