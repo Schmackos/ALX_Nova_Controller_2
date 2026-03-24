@@ -8,8 +8,6 @@
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
-#include "hal_ess_sabre_adc_base.h"  // for extern TwoWire Wire2
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../i2s_audio.h"
@@ -70,10 +68,7 @@ HalEs9017::HalEs9017() : HalEssSabreDacBase() {
 
 bool HalEs9017::probe() {
 #ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    uint8_t err = _wire->endTransmission();
-    if (err != 0) return false;
+    if (!_bus().probe(_i2cAddr)) return false;
     uint8_t chipId = _readReg(ES9017_REG_CHIP_ID);
     return (chipId == ES9017_CHIP_ID);
 #else

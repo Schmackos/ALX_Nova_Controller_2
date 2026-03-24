@@ -4,6 +4,7 @@
 #ifdef DAC_ENABLED
 
 #include "hal_audio_device.h"
+#include "hal_i2c_bus.h"
 
 // MCP4725 — Microchip 12-bit single-channel I2C DAC
 // Outputs a voltage (0–VCC) proportional to a 12-bit code (0–4095).

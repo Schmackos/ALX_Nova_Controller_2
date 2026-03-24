@@ -10,7 +10,6 @@
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../i2s_audio.h"
@@ -63,10 +62,7 @@ HalEs9841::HalEs9841() : HalEssSabreAdcBase() {
 
 bool HalEs9841::probe() {
 #ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    uint8_t err = _wire->endTransmission();
-    if (err != 0) return false;
+    if (!_bus().probe(_i2cAddr)) return false;
     uint8_t chipId = _readReg(ES9841_REG_CHIP_ID);
     return (chipId == ES9841_CHIP_ID);
 #else
@@ -207,7 +203,7 @@ void HalEs9841::dumpConfig() {
 
 bool HalEs9841::healthCheck() {
 #ifndef NATIVE_TEST
-    if (!_wire || !_initialized) return false;
+    if (!_initialized) return false;
     uint8_t id = _readReg(ES9841_REG_CHIP_ID);
     return (id == ES9841_CHIP_ID);
 #else

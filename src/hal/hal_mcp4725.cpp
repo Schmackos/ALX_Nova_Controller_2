@@ -6,7 +6,6 @@
 
 #ifndef NATIVE_TEST
 #include <Arduino.h>
-#include <Wire.h>
 #include "../debug_serial.h"
 #else
 #define LOG_I(fmt, ...) ((void)0)
@@ -28,10 +27,8 @@ HalMcp4725::HalMcp4725(uint8_t i2cAddr, uint8_t busIndex)
 bool HalMcp4725::probe()
 {
 #ifndef NATIVE_TEST
-    Wire.beginTransmission(_i2cAddr);
-    uint8_t err = Wire.endTransmission();
-    if (err != 0) {
-        LOG_I("[HAL:MCP4725] probe FAIL — no ACK at 0x%02X (err %d)", _i2cAddr, err);
+    if (!HalI2cBus::get(_busIndex).probe(_i2cAddr)) {
+        LOG_I("[HAL:MCP4725] probe FAIL — no ACK at 0x%02X", _i2cAddr);
         return false;
     }
 #endif
@@ -58,10 +55,8 @@ void HalMcp4725::deinit()
 {
 #ifndef NATIVE_TEST
     // Drive output to 0 before releasing
-    Wire.beginTransmission(_i2cAddr);
-    Wire.write(0x00);
-    Wire.write(0x00);
-    Wire.endTransmission();
+    uint8_t zeros[2] = {0x00, 0x00};
+    HalI2cBus::get(_busIndex).writeBytes(_i2cAddr, zeros, 2);
 #endif
     _code  = 0;
     setReady(false);
@@ -81,9 +76,7 @@ void HalMcp4725::dumpConfig()
 bool HalMcp4725::healthCheck()
 {
 #ifndef NATIVE_TEST
-    Wire.beginTransmission(_i2cAddr);
-    uint8_t err = Wire.endTransmission();
-    if (err != 0) {
+    if (!HalI2cBus::get(_busIndex).probe(_i2cAddr)) {
         LOG_I("[HAL:MCP4725] healthCheck FAIL — no ACK at 0x%02X", _i2cAddr);
         setReady(false);
         _state = HAL_STATE_UNAVAILABLE;
@@ -123,12 +116,12 @@ bool HalMcp4725::setVoltageCode(uint16_t code)
     _code = code;
 
 #ifndef NATIVE_TEST
-    Wire.beginTransmission(_i2cAddr);
-    Wire.write((uint8_t)((code >> 4) & 0xFF));  // Upper 8 bits of 12-bit code
-    Wire.write((uint8_t)((code & 0x0F) << 4));  // Lower 4 bits, left-aligned
-    uint8_t err = Wire.endTransmission();
-    if (err != 0) {
-        LOG_I("[HAL:MCP4725] write FAIL — code %u, err %d", code, err);
+    uint8_t buf[2] = {
+        (uint8_t)((code >> 4) & 0xFF),  // Upper 8 bits of 12-bit code
+        (uint8_t)((code & 0x0F) << 4)   // Lower 4 bits, left-aligned
+    };
+    if (!HalI2cBus::get(_busIndex).writeBytes(_i2cAddr, buf, 2)) {
+        LOG_I("[HAL:MCP4725] write FAIL — code %u", code);
         return false;
     }
 #endif

@@ -11,8 +11,6 @@
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
-#include "hal_cirrus_dac_base.h"  // for extern TwoWire Wire2
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../drivers/cs43130_regs.h"
@@ -83,9 +81,7 @@ HalCs43130::HalCs43130() : HalCirrusDacBase() {
 
 bool HalCs43130::probe() {
 #ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    if (_wire->endTransmission() != 0) return false;
+    if (!_bus().probe(_i2cAddr)) return false;
     uint8_t chipId = _readRegPaged(CS43130_REG_DEVID_REVID);
     return (chipId == CS43130_CHIP_ID);
 #else
@@ -228,7 +224,7 @@ void HalCs43130::dumpConfig() {
 
 bool HalCs43130::healthCheck() {
 #ifndef NATIVE_TEST
-    if (!_wire || !_initialized) return false;
+    if (!_initialized) return false;
     uint8_t id = _readRegPaged(CS43130_REG_DEVID_REVID);
     return (id == CS43130_CHIP_ID);
 #else

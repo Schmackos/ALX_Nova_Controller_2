@@ -7,6 +7,7 @@
 #include "hal_audio_device.h"
 #include "hal_audio_interfaces.h"
 #include "hal_types.h"
+#include "hal_i2c_bus.h"
 #include "../sink_write_utils.h"
 
 class HalEs8311 : public HalAudioDevice, public HalAudioCodecInterface {

@@ -8,7 +8,6 @@
 #include "../audio_pipeline.h"
 
 #ifndef NATIVE_TEST
-#include <Wire.h>
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../config.h"  // ES8311_I2S_DSDIN_PIN, MCLK_PIN, SCLK_PIN, LRCK_PIN defaults
@@ -79,35 +78,11 @@ HalEs8311::HalEs8311() : HalAudioDevice() {
 // ===== I2C helpers =====
 
 bool HalEs8311::_writeReg(uint8_t reg, uint8_t val) {
-#ifndef NATIVE_TEST
-    Wire.beginTransmission(_i2cAddr);
-    Wire.write(reg);
-    Wire.write(val);
-    uint8_t err = Wire.endTransmission();
-    if (err != 0) {
-        LOG_E("[HAL:ES8311] I2C write failed: reg=0x%02X val=0x%02X err=%d", reg, val, err);
-        return false;
-    }
-    return true;
-#else
-    (void)reg; (void)val;
-    return true;
-#endif
+    return HalI2cBus::get(HAL_I2C_BUS_ONBOARD).writeReg(_i2cAddr, reg, val);
 }
 
 uint8_t HalEs8311::_readReg(uint8_t reg) {
-#ifndef NATIVE_TEST
-    Wire.beginTransmission(_i2cAddr);
-    Wire.write(reg);
-    Wire.endTransmission(false);
-    Wire.requestFrom(_i2cAddr, (uint8_t)1);
-    if (Wire.available()) return Wire.read();
-    LOG_E("[HAL:ES8311] I2C read failed: reg=0x%02X", reg);
-    return 0xFF;
-#else
-    (void)reg;
-    return 0x00;
-#endif
+    return HalI2cBus::get(HAL_I2C_BUS_ONBOARD).readReg(_i2cAddr, reg);
 }
 
 // ===== Clock configuration (extracted from DacEs8311::initClocks) =====
@@ -170,9 +145,7 @@ void HalEs8311::_powerDown() {
 
 bool HalEs8311::probe() {
 #ifndef NATIVE_TEST
-    Wire.beginTransmission(_i2cAddr);
-    uint8_t err = Wire.endTransmission();
-    return err == 0;
+    return HalI2cBus::get(HAL_I2C_BUS_ONBOARD).probe(_i2cAddr);
 #else
     return true;
 #endif
@@ -200,8 +173,8 @@ HalInitResult HalEs8311::init() {
     pinMode(_paPin, OUTPUT);
     digitalWrite(_paPin, LOW);
 
-    // Initialize I2C on the onboard bus (Wire, not Wire1)
-    Wire.begin(_sdaPin, _sclPin, 100000);
+    // Initialize I2C on the onboard bus (Bus 1 = Wire, GPIO 7/8)
+    HalI2cBus::get(HAL_I2C_BUS_ONBOARD).begin(_sdaPin, _sclPin, 100000);
     LOG_I("[HAL:ES8311] I2C initialized (SDA=%d, SCL=%d, 100kHz)", _sdaPin, _sclPin);
 
     // I2C noise immunity — write GPIO_CFG twice (ES8311 datasheet recommendation)
@@ -325,7 +298,7 @@ void HalEs8311::deinit() {
     }
 
 #ifndef NATIVE_TEST
-    Wire.end();
+    HalI2cBus::get(HAL_I2C_BUS_ONBOARD).end();
 #endif
 
     _initialized = false;

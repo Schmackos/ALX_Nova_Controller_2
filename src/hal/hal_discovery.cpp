@@ -5,6 +5,7 @@
 #include "hal_device_db.h"
 #include "hal_driver_registry.h"
 #include "hal_eeprom_v3.h"
+#include "hal_i2c_bus.h"
 // HalDacAdapter removed -- EEPROM-discovered devices use HalDriverRegistry factories
 
 // ===== Unmatched address tracking =====
@@ -26,9 +27,7 @@ int hal_get_unmatched_addresses(HalUnmatchedAddr* out, int maxOut) {
 #include "../dac_eeprom.h"
 #include "../app_state.h"
 #include "../diag_journal.h"
-#include <Wire.h>
 #include <sdkconfig.h>
-#include "hal_ess_sabre_adc_base.h"  // for extern TwoWire Wire2
 #else
 #define LOG_I(tag, ...) ((void)0)
 #define LOG_W(tag, ...) ((void)0)
@@ -52,7 +51,10 @@ bool hal_wifi_sdio_active() {
 // ===== Expansion EEPROM scan (Bus 2 / Wire2, always safe) =====
 
 #ifndef NATIVE_TEST
-// Read a block of bytes from EEPROM on Wire2 (expansion bus)
+// Read a block of bytes from EEPROM on the expansion bus (Bus 2).
+// Uses Wire2 directly for the repeated-start I2C sequence (write addr ptr, then read).
+// Wire2 is defined in hal_i2c_bus.cpp.
+extern TwoWire Wire2;
 static bool exp_eeprom_read_block(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len) {
     Wire2.beginTransmission(i2cAddr);
     Wire2.write(memAddr);
@@ -70,16 +72,14 @@ static bool exp_eeprom_read_block(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf
 static int hal_eeprom_scan_expansion(HalDeviceManager& mgr) {
     int newDevices = 0;
 
-    if (!Wire2.begin(28, 29, 100000)) {
+    if (!HalI2cBus::get(HAL_I2C_BUS_EXP).begin(28, 29, 100000)) {
         LOG_W("[HAL:Discovery]", "Wire2.begin(28,29) failed for expansion EEPROM scan");
         return 0;
     }
-    Wire2.setClock(100000);
 
     for (uint8_t addr = DAC_EEPROM_ADDR_START; addr <= DAC_EEPROM_ADDR_END; addr++) {
         // Check EEPROM presence
-        Wire2.beginTransmission(addr);
-        if (Wire2.endTransmission() != 0) continue;
+        if (!HalI2cBus::get(HAL_I2C_BUS_EXP).probe(addr)) continue;
 
         // Read magic first (4 bytes)
         uint8_t magic[DAC_EEPROM_MAGIC_LEN];
@@ -192,7 +192,7 @@ static int hal_eeprom_scan_expansion(HalDeviceManager& mgr) {
         }
     }
 
-    Wire2.end();
+    HalI2cBus::get(HAL_I2C_BUS_EXP).end();
     return newDevices;
 }
 #endif // NATIVE_TEST
@@ -393,40 +393,30 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
     uint8_t found = 0;
 
 #ifndef NATIVE_TEST
-    TwoWire *bus = nullptr;
-    bool needsInit = false;
+    if (busIndex > 2) return 0;
 
-    switch (busIndex) {
-        case HAL_I2C_BUS_EXT:
-            // Bus 0: GPIO 48/54 — SDIO conflict check is done by caller
-            bus = &Wire1;
-            if (!Wire1.begin(48, 54, 100000)) {
-                LOG_W("[HAL:Discovery]", "Wire1.begin(48,54) failed — bus EXT unavailable");
-                return 0;
-            }
-            needsInit = true;
-            break;
-        case HAL_I2C_BUS_ONBOARD:
-            // Bus 1: GPIO 7/8 — already initialized by ES8311 driver
-            bus = &Wire;
-            break;
-        case HAL_I2C_BUS_EXP: {
-            // Bus 2: GPIO 28/29 — expansion bus (Wire2 defined in hal_ess_sabre_adc_base.cpp)
-            if (!Wire2.begin(28, 29, 100000)) {
-                LOG_W("[HAL:Discovery]", "Wire2.begin(28,29) failed — bus EXP unavailable");
-                return 0;
-            }
-            bus = &Wire2;
-            needsInit = true;
-            break;
-        }
-        default:
+    // Initialise bus if it's one we need to bring up for scanning
+    bool needsInit = (busIndex == HAL_I2C_BUS_EXT || busIndex == HAL_I2C_BUS_EXP);
+    HalI2cBus& bus = HalI2cBus::get(busIndex);
+
+    if (busIndex == HAL_I2C_BUS_EXT) {
+        // Bus 0: GPIO 48/54 — SDIO conflict check is done by caller
+        if (!bus.begin(48, 54, 100000)) {
+            LOG_W("[HAL:Discovery]", "Wire1.begin(48,54) failed — bus EXT unavailable");
             return 0;
+        }
+    } else if (busIndex == HAL_I2C_BUS_EXP) {
+        // Bus 2: GPIO 28/29 — expansion bus
+        if (!bus.begin(28, 29, 100000)) {
+            LOG_W("[HAL:Discovery]", "Wire2.begin(28,29) failed — bus EXP unavailable");
+            return 0;
+        }
     }
+    // Bus 1: GPIO 7/8 — already initialized by ES8311 driver, no begin() needed
 
     // Reduce Wire timeout from default ~1s to 200ms per address to limit
     // worst-case blocking time during a full 112-address bus sweep.
-    bus->setTimeout(200);
+    bus.setTimeout(200);
 
     // Track addresses that return timeout for retry
     uint8_t timeoutAddrs[HAL_PROBE_RETRY_MAX_ADDRS];
@@ -444,8 +434,7 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
         if (((addr - 0x08) & 0x07) == 0) {
             vTaskDelay(1);  // yield every 8 addresses (~1 tick, <1ms)
         }
-        bus->beginTransmission(addr);
-        uint8_t err = bus->endTransmission();
+        uint8_t err = bus.probeGetError(addr);
         if (err == 0) {
             found++;
             if (ackCount < sizeof(ackAddrs)) ackAddrs[ackCount++] = addr;
@@ -459,13 +448,10 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
     // Toggle SCL 9 times + STOP to release it before retrying.
     if (timeoutCount > 0) {
         hal_i2c_bus_recovery(busIndex);
-        // Re-initialise the Wire instance after GPIO toggling
+        // Re-initialise the bus after GPIO toggling
         if (needsInit) {
-            switch (busIndex) {
-                case HAL_I2C_BUS_EXT: Wire1.begin(48, 54, 100000); break;
-                case HAL_I2C_BUS_EXP: Wire2.begin(28, 29, 100000); break;
-                default: break;
-            }
+            if (busIndex == HAL_I2C_BUS_EXT) bus.begin(48, 54, 100000);
+            else if (busIndex == HAL_I2C_BUS_EXP) bus.begin(28, 29, 100000);
         }
     }
 
@@ -478,8 +464,7 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
             uint8_t remaining = 0;
             for (uint8_t i = 0; i < timeoutCount; i++) {
                 if (timeoutAddrs[i] == 0) continue; // already found
-                bus->beginTransmission(timeoutAddrs[i]);
-                uint8_t retryErr = bus->endTransmission();
+                uint8_t retryErr = bus.probeGetError(timeoutAddrs[i]);
                 if (retryErr == 0) {
                     found++;
                     if (ackCount < sizeof(ackAddrs)) ackAddrs[ackCount++] = timeoutAddrs[i];
@@ -499,7 +484,7 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
 
     // Release bus if we initialized it (avoid holding pins)
     if (needsInit) {
-        bus->end();
+        bus.end();
     }
 
     // Record unmatched addresses: ACK'd but not claimed by any registered HAL device
