@@ -22,16 +22,12 @@
 // getInputSource() returns the first source for backward compatibility with
 // existing bridge code that calls it unconditionally.
 
-#include "hal_audio_device.h"
-#include "hal_audio_interfaces.h"
+#include "hal_ess_sabre_adc_base.h"
 #include "hal_types.h"
 #include "hal_tdm_deinterleaver.h"
 #include "../audio_input_source.h"
-#ifndef NATIVE_TEST
-class TwoWire;  // Forward declaration — defined in Wire.h (Arduino)
-#endif
 
-class HalEs9843pro : public HalAudioDevice, public HalAudioAdcInterface {
+class HalEs9843pro : public HalEssSabreAdcBase {
 public:
     HalEs9843pro();
     virtual ~HalEs9843pro() {}
@@ -70,24 +66,6 @@ public:
     bool setChannelVolume(uint8_t ch, uint8_t vol8);           // per-channel 8-bit volume
 
 private:
-    bool    _writeReg(uint8_t reg, uint8_t val);
-    uint8_t _readReg(uint8_t reg);
-
-    uint8_t  _i2cAddr      = 0x40;   // ES9843PRO default (ADDR1=LOW, ADDR2=LOW)
-    int8_t   _sdaPin       = 28;     // Bus 2 expansion SDA
-    int8_t   _sclPin       = 29;     // Bus 2 expansion SCL
-    uint8_t  _i2cBusIndex  = 2;      // HAL_I2C_BUS_EXP
-    uint32_t _sampleRate   = 48000;
-    uint8_t  _bitDepth     = 32;
-    uint8_t  _gainDb       = 0;      // 0–42 dB (maps to gain register 0-7)
-    uint8_t  _filterPreset = 0;      // 0-7 global filter shape
-    bool     _hpfEnabled   = true;
-    bool     _initialized  = false;
-
-#ifndef NATIVE_TEST
-    TwoWire* _wire = nullptr;
-#endif
-
     // TDM deinterleaver — owns the ping-pong DMA split and both AudioInputSource structs
     HalTdmDeinterleaver _tdm;
 

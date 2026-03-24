@@ -18,17 +18,12 @@
 //   source index 0 → "ES9840 CH1/2"  (SLOT0 + SLOT1)
 //   source index 1 → "ES9840 CH3/4"  (SLOT2 + SLOT3)
 
-#include "hal_audio_device.h"
-#include "hal_audio_interfaces.h"
+#include "hal_ess_sabre_adc_base.h"
 #include "hal_types.h"
 #include "hal_tdm_deinterleaver.h"
 #include "../audio_input_source.h"
 
-#ifndef NATIVE_TEST
-class TwoWire;  // Forward declaration — defined in Wire.h (Arduino)
-#endif
-
-class HalEs9840 : public HalAudioDevice, public HalAudioAdcInterface {
+class HalEs9840 : public HalEssSabreAdcBase {
 public:
     HalEs9840();
     virtual ~HalEs9840() {}
@@ -66,25 +61,6 @@ public:
     bool setChannelVolume16(uint8_t ch, uint16_t vol); // per-channel 16-bit volume
 
 private:
-    bool    _writeReg(uint8_t reg, uint8_t val);
-    uint8_t _readReg(uint8_t reg);
-    bool    _writeReg16(uint8_t regLsb, uint16_t val);
-
-    uint8_t  _i2cAddr      = 0x40;   // ES9840 default
-    int8_t   _sdaPin       = 28;     // Bus 2 expansion SDA
-    int8_t   _sclPin       = 29;     // Bus 2 expansion SCL
-    uint8_t  _i2cBusIndex  = 2;      // HAL_I2C_BUS_EXP
-    uint32_t _sampleRate   = 48000;
-    uint8_t  _bitDepth     = 32;
-    uint8_t  _gainDb       = 0;      // 0-18 dB (2-bit: 0/6/12/18 dB steps)
-    uint8_t  _filterPreset = 0;      // 0-7 per-channel filter shape
-    bool     _hpfEnabled   = true;
-    bool     _initialized  = false;
-
-#ifndef NATIVE_TEST
-    TwoWire* _wire = nullptr;
-#endif
-
     // TDM deinterleaver — owns the ping-pong DMA split and both AudioInputSource structs
     HalTdmDeinterleaver _tdm;
 

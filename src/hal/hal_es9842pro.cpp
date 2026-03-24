@@ -5,11 +5,11 @@
 // HPF and filter, TDM output with HalTdmDeinterleaver for stereo pair splitting.
 
 #include "hal_es9842pro.h"
+#include "hal_ess_sabre_adc_base.h"
 #include "hal_device_manager.h"
 
 #ifndef NATIVE_TEST
 #include <Wire.h>
-#include "hal_ess_sabre_adc_base.h"  // for extern TwoWire Wire2
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../i2s_audio.h"
@@ -60,55 +60,12 @@ inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
 
 // ===== Constructor =====
 
-HalEs9842pro::HalEs9842pro() : HalAudioDevice() {
+HalEs9842pro::HalEs9842pro() : HalEssSabreAdcBase() {
     hal_init_descriptor(_descriptor, "ess,es9842pro", "ES9842PRO", "ESS Technology",
         HAL_DEV_ADC, 4, 0x40, HAL_BUS_I2C, HAL_I2C_BUS_EXP,
         HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K,
         HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL);
     _initPriority = HAL_PRIORITY_HARDWARE;
-}
-
-// ===== I2C helpers =====
-
-bool HalEs9842pro::_writeReg(uint8_t reg, uint8_t val) {
-#ifndef NATIVE_TEST
-    if (!_wire) return false;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write(reg);
-    _wire->write(val);
-    uint8_t err = _wire->endTransmission();
-    if (err != 0) {
-        LOG_E("[HAL:ES9842PRO] I2C write failed: reg=0x%02X val=0x%02X err=%d", reg, val, err);
-        return false;
-    }
-    return true;
-#else
-    (void)reg; (void)val;
-    return true;
-#endif
-}
-
-uint8_t HalEs9842pro::_readReg(uint8_t reg) {
-#ifndef NATIVE_TEST
-    if (!_wire) return 0xFF;
-    _wire->beginTransmission(_i2cAddr);
-    _wire->write(reg);
-    _wire->endTransmission(false);
-    _wire->requestFrom(_i2cAddr, (uint8_t)1);
-    if (_wire->available()) return _wire->read();
-    LOG_E("[HAL:ES9842PRO] I2C read failed: reg=0x%02X", reg);
-    return 0xFF;
-#else
-    (void)reg;
-    return 0x00;
-#endif
-}
-
-bool HalEs9842pro::_writeReg16(uint8_t regLsb, uint16_t val) {
-    // Write LSB first, then MSB. MSB write latches both on ESS SABRE ADCs.
-    bool ok = _writeReg(regLsb, (uint8_t)(val & 0xFF));
-    ok = ok && _writeReg((uint8_t)(regLsb + 1), (uint8_t)((val >> 8) & 0xFF));
-    return ok;
 }
 
 // ===== HalDevice lifecycle =====
@@ -128,32 +85,15 @@ bool HalEs9842pro::probe() {
 
 HalInitResult HalEs9842pro::init() {
     // ---- 1. Read per-device config overrides from HAL Device Manager ----
-    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
-    if (cfg && cfg->valid) {
-        if (cfg->i2cAddr != 0)     _i2cAddr     = cfg->i2cAddr;
-        if (cfg->i2cBusIndex != 0) _i2cBusIndex = cfg->i2cBusIndex;
-        if (cfg->pinSda >= 0)      _sdaPin      = cfg->pinSda;
-        if (cfg->pinScl >= 0)      _sclPin      = cfg->pinScl;
-        if (cfg->sampleRate > 0)   _sampleRate  = cfg->sampleRate;
-        if (cfg->bitDepth > 0)     _bitDepth    = cfg->bitDepth;
-        if (cfg->pgaGain <= 18)    _gainDb      = cfg->pgaGain;
-        _hpfEnabled   = cfg->hpfEnabled;
-        _filterPreset = cfg->filterMode;   // 0-7 stored in filterMode field
-    }
+    _applyConfigOverrides();
+    if (_gainDb > 18) _gainDb = 18;
 
     LOG_I("[HAL:ES9842PRO] Initializing (I2C addr=0x%02X bus=%u SDA=%d SCL=%d sr=%luHz bits=%u)",
           _i2cAddr, _i2cBusIndex, _sdaPin, _sclPin, (unsigned long)_sampleRate, _bitDepth);
 
 #ifndef NATIVE_TEST
-    // ---- 2. Select TwoWire instance based on i2cBusIndex ----
-    switch (_i2cBusIndex) {
-        case 1:  _wire = &Wire1; break;
-        case 2:  _wire = &Wire2; break;
-        default: _wire = &Wire;  break;
-    }
-
-    // ---- 3. Initialize I2C bus at 400 kHz ----
-    _wire->begin((int)_sdaPin, (int)_sclPin, (uint32_t)400000);
+    // ---- 2+3. Select and initialize TwoWire instance ----
+    _selectWire();
     LOG_I("[HAL:ES9842PRO] I2C initialized (bus %u SDA=%d SCL=%d 400kHz)",
           _i2cBusIndex, _sdaPin, _sclPin);
 #endif
@@ -208,6 +148,7 @@ HalInitResult HalEs9842pro::init() {
     _writeReg(ES9842PRO_REG_CH4_FILTER, filterVal);
 
     // ---- 11. Configure I2S2 in TDM mode and init the deinterleaver ----
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
     uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
     int8_t dinPinRaw = (cfg && cfg->valid && cfg->pinData > 0) ? cfg->pinData : -1;
     if (dinPinRaw < 0) {
