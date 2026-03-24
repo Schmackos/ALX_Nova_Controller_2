@@ -25,6 +25,18 @@ inline void server_send(int code) {
     http_add_security_headers();
     server.send(code);
 }
+// Structured JSON response envelope: {"success":true/false[,"data":...][,"error":"..."]}.
+// Use for new REST endpoints to ensure consistent response shape.
+// Do NOT retrofit existing endpoints — changes would break existing clients.
+inline void json_response(WebServer& server, int code, const char* data = nullptr, const char* error = nullptr) {
+    String json = "{\"success\":";
+    json += (code >= 200 && code < 300) ? "true" : "false";
+    if (data)  { json += ",\"data\":";    json += data;  }
+    if (error) { json += ",\"error\":\""; json += error; json += "\""; }
+    json += "}";
+    server_send(code, "application/json", json);
+}
+
 // Sanitize a user-provided filename to prevent path traversal.
 // Returns true if the name is safe and was copied to `out`; false otherwise.
 inline bool sanitize_filename(const char* name, char* out, size_t outSize) {
@@ -52,6 +64,9 @@ inline bool sanitize_filename(const char* name, char* out, size_t outSize) {
 inline void http_add_security_headers() {}
 inline void server_send(int /*code*/, const char* /*contentType*/, const char* /*content*/) {}
 inline void server_send(int /*code*/) {}
+// json_response stub — server type omitted since WebServer is not available in native builds
+template<typename T>
+inline void json_response(T& /*server*/, int /*code*/, const char* /*data*/ = nullptr, const char* /*error*/ = nullptr) {}
 
 // sanitize_filename is available in test builds too
 inline bool sanitize_filename(const char* name, char* out, size_t outSize) {

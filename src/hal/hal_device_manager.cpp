@@ -4,6 +4,7 @@
 
 #ifndef NATIVE_TEST
 #include <Arduino.h>
+#include <Preferences.h>
 #include "../debug_serial.h"
 #else
 #include "../../test/test_mocks/Arduino.h"
@@ -151,6 +152,10 @@ uint8_t HalDeviceManager::getCount() const {
 
 // ===== Lifecycle =====
 void HalDeviceManager::initAll() {
+    // Restore persistent fault counters before any device init so health-check
+    // retry logic sees the correct accumulated fault history from previous boots.
+    hal_fault_load_all();
+
     // Collect non-null devices into a sortable array
     HalDevice* sorted[HAL_MAX_DEVICES];
     int n = 0;
@@ -248,6 +253,7 @@ void HalDeviceManager::healthCheckAll() {
                     dev->setReady(false);
                     dev->_state = HAL_STATE_ERROR;
                     _faultCount[i]++;
+                    hal_fault_save(static_cast<uint8_t>(i));
                     diag_emit(DIAG_HAL_REINIT_EXHAUSTED, DIAG_SEV_CRIT,
                               static_cast<uint8_t>(i), dev->getDescriptor().name, "retries exhausted");
                     // 1a: Always fire callback on ERROR — bridge removal is idempotent.
@@ -369,6 +375,50 @@ void HalDeviceManager::_resetRetryState(uint8_t slot) {
     _retryState[slot].count = 0;
     _retryState[slot].nextRetryMs = 0;
     _retryState[slot].lastErrorCode = 0;
+}
+
+// ===== NVS Fault Persistence =====
+// Namespace "hal_faults", keys "f00".."f31" (slot index zero-padded to 2 digits).
+// Guards ensure no-op builds on native test targets where Preferences is unavailable.
+
+void HalDeviceManager::hal_fault_load_all() {
+#ifndef NATIVE_TEST
+    Preferences prefs;
+    if (!prefs.begin("hal_faults", true)) return;  // read-only open
+    char key[5];
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        snprintf(key, sizeof(key), "f%02d", i);
+        uint8_t stored = prefs.getUChar(key, 0);
+        if (stored > _faultCount[i]) {
+            _faultCount[i] = stored;
+        }
+    }
+    prefs.end();
+    LOG_I("[HAL] Fault counters loaded from NVS");
+#endif
+}
+
+void HalDeviceManager::hal_fault_save(uint8_t slot) {
+#ifndef NATIVE_TEST
+    if (slot >= HAL_MAX_DEVICES) return;
+    Preferences prefs;
+    if (!prefs.begin("hal_faults", false)) return;  // read-write open
+    char key[5];
+    snprintf(key, sizeof(key), "f%02d", slot);
+    prefs.putUChar(key, _faultCount[slot]);
+    prefs.end();
+#endif
+}
+
+void HalDeviceManager::hal_fault_clear_all() {
+#ifndef NATIVE_TEST
+    Preferences prefs;
+    if (!prefs.begin("hal_faults", false)) return;
+    prefs.clear();
+    prefs.end();
+    LOG_I("[HAL] Fault counters cleared from NVS");
+#endif
+    memset(_faultCount, 0, sizeof(_faultCount));
 }
 
 // ===== Reset (testing) =====

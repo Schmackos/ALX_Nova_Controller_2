@@ -70,6 +70,7 @@ public:
 static HalDeviceManager* mgr;
 
 void setUp() {
+    ArduinoMock::reset();  // Resets mockMillis to 0 between tests
     mgr = &HalDeviceManager::instance();
     mgr->reset();
     hal_registry_reset();
@@ -622,6 +623,121 @@ void test_probe_failure_sets_last_error() {
     TEST_ASSERT_EQUAL_STRING("I2C probe failed (no device response)", dev.getLastError());
 }
 
+// ===== Test 29: Fault count initial zero for all slots =====
+void test_fault_count_initial_zero() {
+    // After reset, all fault counts should be 0
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+        TEST_ASSERT_EQUAL_UINT8(0, mgr->getFaultCount(i));
+    }
+}
+
+// Helper: runs a device through a full fault cycle (health fail -> 3 retries -> ERROR).
+// Uses wide time gaps to ensure we always exceed backoff windows.
+static void drive_to_error_via_retries(HalDeviceManager* m, TestDevice& dev) {
+    dev.healthResult = false;
+    dev.initResult = false;
+
+    // Step 1: AVAILABLE -> UNAVAILABLE (health check fail), retryState.nextRetryMs = now+1000
+    ArduinoMock::mockMillis += 0;  // Use current time
+    m->healthCheckAll();
+
+    // Step 2: Retry 1 — must be past nextRetryMs (now+1000). Use +2000 for safety.
+    ArduinoMock::mockMillis += 2000;
+    m->healthCheckAll();
+
+    // Step 3: Retry 2 — backoff is 1s<<1=2s from retry 1 time. Use +4000 for safety.
+    ArduinoMock::mockMillis += 4000;
+    m->healthCheckAll();
+
+    // Step 4: Retry 3 — backoff is 1s<<2=4s from retry 2 time. Use +6000 for safety.
+    // This exhausts retries: count becomes 3 >= HAL_MAX_RETRIES -> ERROR + faultCount++
+    ArduinoMock::mockMillis += 6000;
+    m->healthCheckAll();
+}
+
+// ===== Test 30: Fault count increments on retry exhaustion =====
+void test_fault_count_increments_on_retry_exhaustion() {
+    ArduinoMock::mockMillis = 0;
+
+    TestDevice dev("fault,counter", HAL_DEV_DAC);
+    dev.initResult = true;
+    int slot = mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, slot);
+
+    mgr->initAll();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, dev._state);
+    TEST_ASSERT_EQUAL_UINT8(0, mgr->getFaultCount(static_cast<uint8_t>(slot)));
+
+    drive_to_error_via_retries(mgr, dev);
+
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, dev._state);
+    TEST_ASSERT_EQUAL_UINT8(1, mgr->getFaultCount(static_cast<uint8_t>(slot)));
+}
+
+// ===== Test 31: Fault count getter returns correct value =====
+void test_fault_count_getter_returns_correct_value() {
+    ArduinoMock::mockMillis = 0;
+
+    TestDevice dev("getter,test", HAL_DEV_ADC);
+    dev.initResult = true;
+    int slot = mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+    mgr->initAll();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, dev._state);
+    TEST_ASSERT_EQUAL_UINT8(0, mgr->getFaultCount(static_cast<uint8_t>(slot)));
+
+    drive_to_error_via_retries(mgr, dev);
+
+    TEST_ASSERT_EQUAL_UINT8(1, mgr->getFaultCount(static_cast<uint8_t>(slot)));
+}
+
+// ===== Test 32: Fault count bounds check — out-of-range returns 0 =====
+void test_fault_count_bounds_check() {
+    TEST_ASSERT_EQUAL_UINT8(0, mgr->getFaultCount(HAL_MAX_DEVICES));
+    TEST_ASSERT_EQUAL_UINT8(0, mgr->getFaultCount(HAL_MAX_DEVICES + 1));
+    TEST_ASSERT_EQUAL_UINT8(0, mgr->getFaultCount(255));
+}
+
+// ===== Test 33: Fault count resets on manager reset =====
+void test_fault_count_clears_on_reset() {
+    ArduinoMock::mockMillis = 0;
+
+    TestDevice dev("reset,fault", HAL_DEV_DAC);
+    dev.initResult = true;
+    int slot = mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+    mgr->initAll();
+
+    drive_to_error_via_retries(mgr, dev);
+    TEST_ASSERT_EQUAL_UINT8(1, mgr->getFaultCount(static_cast<uint8_t>(slot)));
+
+    // Reset the manager — fault count should be cleared
+    mgr->reset();
+    hal_registry_reset();
+
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+        TEST_ASSERT_EQUAL_UINT8(0, mgr->getFaultCount(i));
+    }
+}
+
+// ===== Test 34: Exhausted retries stay at ERROR — no further increments =====
+void test_fault_count_no_further_increment_after_exhaustion() {
+    ArduinoMock::mockMillis = 0;
+
+    TestDevice dev("multi,fault", HAL_DEV_CODEC);
+    dev.initResult = true;
+    int slot = mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+    mgr->initAll();
+
+    drive_to_error_via_retries(mgr, dev);
+    TEST_ASSERT_EQUAL_UINT8(1, mgr->getFaultCount(static_cast<uint8_t>(slot)));
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, dev._state);
+
+    // Additional healthCheckAll calls should NOT increment fault count
+    // (device is in ERROR with retries exhausted — healthCheckAll skips it)
+    ArduinoMock::mockMillis += 20000;
+    mgr->healthCheckAll();
+    TEST_ASSERT_EQUAL_UINT8(1, mgr->getFaultCount(static_cast<uint8_t>(slot)));
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -662,6 +778,14 @@ int main(int argc, char** argv) {
     RUN_TEST(test_init_failure_stores_reason_on_device);
     RUN_TEST(test_init_success_clears_last_error);
     RUN_TEST(test_probe_failure_sets_last_error);
+
+    // Fault counter tests
+    RUN_TEST(test_fault_count_initial_zero);
+    RUN_TEST(test_fault_count_increments_on_retry_exhaustion);
+    RUN_TEST(test_fault_count_getter_returns_correct_value);
+    RUN_TEST(test_fault_count_bounds_check);
+    RUN_TEST(test_fault_count_clears_on_reset);
+    RUN_TEST(test_fault_count_no_further_increment_after_exhaustion);
 
     return UNITY_END();
 }

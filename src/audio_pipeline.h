@@ -51,6 +51,10 @@ struct PipelineTimingMetrics {
     uint32_t matrixMixUs;     // Matrix mixing stage time (us)
     uint32_t outputDspUs;     // Output DSP stage time (us)
     float    totalCpuPercent; // Total pipeline CPU load (0-100 %)
+    // Per-stage breakdown (added in foundation hardening)
+    uint32_t inputReadUs;     // All-lane I2S read time (us)
+    uint32_t perInputDspUs;   // Per-input DSP processing time (us)
+    uint32_t sinkWriteUs;     // All-sink write time (us)
 };
 
 PipelineTimingMetrics audio_pipeline_get_timing();
