@@ -507,7 +507,6 @@ void sendAudioChannelMap() {
     serializeJson(doc, json);
     webSocket.broadcastTXT(json.c_str());
 }
-#endif
 
 #ifdef USB_AUDIO_ENABLED
 void sendUsbAudioState() {
