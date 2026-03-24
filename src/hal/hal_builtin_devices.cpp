@@ -25,11 +25,7 @@
 #include "hal_es9842pro.h"
 #include "hal_es9840.h"
 #include "hal_es9841.h"
-#include "hal_es9038q2m.h"
-#include "hal_es9039q2m.h"
-#include "hal_es9069q.h"
-#include "hal_es9033q.h"
-#include "hal_es9020_dac.h"
+#include "hal_ess_dac_2ch.h"
 #include "hal_es9038pro.h"
 #include "hal_es9028pro.h"
 #include "hal_es9039pro.h"
@@ -82,11 +78,11 @@ static HalDevice* factory_es9820()    { return new HalEs9820(); }
 static HalDevice* factory_es9842pro() { return new HalEs9842pro(); }
 static HalDevice* factory_es9840()    { return new HalEs9840(); }
 static HalDevice* factory_es9841()    { return new HalEs9841(); }
-static HalDevice* factory_es9038q2m() { return new HalEs9038q2m(); }
-static HalDevice* factory_es9039q2m() { return new HalEs9039q2m(); }
-static HalDevice* factory_es9069q()   { return new HalEs9069Q(); }
-static HalDevice* factory_es9033q()   { return new HalEs9033Q(); }
-static HalDevice* factory_es9020_dac() { return new HalEs9020Dac(); }
+static HalDevice* factory_es9038q2m()  { return new HalEssDac2ch(kDescES9038Q2M); }
+static HalDevice* factory_es9039q2m()  { return new HalEssDac2ch(kDescES9039Q2M); }
+static HalDevice* factory_es9069q()    { return new HalEssDac2ch(kDescES9069Q);    }
+static HalDevice* factory_es9033q()    { return new HalEssDac2ch(kDescES9033Q);    }
+static HalDevice* factory_es9020_dac() { return new HalEssDac2ch(kDescES9020Dac);  }
 static HalDevice* factory_es9038pro()  { return new HalEs9038pro(); }
 static HalDevice* factory_es9028pro()  { return new HalEs9028pro(); }
 static HalDevice* factory_es9039pro()  { return new HalEs9039pro(); }
