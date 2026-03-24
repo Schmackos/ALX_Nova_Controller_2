@@ -20,6 +20,19 @@ const { getState } = require('../ws-state');
 
 const router = express.Router();
 
+// Auth check: mirrors firmware requireAuth() — return 401 if no session cookie present.
+// The mock session store is private to auth.js, so we rely on the presence of the
+// sessionId cookie (set by POST /api/auth/login) as the auth signal, consistent with
+// how /api/ws-token validates auth in server.js.
+function requireAuth(req, res) {
+  const cookieId = req.cookies && req.cookies['sessionId'];
+  if (!cookieId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
 // Preset device database entries (mirrors hal_device_db builtin list)
 const DB_PRESETS = [
   { compatible: 'analog,pcm5102a', name: 'PCM5102A', type: 'DAC' },
@@ -37,6 +50,7 @@ router.get('/devices', (req, res) => {
 
 // POST /scan — trigger device rescan with 409 guard
 router.post('/scan', (req, res) => {
+  if (!requireAuth(req, res)) return;
   const state = getState();
   if (state.scanning) {
     return res.status(409).json({ error: 'Scan already in progress' });
@@ -52,6 +66,7 @@ const VALID_PGA_GAIN_STEPS = [0, 6, 12, 18, 24, 30, 36, 42];
 
 // PUT /devices — update device config by slot
 router.put('/devices', (req, res) => {
+  if (!requireAuth(req, res)) return;
   const state = getState();
   const { slot } = req.body || {};
   if (slot === undefined || slot === null) {
@@ -97,6 +112,7 @@ router.put('/devices', (req, res) => {
 
 // DELETE /devices — remove a device by slot
 router.delete('/devices', (req, res) => {
+  if (!requireAuth(req, res)) return;
   const state = getState();
   const { slot } = req.body || {};
   if (slot === undefined || slot === null) {
@@ -112,6 +128,7 @@ router.delete('/devices', (req, res) => {
 
 // POST /devices/reinit — re-initialise a device by slot
 router.post('/devices/reinit', (req, res) => {
+  if (!requireAuth(req, res)) return;
   const state = getState();
   const { slot } = req.body || {};
   if (slot === undefined || slot === null) {
@@ -137,6 +154,7 @@ router.get('/settings', (req, res) => {
 
 // PUT /settings — save HAL auto-discovery toggle
 router.put('/settings', (req, res) => {
+  if (!requireAuth(req, res)) return;
   // Accept and ignore — mock has no persistence
   res.json({ status: 'ok' });
 });
@@ -148,6 +166,7 @@ router.get('/devices/custom', (req, res) => {
 
 // POST /devices/custom — upload a custom device schema
 router.post('/devices/custom', (req, res) => {
+  if (!requireAuth(req, res)) return;
   if (!req.body || !req.body.compatible) {
     return res.status(400).json({ error: 'Invalid schema' });
   }
@@ -156,6 +175,7 @@ router.post('/devices/custom', (req, res) => {
 
 // DELETE /devices/custom — remove a schema by name query param
 router.delete('/devices/custom', (req, res) => {
+  if (!requireAuth(req, res)) return;
   if (!req.query.name) {
     return res.status(400).json({ error: 'Missing name parameter' });
   }
@@ -176,6 +196,7 @@ router.get('/eeprom', (req, res) => {
 
 // POST /eeprom/scan — trigger EEPROM rescan (moved from /api/dac/eeprom/scan)
 router.post('/eeprom/scan', (req, res) => {
+  if (!requireAuth(req, res)) return;
   res.json({ success: true, scanned: true });
 });
 
@@ -186,6 +207,7 @@ router.get('/eeprom/presets', (req, res) => {
 
 // POST /eeprom — program EEPROM (moved from /api/dac/eeprom POST)
 router.post('/eeprom', (req, res) => {
+  if (!requireAuth(req, res)) return;
   if (!req.body || !req.body.deviceId) {
     return res.status(400).json({ error: 'Missing deviceId' });
   }

@@ -3,6 +3,7 @@
  */
 
 const { test, expect } = require('../helpers/fixtures');
+const { test: base } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
 
@@ -145,4 +146,40 @@ test('UNAVAILABLE device status dot uses red colour class', async ({ connectedPa
   await expect(statusDot).toBeVisible({ timeout: 5000 });
   // The red class is applied via halGetStateInfo(4).cls = 'red'
   await expect(statusDot).toHaveClass(/red/, { timeout: 5000 });
+});
+
+// ---------------------------------------------------------------------------
+// @auth: Unauthenticated HAL mutation endpoints must return 401
+//
+// Verifies that POST/PUT/DELETE routes on /api/hal/* enforce auth — no cookie
+// should result in 401, not a successful response. This covers the migration
+// of fetch() → apiFetch() which ensures credentials:'include' on all calls.
+// ---------------------------------------------------------------------------
+
+base.describe('@auth HAL API auth enforcement', () => {
+  base.test('unauthenticated POST /api/hal/scan returns 401', async ({ request, baseURL }) => {
+    const resp = await request.post(`${baseURL || 'http://localhost:3000'}/api/hal/scan`);
+    expect(resp.status()).toBe(401);
+  });
+
+  base.test('unauthenticated PUT /api/hal/devices returns 401', async ({ request, baseURL }) => {
+    const resp = await request.put(`${baseURL || 'http://localhost:3000'}/api/hal/devices`, {
+      data: { slot: 0, enabled: false },
+    });
+    expect(resp.status()).toBe(401);
+  });
+
+  base.test('unauthenticated DELETE /api/hal/devices returns 401', async ({ request, baseURL }) => {
+    const resp = await request.delete(`${baseURL || 'http://localhost:3000'}/api/hal/devices`, {
+      data: { slot: 0 },
+    });
+    expect(resp.status()).toBe(401);
+  });
+
+  base.test('unauthenticated POST /api/hal/devices/reinit returns 401', async ({ request, baseURL }) => {
+    const resp = await request.post(`${baseURL || 'http://localhost:3000'}/api/hal/devices/reinit`, {
+      data: { slot: 0 },
+    });
+    expect(resp.status()).toBe(401);
+  });
 });
