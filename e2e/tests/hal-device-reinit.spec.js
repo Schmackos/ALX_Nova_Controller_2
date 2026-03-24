@@ -116,7 +116,7 @@ test.describe('@hal @api HAL Device Reinit', () => {
 
     // Device should still be visible
     await expect(page.locator('#hal-device-list')).toContainText('ES9822PRO');
-    await expect(page.locator('.hal-device-card')).toHaveCount(8);
+    await expect(page.locator('.hal-device-card')).toHaveCount(11);
   });
 
   test('reinit shows success toast after completion', async ({ connectedPage: page }) => {

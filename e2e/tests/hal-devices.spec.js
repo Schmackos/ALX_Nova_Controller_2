@@ -18,9 +18,9 @@ test('device cards render for all 8 HAL devices with name, type, and state', asy
   const deviceList = page.locator('#hal-device-list');
   await expect(deviceList).not.toContainText('No HAL devices registered', { timeout: 5000 });
 
-  // The halDeviceState fixture contains 8 devices.
+  // The halDeviceState fixture contains 11 devices.
   const cards = deviceList.locator('.hal-device-card');
-  await expect(cards).toHaveCount(8, { timeout: 5000 });
+  await expect(cards).toHaveCount(11, { timeout: 5000 });
 
   // Spot-check known device names from halDeviceState.json
   await expect(deviceList).toContainText('PCM5102A');

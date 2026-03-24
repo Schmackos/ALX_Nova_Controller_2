@@ -63,7 +63,10 @@ function createDefaultState() {
       { id: 4, name: 'NS4150B', compatible: 'ns,ns4150b', type: 'AMP', state: 'AVAILABLE', enabled: true, bus: 'GPIO', address: '53' },
       { id: 5, name: 'Chip Temp', compatible: 'espressif,temp-sensor', type: 'SENSOR', state: 'AVAILABLE', enabled: true, bus: 'Internal', address: '' },
       { id: 7, name: 'ES9822PRO', compatible: 'ess,es9822pro', type: 'ADC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x40', capabilities: 105, cfgPgaGain: 6, cfgHpfEnabled: true, cfgFilterMode: 2, cfgVolume: 80, channels: 2 },
-      { id: 8, name: 'ES9843PRO', compatible: 'ess,es9843pro', type: 'ADC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x40', capabilities: 105, cfgPgaGain: 0, cfgHpfEnabled: false, cfgFilterMode: 0, cfgVolume: 100, channels: 4 }
+      { id: 8, name: 'ES9843PRO', compatible: 'ess,es9843pro', type: 'ADC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x40', capabilities: 105, cfgPgaGain: 0, cfgHpfEnabled: false, cfgFilterMode: 0, cfgVolume: 100, channels: 4 },
+      { id: 9, name: 'ES9069Q', compatible: 'ess,es9069q', type: 'DAC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x48', capabilities: 279, cfgVolume: 100, channels: 2 },
+      { id: 10, name: 'CS43131', compatible: 'cirrus,cs43131', type: 'DAC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x48', capabilities: 6167, cfgVolume: 100, channels: 2 },
+      { id: 11, name: 'ES9033Q', compatible: 'ess,es9033q', type: 'DAC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x48', capabilities: 535, cfgVolume: 100, channels: 2 }
     ],
     audioChannelMap: {
       inputs: [

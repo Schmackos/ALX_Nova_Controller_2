@@ -28,8 +28,8 @@ test.describe('@hal @smoke HAL Device Cards', () => {
   test('device list renders with correct count', async ({ connectedPage: page }) => {
     await openDevicesTab(page);
     const cards = page.locator('.hal-device-card');
-    // The fixture has 8 devices
-    await expect(cards).toHaveCount(8, { timeout: 5000 });
+    // The fixture has 11 devices
+    await expect(cards).toHaveCount(11, { timeout: 5000 });
   });
 
   test('each device shows name, compatible string badge, and state label', async ({ connectedPage: page }) => {
@@ -97,9 +97,9 @@ test.describe('@hal @smoke HAL Device Cards', () => {
     // First card should be slot 0 (PCM5102A DAC)
     const firstName = await cards.first().locator('.hal-device-name').textContent();
     expect(firstName).toContain('PCM5102A');
-    // Last card should be slot 8 (ES9843PRO)
+    // Last card should be slot 11 (ES9033Q)
     const lastName = await cards.last().locator('.hal-device-name').textContent();
-    expect(lastName).toContain('ES9843PRO');
+    expect(lastName).toContain('ES9033Q');
   });
 
   test('disabled device shows unchecked enable toggle', async ({ connectedPage: page }) => {
