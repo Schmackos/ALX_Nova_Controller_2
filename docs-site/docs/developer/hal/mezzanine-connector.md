@@ -50,23 +50,25 @@ The HAL does not poll or wait on INT\_N during normal operation. It is intended 
 
 All expansion modules share a single set of BCK, WS, and MCLK clock lines. This means all active expansion devices must operate at the same sample rate at any given time — there is no clock domain crossing or asynchronous sample rate conversion between slots. The audio pipeline enforces a single active sample rate across all registered sources and sinks.
 
-Which device acts as I2S master is configured per-device through `HalDeviceConfig.isI2sClockMaster`. In the typical configuration the carrier's ESP32-P4 drives BCK, WS, and MCLK on I2S2, and all mezzanine devices operate as I2S slaves consuming those clocks. A mezzanine with a high-precision fixed oscillator may instead act as master — in that case the ESP32 I2S2 peripheral must be configured in slave receive mode and `isI2sClockMaster` set to `false` for that device's HAL entry.
+Which device acts as I2S master is configured per-device through `HalDeviceConfig.isI2sClockMaster`. In the typical configuration the carrier's ESP32-P4 drives BCK, WS, and MCLK on whichever I2S peripheral is assigned to the expansion connector (configured via `HalDeviceConfig.i2sPort`), and all mezzanine devices operate as I2S slaves consuming those clocks. A mezzanine with a high-precision fixed oscillator may instead act as master — in that case the assigned I2S peripheral must be configured in slave receive mode and `isI2sClockMaster` set to `false` for that device's HAL entry.
 
 ### I2S peripheral assignment
 
-The ESP32-P4 provides three I2S peripherals:
+I2S port assignment is fully configurable per device through `HalDeviceConfig.i2sPort` (values 0–2, or 255 for auto/default). The carrier board routes the expansion connector's BCK, WS, MCLK, DIN, and DOUT lines to GPIOs that can be mapped to any of the three ESP32-P4 I2S peripherals.
 
-| Peripheral | Assignment |
-|------------|------------|
+The onboard peripherals use dedicated ports by convention:
+
+| Peripheral | Conventional use |
+|------------|-----------------|
 | I2S0 | Onboard ADC1 (PCM1808, I2S master RX — BCK, WS, MCLK output) |
-| I2S1 | Onboard ADC2 (PCM1808, master RX — data only; clocks from I2S0) |
-| I2S2 | Expansion slot (full-duplex with ES8311 TX; also available for mezzanine ADC RX) |
+| I2S1 | Onboard ADC2 (PCM1808, data-only follower; clocks shared from I2S0) |
+| I2S2 | Conventional default for expansion mezzanine devices (configurable) |
 
-Mezzanine ADC modules are assigned to I2S2 RX. Mezzanine DAC modules are assigned to I2S2 TX. Full-duplex operation (simultaneous ADC and DAC on I2S2) follows the same paired channel-handle pattern as the onboard peripherals.
+Expansion mezzanine drivers default to I2S2 when no explicit `HalDeviceConfig` override is set (`i2sPort == 255`). Any port can be assigned — for example, a carrier board with two independent expansion connectors on separate clock trees could assign one connector to I2S2 and another to I2S0 (when the onboard ADCs are not populated).
 
 ### TDM mode
 
-I2S2 supports TDM (Time Division Multiplexed) framing for multi-channel mezzanines. A TDM-capable module can deliver up to 16 audio channels over the single DIN line by interleaving slots within each LRCLK frame. Configure the TDM slot mask through `HalDeviceConfig` and ensure the mezzanine's TDM frame width matches the carrier configuration. Standard stereo modules use I2S mode with no TDM framing.
+The configured I2S port supports TDM (Time Division Multiplexed) framing for multi-channel mezzanines. A TDM-capable module can deliver up to 16 audio channels over the single DIN line by interleaving slots within each LRCLK frame. Configure the TDM slot mask through `HalDeviceConfig` and ensure the mezzanine's TDM frame width matches the carrier configuration. Standard stereo modules use I2S mode with no TDM framing.
 
 ## EEPROM Auto-Discovery
 
@@ -105,26 +107,26 @@ A Python flashing script and a set of pre-built binary images for supported modu
 ```mermaid
 graph LR
     subgraph Mezzanine
-        CODEC[ESS SABRE ADC or DAC]
-        EEPROM[AT24C02\n0x50+slot]
-        OSC[MCLK Oscillator\noptional]
+        CODEC["ESS SABRE ADC or DAC"]
+        EEPROM["AT24C02<br/>0x50+slot"]
+        OSC["MCLK Oscillator<br/>optional"]
     end
 
     subgraph ESP32-P4
-        I2S2[I2S2 RX/TX]
-        I2C2[I2C Bus 2\nGPIO 28/29]
-        HAL[HAL Driver]
-        Pipeline[Audio Pipeline]
+        I2SPORT["Configured I2S Port<br/>(HalDeviceConfig.i2sPort)"]
+        I2C2["I2C Bus 2<br/>GPIO 28/29"]
+        HAL["HAL Driver"]
+        Pipeline["Audio Pipeline"]
     end
 
-    CODEC -->|I2S DIN pin 10 (ADC)| I2S2
-    I2S2 -->|I2S DOUT pin 11 (DAC)| CODEC
-    EEPROM -->|Compatible string| I2C2
-    I2C2 -->|Register control| CODEC
-    OSC -->|MCLK optional| CODEC
-    I2S2 --> HAL
-    HAL -->|AudioInputSource (ADC)| Pipeline
-    Pipeline -->|AudioOutputSink (DAC)| HAL
+    CODEC -->|"I2S DIN pin 10 (ADC)"| I2SPORT
+    I2SPORT -->|"I2S DOUT pin 11 (DAC)"| CODEC
+    EEPROM -->|"Compatible string"| I2C2
+    I2C2 -->|"Register control"| CODEC
+    OSC -->|"MCLK optional"| CODEC
+    I2SPORT --> HAL
+    HAL -->|"AudioInputSource (ADC)"| Pipeline
+    Pipeline -->|"AudioOutputSink (DAC)"| HAL
 ```
 
 The carrier drives BCK and WS to the mezzanine in the default clock-master configuration. When the mezzanine provides its own MCLK oscillator, pin 9 is left floating on the carrier side and the module drives the device directly. The HAL driver sets `_descriptor.bus` accordingly and the HAL discovery layer resolves the I2S pin map from `HalDeviceConfig` at init time.
@@ -191,8 +193,28 @@ All five 2-channel DAC devices receive standard stereo I2S from the ESP32-P4 on 
 
 **ES9039PRO / ES9039MPRO variants:** Both package variants share the `HalEs9039pro` driver class. `ess,es9039mpro` is registered as a second compatible string pointing to the same factory. The driver reads chip ID register 0xE1 at `init()` time (0x39 = PRO, 0x3A = MPRO) and updates the device name accordingly.
 
+#### 2-Channel Cirrus Logic DAC Modules (Pattern C)
+
+| Device | Compatible | Channels | Interface | Volume Control | Key Feature | I2C Address |
+|--------|-----------|----------|-----------|----------------|-------------|-------------|
+| CS43198 | `cirrus,cs43198` | 2 | I2S | 128-step (0.5 dB/step) | MasterHIFI, 130 dBA DNR, 7 filter presets, DSD256, 384 kHz/32-bit | 0x48 |
+| CS43131 | `cirrus,cs43131` | 2 | I2S | 128-step (0.5 dB/step) | MasterHIFI, 127 dB DNR, integrated headphone amp, DSD256 | 0x48 |
+| CS4398 | `cirrus,cs4398` | 2 | I2S | 128-step (0.5 dB/step) | Classic DAC, 120 dB DNR, 8-bit registers, max 192 kHz/24-bit, DSD64 | 0x4C |
+| CS4399 | `cirrus,cs4399` | 2 | I2S | 128-step (0.5 dB/step) | MasterHIFI, 130 dBA DNR, 5 filter presets including NOS bypass mode | 0x48 |
+| CS43130 | `cirrus,cs43130` | 2 | I2S | 128-step (0.5 dB/step) | MasterHIFI, 130 dB DNR, headphone amp + NOS filter, DSD128 | 0x48 |
+
+All five Cirrus Logic DAC devices follow the same Pattern C integration as the ESS 2-channel DACs. Each registers a single `AudioOutputSink` and uses `buildSink()` from the shared `HalCirrusDacBase` base class. Volume is controlled via an 8-bit attenuation register with 0.5 dB per step.
+
+**Headphone amplifier support:** CS43131 and CS43130 include an integrated headphone amplifier, exposed via `setHeadphoneAmpEnabled(bool)` / `isHeadphoneAmpEnabled()`. Both report `HAL_CAP_HP_AMP`.
+
+**NOS mode:** CS4399 and CS43130 support non-oversampling (NOS) bypass mode via `setNosMode(bool)` / `isNosMode()`, which bypasses the internal digital interpolation filter for a more analog-like sound character.
+
+**Register addressing:** CS43198 and CS4398 use 8-bit register addressing. CS43131, CS43130, and CS4399 use 16-bit paged register addressing. Per-device register definitions are in `src/drivers/cs4*_regs.h` and `src/drivers/cs43*_regs.h`. Shared constants are in `src/drivers/cirrus_dac_common.h`.
+
+**CS4398 I2C address:** The CS4398 uses I2C address 0x4C (different from the 0x48 default used by all other Cirrus Logic DACs), allowing it to coexist with other Cirrus DACs on the same I2C bus.
+
 :::info Adding your own module
-If you are developing a new mezzanine module, follow the [Driver Guide](./driver-guide.md) to create the HAL driver class, register the factory, and write the unit tests. For ADCs: use `"ess,es9822pro"` as a reference for 2-channel I2S ADC devices, or `"ess,es9843pro"` for 4-channel TDM ADC devices using `HalTdmDeinterleaver`. For DACs: use `"ess,es9038q2m"` as a reference for 2-channel I2S DAC devices (Pattern C), or `"ess,es9038pro"` for 8-channel TDM DAC devices using `HalTdmInterleaver` (Pattern D).
+If you are developing a new mezzanine module, follow the [Driver Guide](./driver-guide.md) to create the HAL driver class, register the factory, and write the unit tests. For ADCs: use `"ess,es9822pro"` as a reference for 2-channel I2S ADC devices, or `"ess,es9843pro"` for 4-channel TDM ADC devices using `HalTdmDeinterleaver`. For DACs: use `"ess,es9038q2m"` (ESS) or `"cirrus,cs43198"` (Cirrus Logic) as a reference for 2-channel I2S DAC devices (Pattern C), or `"ess,es9038pro"` for 8-channel TDM DAC devices using `HalTdmInterleaver` (Pattern D).
 :::
 
 ## Design Guidelines for Mezzanine Makers

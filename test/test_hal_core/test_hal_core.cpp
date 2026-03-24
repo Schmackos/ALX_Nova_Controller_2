@@ -185,9 +185,9 @@ void test_state_transitions() {
     dev._state = HAL_STATE_ERROR;
     TEST_ASSERT_EQUAL(HAL_STATE_ERROR, dev._state);
 
-    // Manual
-    dev._state = HAL_STATE_MANUAL;
-    TEST_ASSERT_EQUAL(HAL_STATE_MANUAL, dev._state);
+    // Disabled
+    dev._state = HAL_STATE_DISABLED;
+    TEST_ASSERT_EQUAL(HAL_STATE_DISABLED, dev._state);
 
     // Removed
     dev._state = HAL_STATE_REMOVED;

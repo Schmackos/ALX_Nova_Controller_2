@@ -612,7 +612,7 @@ void test_manual_state_clears_mapping() {
     hal_pipeline_on_device_available(slot);
     TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
 
-    hal_pipeline_state_change(slot, HAL_STATE_AVAILABLE, HAL_STATE_MANUAL);
+    hal_pipeline_state_change(slot, HAL_STATE_AVAILABLE, HAL_STATE_DISABLED);
     TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
 }
 
@@ -669,8 +669,8 @@ void test_manual_to_available_reregisters_mapping() {
     hal_pipeline_on_device_available(slot);
     TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
 
-    // MANUAL clears the mapping
-    hal_pipeline_state_change(slot, HAL_STATE_AVAILABLE, HAL_STATE_MANUAL);
+    // DISABLED clears the mapping
+    hal_pipeline_state_change(slot, HAL_STATE_AVAILABLE, HAL_STATE_DISABLED);
     TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
 
     // Re-available restores it
@@ -840,7 +840,7 @@ void test_sync_mixed_available_error_removed() {
     codec._state  = HAL_STATE_ERROR;     codec._ready  = false;  // skipped
     adc1._state   = HAL_STATE_REMOVED;   adc1._ready   = false;  // skipped
     adc2._state   = HAL_STATE_AVAILABLE; adc2._ready   = true;   // should register
-    sensor._state = HAL_STATE_MANUAL;    sensor._ready  = false;  // skipped
+    sensor._state = HAL_STATE_DISABLED;  sensor._ready  = false;  // skipped
 
     hal_pipeline_sync();
 

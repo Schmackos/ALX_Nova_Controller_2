@@ -4,7 +4,7 @@ sidebar_position: 3
 description: How to write and register a new HAL driver.
 ---
 
-This guide walks through every step required to add a new hardware device to the ALX Nova HAL framework — from the C++ class all the way through driver registration, the device database, and the unit test module. The [PCM5102A DAC driver](https://github.com/your-org/ALX_Nova_Controller_2/blob/main/src/hal/hal_pcm5102a.cpp) is used throughout as a concrete reference because it is deliberately simple: no I2C, no complex init sequence, just clean structure that shows the pattern without noise.
+This guide walks through every step required to add a new hardware device to the ALX Nova HAL framework — from the C++ class all the way through driver registration, the device database, and the unit test module. The [PCM5102A DAC driver](./drivers#pcm5102a--tipcm5102a) is used throughout as a concrete reference because it is deliberately simple: no I2C, no complex init sequence, just clean structure that shows the pattern without noise.
 
 ## Device Lifecycle
 
@@ -21,8 +21,8 @@ stateDiagram-v2
     AVAILABLE --> UNAVAILABLE : healthCheck() fails\n_ready = false
     UNAVAILABLE --> AVAILABLE : healthCheck() passes\n_ready = true (auto-recovery)
     UNAVAILABLE --> ERROR : 3 consecutive\nhealthCheck() failures
-    AVAILABLE --> MANUAL : user disables via web UI
-    MANUAL --> CONFIGURING : user re-enables
+    AVAILABLE --> DISABLED : user disables via web UI
+    DISABLED --> CONFIGURING : user re-enables
     AVAILABLE --> REMOVED : absent on rescan\nor DELETE API call
     ERROR --> REMOVED : explicit remove
     REMOVED --> [*]

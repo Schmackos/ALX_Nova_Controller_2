@@ -34,7 +34,7 @@ static const uint64_t LOGIN_COOLDOWN_US = 300000000ULL; // 5 minutes in microsec
 static unsigned long _nextLoginAllowedMs = 0; // millis() gate — non-blocking rate limit
 
 // WebSocket one-time token pool (replaces JS cookie reading for WS auth)
-#define WS_TOKEN_SLOTS 16
+#define WS_TOKEN_SLOTS 32
 #define WS_TOKEN_TTL_MS 60000  // 60 seconds
 struct WsToken {
   char token[37];       // UUID string (36 chars + null)

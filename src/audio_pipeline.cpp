@@ -1,3 +1,33 @@
+// ===================================================================
+// audio_pipeline.cpp — 8-lane stereo pipeline with 32×32 routing matrix
+// ===================================================================
+//
+// Architecture:
+//   8 input lanes (AudioInputSource) → per-input DSP (biquad/gain) →
+//   32×32 routing matrix → per-output DSP (output_dsp) →
+//   16 output sink slots (AudioOutputSink, HAL-managed)
+//
+// Internal format: float32 [-1.0, +1.0] throughout.
+//
+// Key invariants:
+//   - Matrix bounds: static_assert MAX_INPUTS*2 <= MATRIX_SIZE and
+//     MAX_SINKS*2 <= MATRIX_SIZE.  set_source() validates
+//     lane*2+1 < MATRIX_SIZE, set_sink() validates
+//     firstChannel + channelCount <= MATRIX_SIZE.
+//   - DMA buffers: lane 0 + slot 0 pre-allocated at boot (4KB internal
+//     SRAM via heap_caps_calloc MALLOC_CAP_DMA); remaining lanes/slots
+//     lazy-allocated on first use.  DIAG_AUDIO_DMA_ALLOC_FAIL emitted
+//     on failure; AudioState.dmaAllocFailed tracks affected lanes/slots.
+//   - Pause protocol: callers that teardown I2S drivers MUST use
+//     audio_pipeline_request_pause() / audio_pipeline_resume() (defined
+//     at the end of this file).  Never set appState.audio.paused
+//     directly. The audio task gives taskPausedAck when it observes the
+//     flag and yields, guaranteeing it has exited i2s_read().
+//   - Thread safety: set_sink/set_source/remove_sink/remove_source use
+//     ScopedSchedulerSuspend (vTaskSuspendAll RAII guard) on Core 1.
+//     VU metering uses snap-read float (atomic on RISC-V).
+// ===================================================================
+
 #include "audio_pipeline.h"
 #include "i2s_audio.h"
 #include "app_state.h"

@@ -30,7 +30,7 @@ static lv_color_t state_to_color(uint8_t state) {
         case HAL_STATE_AVAILABLE:   return COLOR_SUCCESS;
         case HAL_STATE_DETECTED:
         case HAL_STATE_CONFIGURING:
-        case HAL_STATE_MANUAL:      return COLOR_WARNING;
+        case HAL_STATE_DISABLED:    return COLOR_WARNING;
         case HAL_STATE_UNAVAILABLE:
         case HAL_STATE_ERROR:       return COLOR_ERROR;
         default:                    return COLOR_TEXT_DIM;
@@ -51,7 +51,7 @@ static const char *state_to_label(uint8_t state) {
         case HAL_STATE_AVAILABLE:   return "Ready";
         case HAL_STATE_UNAVAILABLE: return "Unavail";
         case HAL_STATE_ERROR:       return "Error";
-        case HAL_STATE_MANUAL:      return "Manual";
+        case HAL_STATE_DISABLED:    return "Disabled";
         case HAL_STATE_REMOVED:     return "Removed";
         default:                    return "?";
     }
