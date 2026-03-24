@@ -4,6 +4,8 @@ Usage:
     pytest --device-port COM8 --device-ip 192.168.4.1 -v
 """
 
+import json
+import os
 import time
 
 import pytest
@@ -154,6 +156,9 @@ class ApiClient:
     All requests default to a 30s timeout (ESP32-P4 can be slow on
     PBKDF2 and I2C operations). Callers can override per-request via
     ``api.get("/path", timeout=60)``.
+
+    Response timings are collected automatically via ``resp.elapsed``
+    and dumped to ``logs/response_times.json`` at session end.
     """
 
     DEFAULT_TIMEOUT = 30  # seconds
@@ -161,22 +166,36 @@ class ApiClient:
     def __init__(self, session, base_url):
         self._session = session
         self._base_url = base_url
+        self.timings = []
+
+    def _record(self, method, path, resp):
+        self.timings.append({
+            "method": method,
+            "path": path,
+            "status": resp.status_code,
+            "elapsed_ms": round(resp.elapsed.total_seconds() * 1000, 1),
+        })
+        return resp
 
     def get(self, path, **kwargs):
         kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
-        return self._session.get(f"{self._base_url}{path}", **kwargs)
+        return self._record("GET", path,
+                            self._session.get(f"{self._base_url}{path}", **kwargs))
 
     def post(self, path, **kwargs):
         kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
-        return self._session.post(f"{self._base_url}{path}", **kwargs)
+        return self._record("POST", path,
+                            self._session.post(f"{self._base_url}{path}", **kwargs))
 
     def put(self, path, **kwargs):
         kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
-        return self._session.put(f"{self._base_url}{path}", **kwargs)
+        return self._record("PUT", path,
+                            self._session.put(f"{self._base_url}{path}", **kwargs))
 
     def delete(self, path, **kwargs):
         kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
-        return self._session.delete(f"{self._base_url}{path}", **kwargs)
+        return self._record("DELETE", path,
+                            self._session.delete(f"{self._base_url}{path}", **kwargs))
 
 
 @pytest.fixture(scope="session")
@@ -220,6 +239,8 @@ def auth_session(base_url, device_password):
 def api(auth_session, base_url, request):
     """Authenticated API client for REST calls."""
     client = ApiClient(auth_session, base_url)
+    # Store reference so pytest_sessionfinish can dump timings
+    request.config._store["api_client"] = client
     # Cache firmware version for GitHub issue reporting
     if not hasattr(request.config, "_firmware_version"):
         try:
@@ -309,3 +330,22 @@ def reboot_device(api, serial_reader, base_url, device_password):
         pytest.fail("Could not re-authenticate after reboot")
 
     return _reboot
+
+
+# ---------------------------------------------------------------------------
+# Session finish — dump response timings
+# ---------------------------------------------------------------------------
+
+def pytest_sessionfinish(session, exitstatus):
+    """Write collected API response timings to logs/response_times.json."""
+    api_client = session.config._store.get("api_client", None)
+    if api_client is None:
+        return
+    timings = api_client.timings
+    if not timings:
+        return
+    logs_dir = os.path.join(os.path.dirname(__file__), "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    path = os.path.join(logs_dir, "response_times.json")
+    with open(path, "w") as f:
+        json.dump(timings, f, indent=2)

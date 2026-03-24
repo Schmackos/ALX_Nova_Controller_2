@@ -146,26 +146,31 @@ pytest tests/test_hal_advanced.py --device-port COM8 --device-ip 192.168.178.229
 
 ## Test Modules
 
-The device test suite contains **185 tests across 16 modules** in `device_tests/tests/`:
+The device test suite contains **206 tests across 21 modules** in `device_tests/tests/`:
 
 | Module | Tests | Category | What It Validates |
 |--------|-------|----------|-------------------|
 | `test_boot_health.py` | 8 | Boot | Serial errors, auth init, settings loaded, HAL discovery, heap, crash log, uptime |
 | `test_health_check.py` | 12 | Health | `GET /api/health` response schema, verdict, counts, per-check fields, duration, deferred phase |
 | `test_hal_devices.py` | 7 | HAL | Device list, onboard present, no errors, valid configs, DB presets, scan, pin conflicts |
-| `test_hal_advanced.py` | 31 | HAL | DB completeness, scan behavior, config updates, validation boundaries, reinit, CRUD lifecycle, custom devices, error handling |
+| `test_hal_advanced.py` | 31 | HAL | DB completeness, scan behavior, config updates, validation enforcement, reinit, CRUD lifecycle, custom devices, error handling |
 | `test_dsp_audio.py` | 24 | Audio | DSP config/metrics/bypass/presets, signal generator, pipeline matrix, DAC, THD, diagnostics |
-| `test_dsp_extended.py` | 20 | Audio/DSP | DSP stage CRUD, crossover, bass management, baffle step, import/export (APO/miniDSP/JSON), preset CRUD, PEQ presets |
+| `test_dsp_extended.py` | 21 | Audio/DSP | DSP stage CRUD, crossover, bass management, baffle step, import/export (APO/miniDSP/JSON), preset CRUD, PEQ presets |
 | `test_output_dsp.py` | 9 | Audio/DSP | Per-output post-matrix DSP: config, bypass, stage add/delete, crossover, validation |
-| `test_audio.py` | 10 | Audio | I2S ports, pipeline matrix, DAC status, PSRAM, DMA, pause state, heap budget, smart sensing, input names |
-| `test_websocket.py` | 15 | WS/Network | Auth handshake (valid/invalid/timeout), initial state broadcasts, command dispatch, binary frames (waveform/spectrum), multi-client, oversized message |
-| `test_wifi.py` | 9 | WiFi/Network | Status fields, RSSI range, IP format, scan results, saved networks, validation (read-only — no state changes) |
-| `test_ethernet.py` | 8 | Ethernet/Network | Status, hostname, link state, config validation, hostname roundtrip (no IP changes) |
-| `test_ota.py` | 7 | OTA | Update status, version match, check update, releases list, validation (read-only — never flashes firmware) |
-| `test_dac_eeprom.py` | 6 | Audio/HAL | EEPROM read, scan, presets, parsed fields, validation (read-only — never programs/erases) |
+| `test_audio.py` | 12 | Audio | I2S ports, pipeline matrix, DAC status, PSRAM, DMA, pause state, heap budget, smart sensing, input names roundtrip, sensing mode roundtrip |
+| `test_rest_ws_sync.py` | 5 | Sync | REST→WS state propagation: DSP bypass, buzzer, HAL scan, signal gen, HAL config mute |
+| `test_serial_correlation.py` | 3 | Serial | API calls produce expected serial log output: HAL scan, settings change, signal generator |
+| `test_reboot_persistence.py` | 5 | Reboot | Settings survive reboot across /config.json, /hal\_config.json, NVS, /inputnames.txt |
+| `test_performance.py` | 3 | Perf | Response time budgets: health, diagnostics, HAL devices (each under 500ms) |
+| `test_stress.py` | 2 | Stress | Concurrent load: 25 parallel GETs, mixed endpoints, rate limit compliance |
+| `test_websocket.py` | 15 | WS/Network | Auth handshake, command dispatch, binary frames, multi-client, oversized message |
+| `test_wifi.py` | 9 | WiFi/Network | Status, RSSI, scan, saved networks, validation (read-only) |
+| `test_ethernet.py` | 8 | Ethernet/Network | Status, hostname, link state, config validation (no IP changes) |
+| `test_ota.py` | 7 | OTA | Update status, version match, releases, validation (read-only) |
+| `test_dac_eeprom.py` | 6 | Audio/HAL | EEPROM read, scan, presets, parsed fields, validation (read-only) |
 | `test_network.py` | 6 | Network | Reachable, WiFi status, security headers, auth required, auth status, WS port |
-| `test_mqtt.py` | 4 | MQTT | Config readable, connected if configured, HA discovery, diagnostics (3 skip when not configured) |
-| `test_settings.py` | 9 | Settings | Get, export, darkMode toggle, reboot persistence (@slow), auth change validation, import roundtrip, import validation, export v2 structure |
+| `test_mqtt.py` | 4 | MQTT | Config readable, connected if configured, HA discovery, diagnostics |
+| `test_settings.py` | 9 | Settings | Get, export, darkMode toggle, reboot persistence, auth validation, import roundtrip, export v2 |
 
 ### Pytest Markers
 
@@ -176,6 +181,9 @@ pytest tests/ -m "boot" -v              # Boot health only
 pytest tests/ -m "hal" -v               # All HAL tests
 pytest tests/ -m "audio" -v             # DSP + audio tests
 pytest tests/ -m "ws" -v                # WebSocket protocol tests
+pytest tests/ -m "sync" -v              # REST-to-WS state sync tests
+pytest tests/ -m "perf" -v              # Response time performance tests
+pytest tests/ -m "stress" -v            # Concurrent load stress tests
 pytest tests/ -m "wifi" -v              # WiFi management tests
 pytest tests/ -m "ethernet" -v          # Ethernet tests
 pytest tests/ -m "ota" -v               # OTA tests (read-only)
@@ -185,7 +193,7 @@ pytest tests/ -m "not reboot" -v        # Skip reboot tests
 pytest tests/ -m "health" -v            # Health check endpoint only
 ```
 
-Available markers: `boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `reboot`, `slow`, `ws`, `wifi`, `ethernet`, `ota`, `dsp`.
+Available markers: `boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `reboot`, `slow`, `ws`, `wifi`, `ethernet`, `ota`, `dsp`, `sync`, `perf`, `stress`.
 
 ## HAL Testing in Depth
 

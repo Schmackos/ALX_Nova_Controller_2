@@ -118,3 +118,44 @@ class TestAudio:
         assert isinstance(data["names"], list), "inputnames 'names' is not a list"
         assert len(data["names"]) > 0, "inputnames 'names' list is empty"
         assert "numAdcsDetected" in data, "inputnames missing 'numAdcsDetected'"
+
+    def test_input_names_post_roundtrip(self, api):
+        """POST /api/inputnames updates channel names and restores."""
+        resp = api.get("/api/inputnames")
+        assert resp.status_code == 200
+        original_names = resp.json().get("names", [])
+        if not original_names:
+            pytest.skip("No input names configured")
+
+        # Set test names
+        test_names = [f"Test{i}" for i in range(len(original_names))]
+        resp = api.post("/api/inputnames", json={"names": test_names})
+        assert resp.status_code == 200
+
+        # Verify
+        resp = api.get("/api/inputnames")
+        assert resp.status_code == 200
+        after = resp.json().get("names", [])
+        assert after[:len(test_names)] == test_names
+
+        # Restore
+        api.post("/api/inputnames", json={"names": original_names})
+
+    def test_smartsensing_mode_roundtrip(self, api):
+        """POST /api/smartsensing changes mode and restores."""
+        resp = api.get("/api/smartsensing")
+        assert resp.status_code == 200
+        original_mode = resp.json().get("mode", "smart_auto")
+
+        # Cycle through modes
+        target = "always_on" if original_mode != "always_on" else "always_off"
+        resp = api.post("/api/smartsensing", json={"mode": target})
+        assert resp.status_code == 200
+
+        # Verify
+        resp = api.get("/api/smartsensing")
+        assert resp.status_code == 200
+        assert resp.json().get("mode") == target
+
+        # Restore
+        api.post("/api/smartsensing", json={"mode": original_mode})

@@ -10,3 +10,6 @@ requests>=2.31
 
 # WebSocket client for WS protocol testing
 websocket-client>=1.6
+
+# HTML test report generation
+pytest-html>=4.0

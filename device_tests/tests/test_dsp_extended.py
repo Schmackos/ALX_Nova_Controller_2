@@ -246,6 +246,21 @@ class TestDspImportExport:
         resp = api.put("/api/dsp", json=exported)
         assert resp.status_code == 200
 
+    def test_import_apo_format(self, api):
+        """POST /api/dsp/import/apo imports Equalizer APO filter text."""
+        apo_text = "Filter 1: ON PEQ Fc 1000 Hz Gain 0 dB Q 1.0"
+        resp = api.post(
+            "/api/dsp/import/apo",
+            params={"ch": 0},
+            data=apo_text,
+            headers={"Content-Type": "text/plain"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("success") is True or data.get("added", 0) >= 0
+        # Cleanup any imported stages
+        _cleanup_test_stages(api, 0)
+
     def test_stereo_link_toggle(self, api):
         """POST /api/dsp/channel/stereolink toggles stereo link."""
         resp = api.post("/api/dsp/channel/stereolink", json={

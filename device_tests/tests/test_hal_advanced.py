@@ -201,58 +201,55 @@ class TestHalConfigValidation:
             pytest.skip("No HAL devices registered")
         return devices[0]["slot"]
 
-    def test_invalid_gpio_accepted_as_known_gap(self, api):
-        """GPIO pin > 54 is currently accepted — known validation gap.
+    def test_invalid_gpio_rejected(self, api):
+        """GPIO pin > 54 must be rejected by hal_validate_config().
 
-        KNOWN ISSUE: PUT /api/hal/devices does not validate GPIO range.
-        Validation exists in hal_validate_config() but is not called by
-        the PUT handler. This test documents the gap. When fixed, change
-        assertion to expect 422.
+        The PUT handler calls hal_validate_config() which validates all
+        GPIO pins are -1 (unset) or 0-54 (valid ESP32-P4 range).
         """
         slot = self._get_any_device_slot(api)
         resp = api.put("/api/hal/devices", json={
             "slot": slot, "gpioA": 99,
         })
-        # Currently 200 (no validation) — when fixed, expect 400/422
         if resp.status_code in (400, 422):
-            pass  # Fixed! Validation now works
-        else:
-            # Known gap — document but don't fail the test
-            assert resp.status_code == 200
-            # Restore valid value
-            api.put("/api/hal/devices", json={"slot": slot, "gpioA": -1})
+            return  # Validation working correctly
+        # If firmware accepted it, restore and flag regression
+        api.put("/api/hal/devices", json={"slot": slot, "gpioA": -1})
+        pytest.fail(
+            f"Validation regression: GPIO 99 accepted (HTTP {resp.status_code})"
+        )
 
-    def test_invalid_i2s_port_accepted_as_known_gap(self, api):
-        """I2S port > 2 is currently accepted — known validation gap.
+    def test_invalid_i2s_port_rejected(self, api):
+        """I2S port > 2 (and != 255) must be rejected.
 
-        KNOWN ISSUE: PUT /api/hal/devices does not validate i2sPort range.
-        When fixed, change assertion to expect 422.
+        hal_validate_config() enforces i2sPort in {0, 1, 2, 255}.
         """
         slot = self._get_any_device_slot(api)
         resp = api.put("/api/hal/devices", json={
             "slot": slot, "i2sPort": 5,
         })
         if resp.status_code in (400, 422):
-            pass  # Fixed!
-        else:
-            assert resp.status_code == 200
-            api.put("/api/hal/devices", json={"slot": slot, "i2sPort": 255})
+            return  # Validation working correctly
+        api.put("/api/hal/devices", json={"slot": slot, "i2sPort": 255})
+        pytest.fail(
+            f"Validation regression: i2sPort 5 accepted (HTTP {resp.status_code})"
+        )
 
-    def test_invalid_i2c_bus_accepted_as_known_gap(self, api):
-        """I2C bus > 2 is currently accepted — known validation gap.
+    def test_invalid_i2c_bus_rejected(self, api):
+        """I2C bus > 2 must be rejected.
 
-        KNOWN ISSUE: PUT /api/hal/devices does not validate i2cBus range.
-        When fixed, change assertion to expect 422.
+        hal_validate_config() enforces i2cBusIndex in {0, 1, 2}.
         """
         slot = self._get_any_device_slot(api)
         resp = api.put("/api/hal/devices", json={
             "slot": slot, "i2cBus": 10,
         })
         if resp.status_code in (400, 422):
-            pass  # Fixed!
-        else:
-            assert resp.status_code == 200
-            api.put("/api/hal/devices", json={"slot": slot, "i2cBus": 0})
+            return  # Validation working correctly
+        api.put("/api/hal/devices", json={"slot": slot, "i2cBus": 0})
+        pytest.fail(
+            f"Validation regression: i2cBus 10 accepted (HTTP {resp.status_code})"
+        )
 
     def test_update_nonexistent_slot_404(self, api):
         """PUT on an empty slot should return 404."""

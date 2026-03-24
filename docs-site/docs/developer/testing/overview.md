@@ -18,7 +18,7 @@ This section also covers on-device testing — hardware-in-the-loop validation u
 | C++ unit tests | Unity (PlatformIO native) | ~3,125 tests / 114 modules | Firmware logic, HAL, DSP, audio pipeline, networking, auth |
 | E2E browser tests | Playwright + Express mock | 302 tests / 50 specs | Web UI, WS state sync, REST API contracts, accessibility, visual regression |
 | Static analysis | ESLint, cppcheck, find_dups, check_missing_fns | — | JS correctness, C++ warnings, duplicate/missing declarations |
-| On-device tests | pytest + pyserial + requests + websocket-client | 185 tests / 16 modules | I2S DMA, GPIO, HAL lifecycle, DSP, audio pipeline, WiFi SDIO, WebSocket protocol, OTA, Ethernet (real hardware) |
+| On-device tests | pytest + pyserial + requests + websocket-client | 206 tests / 21 modules | I2S DMA, GPIO, HAL lifecycle, DSP, audio pipeline, WiFi SDIO, WebSocket protocol, REST→WS sync, serial correlation, reboot persistence, performance, stress (real hardware) |
 
 ## Layer 1: C++ Unit Tests
 
