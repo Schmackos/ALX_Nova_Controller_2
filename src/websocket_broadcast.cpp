@@ -339,6 +339,10 @@ void sendDspMetrics() {
   doc["pipelineFrameUs"] = timing.totalFrameUs;
   doc["matrixUs"]       = timing.matrixMixUs;
   doc["outputDspUs"]    = timing.outputDspUs;
+  // Per-stage breakdown
+  doc["inputReadUs"]    = timing.inputReadUs;
+  doc["perInputDspUs"]  = timing.perInputDspUs;
+  doc["sinkWriteUs"]    = timing.sinkWriteUs;
   // DSP threshold flags and FIR bypass counter
   doc["dspCpuWarn"]     = m.cpuWarning;
   doc["dspCpuCrit"]     = m.cpuCritical;

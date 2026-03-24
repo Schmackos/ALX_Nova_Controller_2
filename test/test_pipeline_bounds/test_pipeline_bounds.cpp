@@ -663,6 +663,10 @@ struct PipelineTimingMetrics {
     uint32_t matrixMixUs;
     uint32_t outputDspUs;
     float    totalCpuPercent;
+    // Per-stage breakdown (foundation hardening)
+    uint32_t inputReadUs;
+    uint32_t perInputDspUs;
+    uint32_t sinkWriteUs;
 };
 
 // Native stub for audio_pipeline_get_timing() — returns zero-initialized struct.
@@ -682,11 +686,17 @@ void test_timing_metrics_fields_exist(void) {
     m.matrixMixUs = 45;
     m.outputDspUs = 67;
     m.totalCpuPercent = 12.5f;
+    m.inputReadUs = 10;
+    m.perInputDspUs = 20;
+    m.sinkWriteUs = 30;
 
     TEST_ASSERT_EQUAL_UINT32(123, m.totalFrameUs);
     TEST_ASSERT_EQUAL_UINT32(45, m.matrixMixUs);
     TEST_ASSERT_EQUAL_UINT32(67, m.outputDspUs);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 12.5f, m.totalCpuPercent);
+    TEST_ASSERT_EQUAL_UINT32(10, m.inputReadUs);
+    TEST_ASSERT_EQUAL_UINT32(20, m.perInputDspUs);
+    TEST_ASSERT_EQUAL_UINT32(30, m.sinkWriteUs);
 }
 
 // 7b. PipelineTimingMetrics zero-initialized by default
@@ -698,13 +708,16 @@ void test_timing_metrics_initial_zero(void) {
     TEST_ASSERT_EQUAL_UINT32(0, m.matrixMixUs);
     TEST_ASSERT_EQUAL_UINT32(0, m.outputDspUs);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, m.totalCpuPercent);
+    TEST_ASSERT_EQUAL_UINT32(0, m.inputReadUs);
+    TEST_ASSERT_EQUAL_UINT32(0, m.perInputDspUs);
+    TEST_ASSERT_EQUAL_UINT32(0, m.sinkWriteUs);
 }
 
-// 7c. Struct size is consistent (4 fields: 3 x uint32_t + 1 x float = 16 bytes min)
+// 7c. Struct size is consistent (7 fields: 6 x uint32_t + 1 x float = 28 bytes min)
 void test_timing_metrics_struct_size(void) {
-    TEST_ASSERT_TRUE(sizeof(PipelineTimingMetrics) >= 16);
-    // Exact size depends on padding, but must hold all 4 fields
-    TEST_ASSERT_TRUE(sizeof(PipelineTimingMetrics) <= 32); // Reasonable upper bound with padding
+    TEST_ASSERT_TRUE(sizeof(PipelineTimingMetrics) >= 28);
+    // Exact size depends on padding, but must hold all 7 fields
+    TEST_ASSERT_TRUE(sizeof(PipelineTimingMetrics) <= 48); // Reasonable upper bound with padding
 }
 
 // 7d. Getter API returns a zeroed struct (simulates native no-op)
@@ -716,6 +729,9 @@ void test_timing_metrics_getter(void) {
     TEST_ASSERT_EQUAL_UINT32(0, m.matrixMixUs);
     TEST_ASSERT_EQUAL_UINT32(0, m.outputDspUs);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, m.totalCpuPercent);
+    TEST_ASSERT_EQUAL_UINT32(0, m.inputReadUs);
+    TEST_ASSERT_EQUAL_UINT32(0, m.perInputDspUs);
+    TEST_ASSERT_EQUAL_UINT32(0, m.sinkWriteUs);
 }
 
 // ============================================================
