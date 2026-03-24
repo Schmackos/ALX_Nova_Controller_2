@@ -16,28 +16,11 @@
 #include "hal_ns4150b.h"
 #include "hal_led.h"
 #include "hal_relay.h"
-#include "hal_es9822pro.h"
-#include "hal_es9843pro.h"
-#include "hal_es9826.h"
-#include "hal_es9821.h"
-#include "hal_es9823pro.h"
-#include "hal_es9820.h"
-#include "hal_es9842pro.h"
-#include "hal_es9840.h"
-#include "hal_es9841.h"
+#include "hal_ess_adc_2ch.h"
+#include "hal_ess_adc_4ch.h"
 #include "hal_ess_dac_2ch.h"
-#include "hal_es9038pro.h"
-#include "hal_es9028pro.h"
-#include "hal_es9039pro.h"
-#include "hal_es9027pro.h"
-#include "hal_es9081.h"
-#include "hal_es9082.h"
-#include "hal_es9017.h"
-#include "hal_cs43198.h"
-#include "hal_cs43131.h"
-#include "hal_cs4398.h"
-#include "hal_cs4399.h"
-#include "hal_cs43130.h"
+#include "hal_ess_dac_8ch.h"
+#include "hal_cirrus_dac_2ch.h"
 #include "../config.h"
 #include "../debug_serial.h"
 #include "../drivers/es8311_regs.h"
@@ -69,32 +52,32 @@ static HalDevice* factory_encoder()  { return new HalEncoder(ENCODER_A_PIN, ENCO
 static HalDevice* factory_ns4150b()  { return new HalNs4150b(ES8311_PA_PIN); }
 static HalDevice* factory_led()      { return new HalLed(LED_PIN); }
 static HalDevice* factory_relay()    { return new HalRelay(AMPLIFIER_PIN); }
-static HalDevice* factory_es9822pro() { return new HalEs9822pro(); }
-static HalDevice* factory_es9843pro() { return new HalEs9843pro(); }
-static HalDevice* factory_es9826()    { return new HalEs9826(); }
-static HalDevice* factory_es9821()    { return new HalEs9821(); }
-static HalDevice* factory_es9823pro() { return new HalEs9823pro(); }
-static HalDevice* factory_es9820()    { return new HalEs9820(); }
-static HalDevice* factory_es9842pro() { return new HalEs9842pro(); }
-static HalDevice* factory_es9840()    { return new HalEs9840(); }
-static HalDevice* factory_es9841()    { return new HalEs9841(); }
+static HalDevice* factory_es9822pro() { return new HalEssAdc2ch(kDescES9822PRO); }
+static HalDevice* factory_es9826()    { return new HalEssAdc2ch(kDescES9826);    }
+static HalDevice* factory_es9823pro() { return new HalEssAdc2ch(kDescES9823PRO); }
+static HalDevice* factory_es9821()    { return new HalEssAdc2ch(kDescES9821);    }
+static HalDevice* factory_es9820()    { return new HalEssAdc2ch(kDescES9820);    }
+static HalDevice* factory_es9843pro() { return new HalEssAdc4ch(kDescES9843PRO); }
+static HalDevice* factory_es9842pro() { return new HalEssAdc4ch(kDescES9842PRO); }
+static HalDevice* factory_es9841()    { return new HalEssAdc4ch(kDescES9841);    }
+static HalDevice* factory_es9840()    { return new HalEssAdc4ch(kDescES9840);    }
 static HalDevice* factory_es9038q2m()  { return new HalEssDac2ch(kDescES9038Q2M); }
 static HalDevice* factory_es9039q2m()  { return new HalEssDac2ch(kDescES9039Q2M); }
 static HalDevice* factory_es9069q()    { return new HalEssDac2ch(kDescES9069Q);    }
 static HalDevice* factory_es9033q()    { return new HalEssDac2ch(kDescES9033Q);    }
 static HalDevice* factory_es9020_dac() { return new HalEssDac2ch(kDescES9020Dac);  }
-static HalDevice* factory_es9038pro()  { return new HalEs9038pro(); }
-static HalDevice* factory_es9028pro()  { return new HalEs9028pro(); }
-static HalDevice* factory_es9039pro()  { return new HalEs9039pro(); }
-static HalDevice* factory_es9027pro()  { return new HalEs9027pro(); }
-static HalDevice* factory_es9081()     { return new HalEs9081(); }
-static HalDevice* factory_es9082()     { return new HalEs9082(); }
-static HalDevice* factory_es9017()     { return new HalEs9017(); }
-static HalDevice* factory_cs43198()    { return new HalCs43198(); }
-static HalDevice* factory_cs43131()    { return new HalCs43131(); }
-static HalDevice* factory_cs4398()     { return new HalCs4398(); }
-static HalDevice* factory_cs4399()     { return new HalCs4399(); }
-static HalDevice* factory_cs43130()    { return new HalCs43130(); }
+static HalDevice* factory_es9038pro()  { return new HalEssDac8ch(kDescES9038PRO); }
+static HalDevice* factory_es9028pro()  { return new HalEssDac8ch(kDescES9028PRO); }
+static HalDevice* factory_es9039pro()  { return new HalEssDac8ch(kDescES9039PRO); }
+static HalDevice* factory_es9027pro()  { return new HalEssDac8ch(kDescES9027PRO); }
+static HalDevice* factory_es9081()     { return new HalEssDac8ch(kDescES9081);    }
+static HalDevice* factory_es9082()     { return new HalEssDac8ch(kDescES9082);    }
+static HalDevice* factory_es9017()     { return new HalEssDac8ch(kDescES9017);    }
+static HalDevice* factory_cs43198()    { return new HalCirrusDac2ch(kDescCS43198); }
+static HalDevice* factory_cs43131()    { return new HalCirrusDac2ch(kDescCS43131); }
+static HalDevice* factory_cs4398()     { return new HalCirrusDac2ch(kDescCS4398);  }
+static HalDevice* factory_cs4399()     { return new HalCirrusDac2ch(kDescCS4399);  }
+static HalDevice* factory_cs43130()    { return new HalCirrusDac2ch(kDescCS43130); }
 #ifdef USB_AUDIO_ENABLED
 static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #endif
