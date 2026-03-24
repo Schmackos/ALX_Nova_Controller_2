@@ -6,25 +6,29 @@ description: HAL device management REST API endpoints.
 
 The HAL API manages the hardware abstraction layer device lifecycle. It covers device enumeration, runtime discovery, per-device configuration, manual registration of expansion hardware, and a custom device schema system. All endpoints require the `DAC_ENABLED` build flag and are registered at boot by `registerHalApiEndpoints()`.
 
+:::note Authentication
+All HAL API endpoints require a valid session cookie (obtained via the web UI login or `POST /api/auth/login`). Unauthenticated requests receive `HTTP 401`. All endpoints are also subject to the global rate limit of 30 requests per second per IP address — exceeding this returns `HTTP 429`.
+:::
+
 ## Endpoint summary
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/hal/devices` | No | List all registered devices |
-| POST | `/api/hal/devices` | No | Manually register a device by compatible string |
-| PUT | `/api/hal/devices` | No | Update per-device runtime configuration |
-| DELETE | `/api/hal/devices` | No | Remove a device from its slot |
-| POST | `/api/hal/devices/reinit` | No | Deinit and re-initialize a device |
-| GET | `/api/hal/devices/custom` | No | List custom device schemas stored in LittleFS |
-| POST | `/api/hal/devices/custom` | No | Upload a custom JSON device schema |
-| DELETE | `/api/hal/devices/custom` | No | Remove a custom device schema by name |
-| POST | `/api/hal/devices/custom/create` | No | Create a new custom device via structured form data |
-| POST | `/api/hal/scan` | No | Trigger a full device rescan (I2C + EEPROM) |
-| GET | `/api/hal/scan/unmatched` | No | List I2C addresses found but not matched to any driver |
-| GET | `/api/hal/db` | No | List all entries in the device database |
-| GET | `/api/hal/db/presets` | No | List device presets (compatible string + name + type) |
-| GET | `/api/hal/settings` | No | Get HAL auto-discovery toggle state |
-| PUT | `/api/hal/settings` | No | Set HAL auto-discovery toggle state |
+| Method | Path | Auth | Rate limited | Description |
+|--------|------|------|--------------|-------------|
+| GET | `/api/hal/devices` | Yes | Yes | List all registered devices |
+| POST | `/api/hal/devices` | Yes | Yes | Manually register a device by compatible string |
+| PUT | `/api/hal/devices` | Yes | Yes | Update per-device runtime configuration |
+| DELETE | `/api/hal/devices` | Yes | Yes | Remove a device from its slot |
+| POST | `/api/hal/devices/reinit` | Yes | Yes | Deinit and re-initialize a device |
+| GET | `/api/hal/devices/custom` | Yes | Yes | List custom device schemas stored in LittleFS |
+| POST | `/api/hal/devices/custom` | Yes | Yes | Upload a custom JSON device schema |
+| DELETE | `/api/hal/devices/custom` | Yes | Yes | Remove a custom device schema by name |
+| POST | `/api/hal/devices/custom/create` | Yes | Yes | Create a new custom device via structured form data |
+| POST | `/api/hal/scan` | Yes | Yes | Trigger a full device rescan (I2C + EEPROM) |
+| GET | `/api/hal/scan/unmatched` | Yes | Yes | List I2C addresses found but not matched to any driver |
+| GET | `/api/hal/db` | Yes | Yes | List all entries in the device database |
+| GET | `/api/hal/db/presets` | Yes | Yes | List device presets (compatible string + name + type) |
+| GET | `/api/hal/settings` | Yes | Yes | Get HAL auto-discovery toggle state |
+| PUT | `/api/hal/settings` | Yes | Yes | Set HAL auto-discovery toggle state |
 
 ---
 
@@ -166,6 +170,8 @@ Returns a JSON array of all currently registered HAL devices (up to 24 slots).
 | Status | Meaning |
 |--------|---------|
 | 200 | Success |
+| 401 | Authentication required |
+| 429 | Rate limit exceeded |
 
 ---
 
@@ -212,9 +218,11 @@ When the slot is allocated but `init()` fails (the device is in ERROR state), th
 |--------|---------|
 | 201 | Device registered and init attempted (check `state` for result) |
 | 400 | Missing or empty `compatible` field |
+| 401 | Authentication required |
 | 404 | Unknown compatible string — not in device database |
 | 409 | Max instances for this compatible reached (8), or no free slots |
 | 422 | No driver factory registered for this device |
+| 429 | Rate limit exceeded |
 | 500 | Driver factory returned null, or no free slots internally |
 
 :::note
@@ -278,8 +286,10 @@ Update runtime configuration for a device. All fields are optional — only fiel
 |--------|---------|
 | 200 | Configuration saved and applied |
 | 400 | Invalid JSON, or `slot` out of range |
+| 401 | Authentication required |
 | 404 | No device in the specified slot |
 | 422 | Config field failed validation (see `field` and `error` in response body) |
+| 429 | Rate limit exceeded |
 
 Config fields validated by `hal_validate_config()`:
 
@@ -319,7 +329,9 @@ For DAC-path devices, this endpoint enqueues deferred teardown via `appState.hal
 |--------|---------|
 | 200 | Device removed |
 | 400 | Invalid JSON, or `slot` out of range |
+| 401 | Authentication required |
 | 404 | No device in the specified slot |
+| 429 | Rate limit exceeded |
 
 ---
 
@@ -358,7 +370,9 @@ On failure, the response includes the `error` field containing the reason text f
 |--------|---------|
 | 200 | Reinit attempted (check `state` for result) |
 | 400 | Invalid JSON, or `slot` out of range |
+| 401 | Authentication required |
 | 404 | No device in the specified slot |
+| 429 | Rate limit exceeded |
 
 ---
 
@@ -400,7 +414,9 @@ When Bus 0 is skipped due to an active WiFi connection, the response includes ad
 | Status | Meaning |
 |--------|---------|
 | 200 | Scan complete |
+| 401 | Authentication required |
 | 409 | Scan already in progress |
+| 429 | Rate limit exceeded |
 
 :::warning
 I2C Bus 0 (GPIO 48/54) shares the SDIO lines with the ESP32-C6 WiFi co-processor. The scanner automatically skips Bus 0 when WiFi is active to prevent `sdmmc_send_cmd` errors and MCU resets.
@@ -435,6 +451,14 @@ Returns the full device database — all known device descriptors regardless of 
 ]
 ```
 
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 401 | Authentication required |
+| 429 | Rate limit exceeded |
+
 ---
 
 ## GET /api/hal/db/presets
@@ -451,6 +475,14 @@ Returns a condensed list of device database entries suitable for populating a UI
 ]
 ```
 
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 401 | Authentication required |
+| 429 | Rate limit exceeded |
+
 ---
 
 ## GET /api/hal/settings
@@ -462,6 +494,14 @@ Returns the current HAL settings.
 ```json
 { "halAutoDiscovery": true }
 ```
+
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 401 | Authentication required |
+| 429 | Rate limit exceeded |
 
 ---
 
@@ -481,6 +521,15 @@ Updates HAL settings. Currently controls only the auto-discovery toggle.
 { "status": "ok" }
 ```
 
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Settings saved |
+| 400 | Invalid JSON |
+| 401 | Authentication required |
+| 429 | Rate limit exceeded |
+
 ---
 
 ## GET /api/hal/devices/custom
@@ -496,6 +545,14 @@ Lists custom device schema files stored in LittleFS under `/hal/custom/`.
   ]
 }
 ```
+
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 401 | Authentication required |
+| 429 | Rate limit exceeded |
 
 ---
 
@@ -528,6 +585,8 @@ Uploads a custom JSON device schema. The schema must include a `compatible` fiel
 |--------|---------|
 | 200 | Schema saved and loaded |
 | 400 | Invalid JSON or missing `compatible` field |
+| 401 | Authentication required |
+| 429 | Rate limit exceeded |
 | 500 | LittleFS write failed |
 
 ---
@@ -550,7 +609,9 @@ Removes a custom schema file. The schema is identified by the `name` query param
 |--------|---------|
 | 200 | Schema removed |
 | 400 | Missing `name` query parameter |
+| 401 | Authentication required |
 | 404 | Schema file not found |
+| 429 | Rate limit exceeded |
 
 ---
 
@@ -621,7 +682,9 @@ Creates a new custom device from a structured JSON body. This endpoint is the co
 |--------|---------|
 | 201 | Device schema saved and init attempted (check `state` for hardware result) |
 | 400 | Invalid JSON, missing required fields, or `compatible` already in use |
+| 401 | Authentication required |
 | 409 | No free device slots |
+| 429 | Rate limit exceeded |
 | 500 | LittleFS write failed |
 
 :::note Init result
@@ -672,7 +735,9 @@ Returns I2C addresses that were found during the most recent bus scan but could 
 | Status | Meaning |
 |--------|---------|
 | 200 | Success (count may be 0 if all addresses were matched) |
+| 401 | Authentication required |
 | 409 | A scan is currently in progress — retry after the scan completes |
+| 429 | Rate limit exceeded |
 
 :::tip Using this endpoint
 Call `POST /api/hal/scan` first to ensure the address list is fresh, then call this endpoint to get unmatched addresses. The web UI custom device modal does this automatically when you click **Scan for devices**.

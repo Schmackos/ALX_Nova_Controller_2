@@ -306,6 +306,14 @@ Per-device configuration is persisted to `/hal_config.json` on LittleFS. The str
 
 The REST endpoint `PUT /api/hal/devices` accepts a partial config object — only the fields present in the request body are updated. All fields are validated by `hal_validate_config()` before being written. Invalid values (e.g., an `i2sPort` outside 0–2 or 255, an `i2cBusIndex` outside 0–2, or a GPIO pin outside -1 to 54) cause the endpoint to return HTTP 422 with a field-specific error message. On successful validation the driver's `init()` method is re-run with the new config active.
 
+## Security
+
+All HAL API endpoints require a valid session cookie. Unauthenticated requests are rejected with `HTTP 401`. All endpoints are also subject to the global rate limit of 30 requests per second per IP address enforced by `requireAuth()` — exceeding this limit returns `HTTP 429`.
+
+This applies uniformly to every endpoint under `/api/hal/`, including read-only endpoints such as `GET /api/hal/devices` and `GET /api/hal/db/presets`. The rationale is that device enumeration can reveal hardware topology information, and mutation endpoints (POST/PUT/DELETE) must always be gated.
+
+Authentication is obtained through the standard web UI login flow or `POST /api/auth/login`. The session cookie is `HttpOnly` and is validated by the shared `requireAuth()` helper used across all protected API surfaces (DSP, pipeline, settings, and HAL).
+
 ## REST API Surface
 
 All HAL management is exposed under `/api/hal/`:
