@@ -62,7 +62,7 @@ test.describe('@hal @api HAL Discovery', () => {
 
   test('scan results update device list via WS push', async ({ connectedPage: page }) => {
     await openDevicesTab(page);
-    await expect(page.locator('.hal-device-card')).toHaveCount(8);
+    await expect(page.locator('.hal-device-card')).toHaveCount(11);
 
     await page.route('/api/hal/scan', async (route) => {
       await route.fulfill({

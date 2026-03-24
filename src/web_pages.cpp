@@ -8502,6 +8502,11 @@ body.night-mode {
         var HAL_CAP_PGA_CONTROL = 1 << 5;
         var HAL_CAP_HPF_CONTROL = 1 << 6;
         var HAL_CAP_CODEC       = 1 << 7;
+        var HAL_CAP_MQA         = 1 << 8;
+        var HAL_CAP_LINE_DRIVER = 1 << 9;
+        var HAL_CAP_APLL        = 1 << 10;
+        var HAL_CAP_DSD         = 1 << 11;
+        var HAL_CAP_HP_AMP      = 1 << 12;
 
         var halDevices = [];
         var halScanning = false;
@@ -8638,6 +8643,11 @@ body.night-mode {
                 if (d.capabilities & HAL_CAP_PGA_CONTROL) h += '<span class="hal-cap-badge">PGA</span>';
                 if (d.capabilities & HAL_CAP_HPF_CONTROL) h += '<span class="hal-cap-badge">HPF</span>';
                 if (d.capabilities & HAL_CAP_CODEC)       h += '<span class="hal-cap-badge">Codec</span>';
+                if (d.capabilities & HAL_CAP_MQA)         h += '<span class="hal-cap-badge">MQA</span>';
+                if (d.capabilities & HAL_CAP_LINE_DRIVER) h += '<span class="hal-cap-badge">Line Out</span>';
+                if (d.capabilities & HAL_CAP_APLL)        h += '<span class="hal-cap-badge">APLL</span>';
+                if (d.capabilities & HAL_CAP_DSD)         h += '<span class="hal-cap-badge">DSD</span>';
+                if (d.capabilities & HAL_CAP_HP_AMP)      h += '<span class="hal-cap-badge">HP Amp</span>';
             }
             h += '</div>';
 
@@ -8673,6 +8683,14 @@ body.night-mode {
                     if (d.capabilities & 4) caps.push('Mute');
                     if (d.capabilities & 8) caps.push('ADC');
                     if (d.capabilities & 16) caps.push('DAC');
+                    if (d.capabilities & 32) caps.push('PGA Control');
+                    if (d.capabilities & 64) caps.push('HPF Control');
+                    if (d.capabilities & 128) caps.push('Codec');
+                    if (d.capabilities & 256) caps.push('MQA');
+                    if (d.capabilities & 512) caps.push('Line Driver');
+                    if (d.capabilities & 1024) caps.push('APLL');
+                    if (d.capabilities & 2048) caps.push('DSD');
+                    if (d.capabilities & 4096) caps.push('HP Amp');
                     h += '<div class="hal-detail-row"><span>Capabilities:</span><span>' + caps.join(', ') + '</span></div>';
                 }
 
@@ -8685,6 +8703,8 @@ body.night-mode {
                     if (d.sampleRates & 8) rates.push('48k');
                     if (d.sampleRates & 16) rates.push('96k');
                     if (d.sampleRates & 32) rates.push('192k');
+                    if (d.sampleRates & 64) rates.push('384k');
+                    if (d.sampleRates & 128) rates.push('768k');
                     h += '<div class="hal-detail-row"><span>Sample Rates:</span><span>' + rates.join(', ') + '</span></div>';
                 }
 

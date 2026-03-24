@@ -28,8 +28,8 @@ test.describe('@hal @smoke HAL Device Cards', () => {
   test('device list renders with correct count', async ({ connectedPage: page }) => {
     await openDevicesTab(page);
     const cards = page.locator('.hal-device-card');
-    // The fixture has 8 devices
-    await expect(cards).toHaveCount(8, { timeout: 5000 });
+    // The fixture has 11 devices
+    await expect(cards).toHaveCount(11, { timeout: 5000 });
   });
 
   test('each device shows name, compatible string badge, and state label', async ({ connectedPage: page }) => {
