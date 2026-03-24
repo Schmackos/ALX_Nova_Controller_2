@@ -97,9 +97,9 @@ test.describe('@hal @smoke HAL Device Cards', () => {
     // First card should be slot 0 (PCM5102A DAC)
     const firstName = await cards.first().locator('.hal-device-name').textContent();
     expect(firstName).toContain('PCM5102A');
-    // Last card should be slot 8 (ES9843PRO)
+    // Last card should be slot 11 (ES9033Q)
     const lastName = await cards.last().locator('.hal-device-name').textContent();
-    expect(lastName).toContain('ES9843PRO');
+    expect(lastName).toContain('ES9033Q');
   });
 
   test('disabled device shows unchecked enable toggle', async ({ connectedPage: page }) => {

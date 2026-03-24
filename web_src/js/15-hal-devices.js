@@ -152,7 +152,7 @@
                 if (d.capabilities & HAL_CAP_HPF_CONTROL) h += '<span class="hal-cap-badge">HPF</span>';
                 if (d.capabilities & HAL_CAP_CODEC)       h += '<span class="hal-cap-badge">Codec</span>';
                 if (d.capabilities & HAL_CAP_MQA)         h += '<span class="hal-cap-badge">MQA</span>';
-                if (d.capabilities & HAL_CAP_LINE_DRIVER) h += '<span class="hal-cap-badge">Line Out</span>';
+                if (d.capabilities & HAL_CAP_LINE_DRIVER) h += '<span class="hal-cap-badge">Line Driver</span>';
                 if (d.capabilities & HAL_CAP_APLL)        h += '<span class="hal-cap-badge">APLL</span>';
                 if (d.capabilities & HAL_CAP_DSD)         h += '<span class="hal-cap-badge">DSD</span>';
                 if (d.capabilities & HAL_CAP_HP_AMP)      h += '<span class="hal-cap-badge">HP Amp</span>';
@@ -1041,7 +1041,12 @@
                 { bit: 1, label: 'Filters', defOn: false },
                 { bit: 2, label: 'Mute', defOn: false },
                 { bit: 5, label: 'PGA Control', defOn: false },
-                { bit: 6, label: 'HPF Control', defOn: false }
+                { bit: 6, label: 'HPF Control', defOn: false },
+                { bit: 8, label: 'MQA', defOn: false },
+                { bit: 9, label: 'Line Driver', defOn: false },
+                { bit: 10, label: 'APLL', defOn: false },
+                { bit: 11, label: 'DSD', defOn: false },
+                { bit: 12, label: 'HP Amp', defOn: false }
             ];
             var h = '';
             for (var i = 0; i < caps.length; i++) {
