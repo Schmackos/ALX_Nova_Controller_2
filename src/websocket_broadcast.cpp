@@ -390,6 +390,9 @@ void sendHalDeviceState() {
             }
         }
 
+        // Persistent fault counter — survives reboot, useful for field diagnostics
+        obj["faultCount"] = HalDeviceManager::instance().getFaultCount(dev->getSlot());
+
         // For sensor devices, include live readings
         if (desc.type == HAL_DEV_SENSOR) {
             HalTempSensor* ts = static_cast<HalTempSensor*>(dev);

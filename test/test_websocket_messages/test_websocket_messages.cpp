@@ -114,6 +114,58 @@ void test_timer_active_flag() {
     TEST_ASSERT_FALSE(doc["timerActive"].as<bool>());
 }
 
+// ===== Test: WebSocket Protocol Version =====
+// Verifies that WS_PROTOCOL_VERSION is defined in config.h and the
+// protocolVersion message uses the correct format.
+
+// Pull in config.h for WS_PROTOCOL_VERSION
+#include "../../src/config.h"
+
+void test_protocol_version_constant_defined() {
+    // WS_PROTOCOL_VERSION should be "1.0"
+    TEST_ASSERT_EQUAL_STRING("1.0", WS_PROTOCOL_VERSION);
+}
+
+void test_protocol_version_format() {
+    // Version string should be non-empty and match "major.minor" semver pattern
+    const char* ver = WS_PROTOCOL_VERSION;
+    TEST_ASSERT_NOT_NULL(ver);
+    TEST_ASSERT_TRUE(strlen(ver) >= 3);  // At least "X.Y"
+
+    // Find the dot separator
+    const char* dot = strchr(ver, '.');
+    TEST_ASSERT_NOT_NULL_MESSAGE(dot, "Version must contain a '.' separator");
+
+    // Major part (before dot) should be all digits
+    for (const char* p = ver; p < dot; p++) {
+        TEST_ASSERT_TRUE_MESSAGE(*p >= '0' && *p <= '9',
+            "Major version must be numeric");
+    }
+
+    // Minor part (after dot) should be all digits
+    for (const char* p = dot + 1; *p != '\0'; p++) {
+        TEST_ASSERT_TRUE_MESSAGE(*p >= '0' && *p <= '9',
+            "Minor version must be numeric");
+    }
+}
+
+void test_protocol_version_message_structure() {
+    // Verify the protocolVersion WS message has the expected JSON structure
+    JsonDocument doc;
+    doc["type"] = "protocolVersion";
+    doc["version"] = WS_PROTOCOL_VERSION;
+
+    TEST_ASSERT_EQUAL_STRING("protocolVersion", doc["type"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("1.0", doc["version"].as<const char*>());
+
+    // Verify the exact JSON string that websocket_command.cpp sends
+    // (it uses compile-time string concatenation)
+    const char* expected = "{\"type\":\"protocolVersion\",\"version\":\"1.0\"}";
+    char buf[128];
+    serializeJson(doc, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING(expected, buf);
+}
+
 void setUp(void) {
 #ifdef NATIVE_TEST
     ArduinoMock::reset();
@@ -131,6 +183,11 @@ int main(int argc, char **argv) {
     RUN_TEST(test_websocket_message_consistency);
     RUN_TEST(test_timer_display_values);
     RUN_TEST(test_timer_active_flag);
+
+    // Protocol version tests
+    RUN_TEST(test_protocol_version_constant_defined);
+    RUN_TEST(test_protocol_version_format);
+    RUN_TEST(test_protocol_version_message_structure);
 
     return UNITY_END();
 }

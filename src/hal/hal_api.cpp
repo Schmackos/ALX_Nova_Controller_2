@@ -48,6 +48,9 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
         }
     }
 
+    // Persistent fault counter — incremented on retry exhaustion, survives reboot
+    obj["faultCount"] = HalDeviceManager::instance().getFaultCount(dev->getSlot());
+
     // Per-device runtime config
     HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(dev->getSlot());
     if (cfg && cfg->valid) {
@@ -706,6 +709,14 @@ void registerHalApiEndpoints(WebServer& server) {
         String respJson;
         serializeJson(resp, respJson);
         server_send(201, "application/json", respJson);
+    });
+
+    // POST /api/hal/devices/faults/clear — reset all persistent fault counters (field service)
+    server.on("/api/hal/devices/faults/clear", HTTP_POST, [&server]() {
+        if (!requireAuth()) return;
+        HalDeviceManager::instance().hal_fault_clear_all();
+        LOG_I("[HAL:API] Fault counters cleared by field service request");
+        json_response(server, 200);
     });
 
     // GET /api/hal/scan/unmatched — return unmatched I2C addresses from last scan

@@ -57,6 +57,11 @@ public:
     // NVS hardware fault counter — incremented when retry exhaustion → ERROR
     uint8_t getFaultCount(uint8_t slot) const;
 
+    // NVS fault persistence — load at boot, save on increment, clear for field service
+    void hal_fault_load_all();
+    void hal_fault_save(uint8_t slot);
+    void hal_fault_clear_all();
+
     // State change callback — registered once at boot by hal_pipeline_bridge
     void setStateChangeCallback(HalStateChangeCb cb);
 

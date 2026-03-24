@@ -214,4 +214,15 @@ router.post('/eeprom', (req, res) => {
   res.json({ success: true });
 });
 
+// POST /devices/faults/clear — reset all persistent HAL fault counters (field service)
+router.post('/devices/faults/clear', (req, res) => {
+  if (!requireAuth(req, res)) return;
+  const state = getState();
+  // Zero out faultCount on all mock devices
+  if (state.halDevices) {
+    state.halDevices.forEach(d => { d.faultCount = 0; });
+  }
+  res.json({ success: true });
+});
+
 module.exports = router;
