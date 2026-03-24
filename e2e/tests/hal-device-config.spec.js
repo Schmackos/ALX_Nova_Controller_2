@@ -103,6 +103,7 @@ test.describe('@hal @api HAL Device Config', () => {
 
   test('config validation rejects invalid PGA gain via PUT', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgPgaGain: 50 }
     });
     expect(res.status()).toBe(400);

@@ -201,6 +201,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
 
   test('rejects invalid PGA gain value (50 is not a valid step)', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgPgaGain: 50 },
     });
     expect(res.status()).toBe(400);
@@ -210,6 +211,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
 
   test('rejects non-numeric PGA gain value', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgPgaGain: 'bad' },
     });
     expect(res.status()).toBe(400);
@@ -217,6 +219,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
 
   test('accepts valid PGA gain value (12 dB)', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgPgaGain: 12 },
     });
     expect(res.status()).toBe(200);
@@ -226,6 +229,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
     const validSteps = [0, 6, 12, 18, 24, 30, 36, 42];
     for (const gain of validSteps) {
       const res = await request.put('http://localhost:3000/api/hal/devices', {
+        headers: { Cookie: 'sessionId=test-session' },
         data: { slot: 7, cfgPgaGain: gain },
       });
       expect(res.status()).toBe(200);
@@ -234,6 +238,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
 
   test('rejects out-of-range filter mode (8 exceeds max of 7)', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgFilterMode: 8 },
     });
     expect(res.status()).toBe(400);
@@ -243,6 +248,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
 
   test('rejects negative filter mode (-1)', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgFilterMode: -1 },
     });
     expect(res.status()).toBe(400);
@@ -251,6 +257,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
   test('accepts valid filter mode at boundary values (0 and 7)', async ({ request }) => {
     for (const mode of [0, 7]) {
       const res = await request.put('http://localhost:3000/api/hal/devices', {
+        headers: { Cookie: 'sessionId=test-session' },
         data: { slot: 7, cfgFilterMode: mode },
       });
       expect(res.status()).toBe(200);
@@ -259,6 +266,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
 
   test('rejects volume above 100', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgVolume: 150 },
     });
     expect(res.status()).toBe(400);
@@ -268,6 +276,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
 
   test('rejects negative volume (-1)', async ({ request }) => {
     const res = await request.put('http://localhost:3000/api/hal/devices', {
+      headers: { Cookie: 'sessionId=test-session' },
       data: { slot: 7, cfgVolume: -1 },
     });
     expect(res.status()).toBe(400);
@@ -276,6 +285,7 @@ test.describe('ADC config validation — PUT /api/hal/devices', () => {
   test('accepts volume at boundary values (0 and 100)', async ({ request }) => {
     for (const vol of [0, 100]) {
       const res = await request.put('http://localhost:3000/api/hal/devices', {
+        headers: { Cookie: 'sessionId=test-session' },
         data: { slot: 7, cfgVolume: vol },
       });
       expect(res.status()).toBe(200);
