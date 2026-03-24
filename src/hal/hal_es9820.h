@@ -8,16 +8,11 @@
 // Default I2C bus: Bus 2 (expansion), GPIO28 SDA / GPIO29 SCL.
 // Compatible string: "ess,es9820"
 
-#include "hal_audio_device.h"
-#include "hal_audio_interfaces.h"
+#include "hal_ess_sabre_adc_base.h"
 #include "hal_types.h"
 #include "../audio_input_source.h"
 
-#ifndef NATIVE_TEST
-class TwoWire;  // Forward declaration — defined in Wire.h (Arduino)
-#endif
-
-class HalEs9820 : public HalAudioDevice, public HalAudioAdcInterface {
+class HalEs9820 : public HalEssSabreAdcBase {
 public:
     HalEs9820();
     virtual ~HalEs9820() {}
@@ -48,25 +43,6 @@ public:
     bool setChannelVolume(uint8_t channel, uint16_t vol16);    // per-channel 16-bit volume
 
 private:
-    bool    _writeReg(uint8_t reg, uint8_t val);
-    bool    _writeReg16(uint8_t regLsb, uint16_t val);        // LSB first, MSB latches
-    uint8_t _readReg(uint8_t reg);
-
-    uint8_t  _i2cAddr      = 0x40;   // ES9820 default (ADDR1=LOW, ADDR2=LOW)
-    int8_t   _sdaPin       = 28;     // Bus 2 expansion SDA
-    int8_t   _sclPin       = 29;     // Bus 2 expansion SCL
-    uint8_t  _i2cBusIndex  = 2;      // HAL_I2C_BUS_EXP
-    uint32_t _sampleRate   = 48000;
-    uint8_t  _bitDepth     = 32;
-    uint8_t  _gainDb       = 0;      // 0/6/12/18 dB (maps to DATA_GAIN register 0-3)
-    uint8_t  _filterPreset = 0;      // 0-7 (applied to both CH1 and CH2)
-    bool     _hpfEnabled   = true;
-    bool     _initialized  = false;
-
-#ifndef NATIVE_TEST
-    TwoWire* _wire = nullptr;
-#endif
-
     AudioInputSource _inputSrc      = {};
     bool             _inputSrcReady = false;
 };

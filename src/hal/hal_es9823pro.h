@@ -8,16 +8,11 @@
 // Default I2C bus: Bus 2 (expansion), GPIO28 SDA / GPIO29 SCL.
 // Compatible strings: "ess,es9823pro" (primary), "ess,es9823mpro" (detected by chip ID)
 
-#include "hal_audio_device.h"
-#include "hal_audio_interfaces.h"
+#include "hal_ess_sabre_adc_base.h"
 #include "hal_types.h"
 #include "../audio_input_source.h"
 
-#ifndef NATIVE_TEST
-class TwoWire;  // Forward declaration — defined in Wire.h (Arduino)
-#endif
-
-class HalEs9823pro : public HalAudioDevice, public HalAudioAdcInterface {
+class HalEs9823pro : public HalEssSabreAdcBase {
 public:
     HalEs9823pro();
     virtual ~HalEs9823pro() {}
@@ -48,25 +43,7 @@ public:
     bool setChannelVolume(uint8_t channel, uint16_t vol16);    // per-channel 16-bit volume
 
 private:
-    bool    _writeReg(uint8_t reg, uint8_t val);
-    bool    _writeReg16(uint8_t regLsb, uint16_t val);        // LSB first, MSB latches
-    uint8_t _readReg(uint8_t reg);
-
-    uint8_t  _i2cAddr      = 0x40;   // ES9823PRO default (ADDR1=LOW, ADDR2=LOW)
-    int8_t   _sdaPin       = 28;     // Bus 2 expansion SDA
-    int8_t   _sclPin       = 29;     // Bus 2 expansion SCL
-    uint8_t  _i2cBusIndex  = 2;      // HAL_I2C_BUS_EXP
-    uint32_t _sampleRate   = 48000;
-    uint8_t  _bitDepth     = 32;
-    uint8_t  _gainDb       = 0;      // 0/6/12/18/24/30/36/42 dB (maps to gain register 0-7)
-    uint8_t  _filterPreset = 0;      // 0-7
-    bool     _hpfEnabled   = true;   // HPF flag stored; no dedicated HPF register on ES9823PRO
-    bool     _initialized  = false;
     bool     _isMonolithic = false;  // true when ES9823MPRO (chip ID 0x8C) is detected
-
-#ifndef NATIVE_TEST
-    TwoWire* _wire = nullptr;
-#endif
 
     AudioInputSource _inputSrc      = {};
     bool             _inputSrcReady = false;
