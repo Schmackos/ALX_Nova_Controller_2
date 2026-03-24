@@ -58,10 +58,10 @@ sequenceDiagram
     Bridge->>Pipeline: buildSink() → audio_pipeline_set_sink(sinkSlot, &sink)
     Note over Pipeline: DAC path. ADC path uses<br/>getInputSource() + audio_pipeline_set_source().
 
-    MainLoop->>MainLoop: markDacDirty()
+    MainLoop->>MainLoop: markHalDeviceDirty()
     MainLoop->>Queue: clearPendingToggles()
-    MainLoop-->>WS: sendHalDeviceState() + sendDacState()
-    WS-->>WebUI: halDevices + dacState broadcast
+    MainLoop-->>WS: sendHalDeviceState()
+    WS-->>WebUI: halDevices broadcast
     WebUI->>WebUI: Device card: checkbox checked, status indicator green
 ```
 
@@ -106,9 +106,9 @@ sequenceDiagram
 
     HAL->>HAL: setState(DISABLED), _ready = false
     MainLoop->>Queue: clearPendingToggles()
-    MainLoop->>MainLoop: markDacDirty()
-    MainLoop-->>WS: sendHalDeviceState() + sendDacState()
-    WS-->>WebUI: Updated halDevices + dacState broadcast
+    MainLoop->>MainLoop: markHalDeviceDirty()
+    MainLoop-->>WS: sendHalDeviceState()
+    WS-->>WebUI: Updated halDevices broadcast
     WebUI->>WebUI: Device card: checkbox unchecked, status indicator grey
 ```
 
@@ -151,7 +151,7 @@ sequenceDiagram
    - For DAC devices: calls `buildSink()` and registers the result via `audio_pipeline_set_sink(sinkSlot, &sink)`.
    - For ADC devices: calls `getInputSourceAt(i)` for each source the driver exposes, then `audio_pipeline_set_source(lane, &src)`.
 
-6. **Main loop** calls `markDacDirty()` (which also signals `EVT_DAC`) and `clearPendingToggles()`. The WebSocket subsystem broadcasts `halDevices` and `dacState` to all connected clients.
+6. **Main loop** calls `markHalDeviceDirty()` (which also signals `EVT_HAL_DEVICE`) and `clearPendingToggles()`. The WebSocket subsystem broadcasts `halDevices` to all connected clients.
 
 7. **Web UI** receives the broadcast and re-renders the device card with a green status indicator and the checkbox in the checked state.
 
@@ -221,4 +221,4 @@ For ADC devices, `dac_deactivate_for_hal()` calls `audio_pipeline_remove_source(
 - [Device Reinit / Error Recovery](device-reinit) — recovery flow after a failed enable
 - [HAL Device Lifecycle](../hal/device-lifecycle) — full state machine and hybrid transient policy
 - [REST API Reference (HAL)](../api/rest-hal) — `PUT /api/hal/devices` endpoint specification
-- [WebSocket Protocol](../websocket) — `halDevices` and `dacState` message formats
+- [WebSocket Protocol](../websocket) — `halDeviceState` message format

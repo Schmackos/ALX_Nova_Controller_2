@@ -190,7 +190,6 @@ void test_EVT_ETHERNET_does_not_overlap_other_events(void) {
                                 | (1UL << 2)  // EVT_BUZZER
                                 | (1UL << 3)  // EVT_SIGGEN
                                 | (1UL << 4)  // EVT_DSP_CONFIG
-                                | (1UL << 5)  // EVT_DAC
                                 | (1UL << 6)  // EVT_EEPROM
                                 | (1UL << 7)  // EVT_USB_AUDIO
                                 | (1UL << 8)  // EVT_USB_VU

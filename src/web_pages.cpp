@@ -5960,8 +5960,6 @@ body.night-mode {
                 applyDebugState(data);
             } else if (data.type === 'signalGenerator') {
                 applySigGenState(data);
-            } else if (data.type === 'dacState') {
-                if (data.eeprom) handleEepromDiag(data.eeprom);
             } else if (data.type === 'eepromProgramResult') {
                 showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');
             } else if (data.type === 'eepromEraseResult') {
@@ -12271,7 +12269,7 @@ function initFirmwareDragDrop() {
         var _eepromPresetsLoaded = false;
         function eepromLoadPresets() {
             if (_eepromPresetsLoaded) return;
-            apiFetch('/api/dac/eeprom/presets')
+            apiFetch('/api/hal/eeprom/presets')
             .then(r => r.safeJson())
             .then(d => {
                 if (!d.success) return;
@@ -13028,7 +13026,7 @@ function initFirmwareDragDrop() {
                 dacI2cAddress: parseInt(document.getElementById('eepromDacAddr').value),
                 flags: flags, sampleRates: rates
             };
-            apiFetch('/api/dac/eeprom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+            apiFetch('/api/hal/eeprom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
             .then(function(r){ return r.safeJson(); })
             .then(function(d){ if (d.success) showToast('EEPROM programmed successfully','success'); else showToast(d.message||'Program failed','error'); })
             .catch(function(){ showToast('EEPROM program failed','error'); });
@@ -13037,7 +13035,7 @@ function initFirmwareDragDrop() {
         function eepromErase() {
             if (!confirm('Erase EEPROM? This will clear all stored DAC identification data.')) return;
             var addr = parseInt(document.getElementById('eepromTargetAddr').value);
-            apiFetch('/api/dac/eeprom/erase', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ address: addr }) })
+            apiFetch('/api/hal/eeprom/erase', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ address: addr }) })
             .then(function(r){ return r.safeJson(); })
             .then(function(d){ if (d.success) showToast('EEPROM erased','success'); else showToast(d.message||'Erase failed','error'); })
             .catch(function(){ showToast('EEPROM erase failed','error'); });
@@ -13064,7 +13062,7 @@ function initFirmwareDragDrop() {
             document.getElementById('eepromRates').value = (p.sampleRates || []).join(',');
         }
         function eepromLoadHex() {
-            apiFetch('/api/dac/eeprom')
+            apiFetch('/api/hal/eeprom')
             .then(r => r.safeJson())
             .then(d => {
                 var el = document.getElementById('dbgEepromHex');

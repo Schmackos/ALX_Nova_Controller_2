@@ -216,8 +216,6 @@
                 applyDebugState(data);
             } else if (data.type === 'signalGenerator') {
                 applySigGenState(data);
-            } else if (data.type === 'dacState') {
-                if (data.eeprom) handleEepromDiag(data.eeprom);
             } else if (data.type === 'eepromProgramResult') {
                 showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');
             } else if (data.type === 'eepromEraseResult') {

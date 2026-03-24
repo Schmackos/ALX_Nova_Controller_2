@@ -25,7 +25,7 @@ The WebSocket subsystem is split across 4 focused implementation files, all shar
 | File | Responsibility |
 |------|---------------|
 | `websocket_command.cpp` | WS event handler (`webSocketEvent()`), command dispatch, deferred init state |
-| `websocket_broadcast.cpp` | 17 state broadcast functions (`sendDspState()`, `sendHardwareStats()`, etc.) + audio data streaming |
+| `websocket_broadcast.cpp` | 16 state broadcast functions (`sendDspState()`, `sendHardwareStats()`, etc.) + audio data streaming |
 | `websocket_auth.cpp` | Client authentication tracking, session validation, auth count recalibration |
 | `websocket_cpu_monitor.cpp` | FreeRTOS idle hook CPU usage measurement, init/update/getter functions |
 
@@ -102,8 +102,7 @@ The following state broadcasts are sent on initial connection:
 | 6 | `debugState` | Debug mode, serial level, pin map |
 | 7 | `adcState` | Per-lane ADC enable flags |
 | 8 | `dspState` | Full DSP configuration for all channels |
-| 9 | `dacState` | DAC enable, volume, mute, filter mode |
-| 10 | `usbAudioState` | USB Audio device state |
+| 9 | `usbAudioState` | USB Audio device state |
 | 11 | `updateState` | OTA update availability flag |
 | 13 | `halDeviceState` | Full HAL device list |
 | 14 | `audioChannelMap` | Active input/output channel mapping |
@@ -525,30 +524,6 @@ Sent periodically when `debugI2sMetrics` is enabled.
 }
 ```
 
-### `dacState`
-
-:::note Backward-compatibility broadcast only
-`DacState` now carries only `txUnderruns` and `eepromFound`/`eepromAddr` fields. Legacy fields `enabled`, `volume`, `mute`, `modelName`, `es8311Enabled`, `es8311Volume`, `es8311Mute` are broadcast for backward compatibility only. **For authoritative per-device state, use the `halDeviceState` broadcast** (`cfgEnabled`, `cfgVolume`, `cfgMute` fields per device slot).
-:::
-
-```json
-{
-  "type": "dacState",
-  "txUnderruns": 0,
-  "eepromFound": true,
-  "eepromAddr": 80,
-  "enabled": true,
-  "volume": 75,
-  "mute": false,
-  "modelName": "PCM5102A",
-  "es8311Enabled": true,
-  "es8311Volume": 80,
-  "es8311Mute": false
-}
-```
-
-The legacy `enabled`, `volume`, `mute`, `modelName`, and `es8311*` fields are included only for backward compatibility with older clients. New integrations should use `halDeviceState` for authoritative per-device state.
-
 ### `halDeviceState`
 
 Full HAL device list. Sent at boot and after any device state change.
@@ -785,7 +760,7 @@ Sent periodically while `debugMode` is `true`. Only the `cpu` block is always in
 }
 ```
 
-`cpu.usageCore0` and `cpu.usageCore1` are `-1` during a calibration window (~4 s) after debug mode is first enabled. The DSP section (`dsp.swapFailures`, `dsp.swapSuccesses`, `dsp.lastSwapFailureAgo`) is included when `DSP_ENABLED`.
+`cpu.usageCore0` and `cpu.usageCore1` are `-1` during a calibration window (~4 s) after debug mode is first enabled. The DSP section (`dsp.swapFailures`, `dsp.swapSuccesses`, `dsp.lastSwapFailureAgo`) is included when `DSP_ENABLED`. EEPROM diagnostics (`dac.eeprom` — found, address, read/write errors) are delivered via this broadcast rather than a dedicated `dacState` message.
 
 The following PSRAM and heap budget fields are included when `debugHwStats` is enabled:
 
@@ -917,7 +892,7 @@ Functions guarded by `wsAnyClientAuthenticated()`:
 - `sendHardwareStats` — CPU, memory, audio diagnostics
 - `sendDspState` / `sendDspMetrics`
 - `sendHalDeviceState` / `sendAudioChannelMap`
-- `sendDacState` / `sendUsbAudioState`
+- `sendUsbAudioState`
 - `sendMqttSettingsState`
 - `sendSmartSensingStateInternal` (in `smart_sensing.cpp`)
 - `sendWiFiStatus` (in `wifi_manager.cpp`)

@@ -83,11 +83,8 @@ sequenceDiagram
     Note over Bridge,HAL: Amplifier output enabled — first available DAC triggers gating
 
     Bridge->>HAL: markHalDeviceDirty()
-    Bridge->>HAL: markDacDirty()
     HAL-->>WS: broadcastHalDevices()
-    HAL-->>WS: broadcastDacState()
     WS-->>WebUI: \{"type":"halDevices",...\}
-    WS-->>WebUI: \{"type":"dacState",...\}
     WebUI->>WebUI: Render device card with volume/mute/filter controls
     REST-->>WebUI: 200 OK \{"found":1,"devices":[...]\}
 ```
@@ -134,7 +131,7 @@ After sink registration the bridge calls `_updateAmpGating()`. This iterates all
 
 ### 9. WebSocket broadcast and UI update
 
-`markHalDeviceDirty()` and `markDacDirty()` set dirty flags in `AppState`. The main loop (Core 1) detects these via `app_events_wait(5)` and calls `broadcastHalDevices()` and `broadcastDacState()` in `src/websocket_broadcast.cpp`. The web UI receives the JSON frames, renders the new device card in the Devices tab, and activates per-slot volume slider, mute toggle, and filter preset selector controls.
+`markHalDeviceDirty()` sets the dirty flag in `AppState`. The main loop (Core 1) detects this via `app_events_wait(5)` and calls `broadcastHalDevices()` in `src/websocket_broadcast.cpp`. The web UI receives the JSON frame, renders the new device card in the Devices tab, and activates per-slot volume slider, mute toggle, and filter preset selector controls.
 
 ### 10. Configuration persistence
 
