@@ -4,9 +4,9 @@
 //
 // Tests the seam between base class helpers and derived driver code:
 //   - _applyConfigOverrides(): reads HalDeviceConfig into member fields
-//   - _selectWire(): picks Wire/Wire1/Wire2 by bus index (NATIVE_TEST is no-op)
+//   - _selectWire(): calls HalI2cBus::get().begin() — no-op wire switch in native mode
 //   - _validateSampleRate(): accepts/rejects rates from a supported list
-//   - _writeReg() / _readReg() / _writeReg16(): I2C stubs in native mode
+//   - _writeReg() / _readReg() / _writeReg16(): delegate to HalI2cBus (Wire mock in native mode)
 //   - Gain clamp interaction: base sets _gainDb, driver clamps afterward
 //
 // Uses a minimal concrete subclass (TestableAdcDriver) that exposes the
@@ -38,6 +38,12 @@
 #include "../test_mocks/Preferences.h"
 #include "../test_mocks/LittleFS.h"
 #include "../../src/diag_journal.cpp"
+
+// hal_i2c_bus.cpp requires hal_wifi_sdio_active() — stub it for native tests
+static bool hal_wifi_sdio_active() { return false; }
+
+// Inline-include HalI2cBus implementation (required by hal_ess_sabre_adc_base.cpp)
+#include "../../src/hal/hal_i2c_bus.cpp"
 
 // Inline-include the base class cpp (so we get the actual implementations)
 #include "../../src/hal/hal_ess_sabre_adc_base.cpp"
@@ -193,6 +199,8 @@ void setUp(void) {
     ArduinoMock::reset();
     HalDeviceManager::instance().reset();
     drv = new TestableAdcDriver();
+    // Register test device address in mock so Wire I2C ops return ACK
+    WireMock::registerDevice(0x40, HAL_I2C_BUS_EXP);
 }
 
 void tearDown(void) {

@@ -37,6 +37,9 @@
 #include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
+// hal_i2c_bus.cpp must come before hal_custom_device.cpp (and hal_wifi_sdio_active
+// stub must be defined before this include — see line below)
+#include "../../src/hal/hal_i2c_bus.cpp"
 #include "../../src/hal/hal_custom_device.cpp"
 
 // Inline discovery just for hal_get_unmatched_addresses / hal_wifi_sdio_active stubs

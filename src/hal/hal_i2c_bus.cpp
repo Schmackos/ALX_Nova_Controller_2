@@ -55,15 +55,15 @@ static WireClass* _busToWire(uint8_t busIndex) {
 
 // ===== Static instances =====
 
-static HalI2cBus _busInstances[3] = {
-    HalI2cBus(HAL_I2C_BUS_EXT),
-    HalI2cBus(HAL_I2C_BUS_ONBOARD),
-    HalI2cBus(HAL_I2C_BUS_EXP),
-};
-
 HalI2cBus& HalI2cBus::get(uint8_t busIndex) {
     if (busIndex > 2) busIndex = 2;
-    return _busInstances[busIndex];
+    // Meyer's singleton: function-local statics are initialized on first call.
+    // Defined inside a static member function, which has access to the private constructor.
+    static HalI2cBus bus0(HAL_I2C_BUS_EXT);
+    static HalI2cBus bus1(HAL_I2C_BUS_ONBOARD);
+    static HalI2cBus bus2(HAL_I2C_BUS_EXP);
+    static HalI2cBus* const instances[3] = { &bus0, &bus1, &bus2 };
+    return *instances[busIndex];
 }
 
 // ===== Mutex helpers (hardware builds only) =====
