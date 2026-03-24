@@ -669,6 +669,101 @@ void test_mqtt_socket_timeout_constant(void) {
     TEST_ASSERT_LESS_THAN(30000, MQTT_SOCKET_TIMEOUT_MS);
 }
 
+// ===== MQTT Reconnect Backoff Tests =====
+// Mirrors the backoff state machine in AppState (app_state.h:221-227, app_state.cpp:117-119)
+
+namespace BackoffState {
+    static unsigned long mqttBackoffDelay = 5000;
+    static const unsigned long MAX_BACKOFF_DELAY = 60000;
+    static unsigned long lastReconnect = 0;
+
+    void increase() {
+        unsigned long doubled = mqttBackoffDelay * 2;
+        mqttBackoffDelay = (doubled < MAX_BACKOFF_DELAY) ? doubled : MAX_BACKOFF_DELAY;
+    }
+    void reset() {
+        mqttBackoffDelay = 5000;
+        lastReconnect = 0;
+    }
+    bool shouldSkip(unsigned long currentMillis) {
+        return (currentMillis - lastReconnect < mqttBackoffDelay);
+    }
+}
+
+void test_mqtt_backoff_increases_on_failure(void) {
+    BackoffState::reset();
+    TEST_ASSERT_EQUAL(5000, BackoffState::mqttBackoffDelay);
+    BackoffState::increase();
+    TEST_ASSERT_EQUAL(10000, BackoffState::mqttBackoffDelay);
+    BackoffState::increase();
+    TEST_ASSERT_EQUAL(20000, BackoffState::mqttBackoffDelay);
+    BackoffState::increase();
+    TEST_ASSERT_EQUAL(40000, BackoffState::mqttBackoffDelay);
+    BackoffState::increase();
+    TEST_ASSERT_EQUAL(60000, BackoffState::mqttBackoffDelay);  // Capped
+}
+
+void test_mqtt_backoff_capped_at_max(void) {
+    BackoffState::reset();
+    // Run 10 consecutive failures — must never exceed MAX
+    for (int i = 0; i < 10; i++) {
+        BackoffState::increase();
+    }
+    TEST_ASSERT_EQUAL(60000, BackoffState::mqttBackoffDelay);
+}
+
+void test_mqtt_backoff_resets_on_success(void) {
+    BackoffState::reset();
+    BackoffState::increase();
+    BackoffState::increase();
+    BackoffState::increase();
+    TEST_ASSERT_EQUAL(40000, BackoffState::mqttBackoffDelay);
+    // Successful connection resets
+    BackoffState::reset();
+    TEST_ASSERT_EQUAL(5000, BackoffState::mqttBackoffDelay);
+}
+
+void test_mqtt_reconnect_skipped_during_backoff(void) {
+    BackoffState::reset();
+    BackoffState::lastReconnect = 1000;
+    // Only 2000ms elapsed, backoff is 5000ms — should skip
+    TEST_ASSERT_TRUE(BackoffState::shouldSkip(3000));
+}
+
+void test_mqtt_reconnect_proceeds_after_backoff(void) {
+    BackoffState::reset();
+    BackoffState::lastReconnect = 1000;
+    // 6000ms elapsed, backoff is 5000ms — should proceed
+    TEST_ASSERT_FALSE(BackoffState::shouldSkip(7000));
+}
+
+void test_mqtt_tcp_connect_failure(void) {
+    // WiFiClient connect failure should propagate to PubSubClient
+    WiFiClient wifiClient;
+    wifiClient.setConnectResult(false);  // Inject TCP failure
+    PubSubClient mqttClient(wifiClient);
+    mqttClient.setServer("broker.test", 1883);
+    bool result = mqttClient.connect("testClient");
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_FALSE(mqttClient.connected());
+}
+
+void test_mqtt_publish_fails_when_disconnected(void) {
+    WiFiClient wifiClient;
+    PubSubClient mqttClient(wifiClient);
+    mqttClient.setServer("broker.test", 1883);
+    mqttClient.connect("testClient");
+    TEST_ASSERT_TRUE(mqttClient.connected());
+
+    // Simulate broker dropping connection
+    mqttClient.simulateDisconnect();
+    TEST_ASSERT_FALSE(mqttClient.connected());
+
+    // Publish should fail
+    bool pubResult = mqttClient.publish("test/topic", "payload");
+    TEST_ASSERT_FALSE(pubResult);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -747,6 +842,15 @@ int runUnityTests(void) {
 
     // MQTT socket timeout tests
     RUN_TEST(test_mqtt_socket_timeout_constant);
+
+    // Reconnect backoff tests
+    RUN_TEST(test_mqtt_backoff_increases_on_failure);
+    RUN_TEST(test_mqtt_backoff_capped_at_max);
+    RUN_TEST(test_mqtt_backoff_resets_on_success);
+    RUN_TEST(test_mqtt_reconnect_skipped_during_backoff);
+    RUN_TEST(test_mqtt_reconnect_proceeds_after_backoff);
+    RUN_TEST(test_mqtt_tcp_connect_failure);
+    RUN_TEST(test_mqtt_publish_fails_when_disconnected);
 
     return UNITY_END();
 }

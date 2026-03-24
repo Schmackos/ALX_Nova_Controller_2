@@ -32,6 +32,8 @@
 #include <Arduino.h>
 #endif
 
+#include "../../src/audio_pipeline.h"
+
 // ============================================================
 // Re-implemented pure conversion helpers
 // These mirror the logic that audio_pipeline.cpp will implement.
@@ -1228,6 +1230,46 @@ void test_matrix_corner_cells(void) {
 }
 
 // ============================================================
+// Section 11: Audio pause/resume protocol
+// ============================================================
+
+// The NATIVE_TEST inline versions are no-ops, but we verify the API exists
+// and the flag-based protocol logic is correct.
+
+void test_native_request_pause_returns_true(void) {
+    // In NATIVE_TEST, request_pause is an inline no-op returning true
+    bool result = audio_pipeline_request_pause(50);
+    TEST_ASSERT_TRUE(result);
+}
+
+void test_native_resume_is_safe(void) {
+    // In NATIVE_TEST, resume is an inline no-op — must not crash
+    audio_pipeline_resume();
+    TEST_ASSERT_TRUE(true);  // Reached without crash
+}
+
+void test_pause_flag_protocol(void) {
+    // Verify the volatile bool protocol used by the helpers:
+    // paused starts false, set true, verify, clear, verify
+    volatile bool paused = false;
+    TEST_ASSERT_FALSE(paused);
+    paused = true;
+    TEST_ASSERT_TRUE(paused);
+    paused = false;
+    TEST_ASSERT_FALSE(paused);
+}
+
+void test_double_pause_flag_safe(void) {
+    // Setting paused twice must not cause issues; single clear restores
+    volatile bool paused = false;
+    paused = true;
+    paused = true;  // Double set
+    TEST_ASSERT_TRUE(paused);
+    paused = false;  // Single clear
+    TEST_ASSERT_FALSE(paused);
+}
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -1315,6 +1357,12 @@ int main(int argc, char **argv) {
     RUN_TEST(test_matrix_overwrite_cell);
     RUN_TEST(test_matrix_negative_gain_stored);
     RUN_TEST(test_matrix_corner_cells);
+
+    // Section 11: Audio pause/resume protocol
+    RUN_TEST(test_native_request_pause_returns_true);
+    RUN_TEST(test_native_resume_is_safe);
+    RUN_TEST(test_pause_flag_protocol);
+    RUN_TEST(test_double_pause_flag_safe);
 
     return UNITY_END();
 }

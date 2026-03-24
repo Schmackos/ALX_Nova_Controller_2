@@ -79,7 +79,7 @@ float audio_pipeline_get_lane_vu_r(int lane);
 // Output sink registration (called from dac_hal.cpp after driver init)
 struct AudioOutputSink;  // Forward declaration
 void audio_pipeline_register_sink(const AudioOutputSink *sink);
-void audio_pipeline_clear_sinks();   // Remove all sinks — caller must set audioPaused=true first
+void audio_pipeline_clear_sinks();   // Remove all sinks — caller must call audio_pipeline_request_pause() first
 int  audio_pipeline_get_sink_count();
 const AudioOutputSink* audio_pipeline_get_sink(int idx);
 
@@ -105,5 +105,24 @@ float audio_pipeline_get_sink_volume(uint8_t slot);
 // Matrix persistence
 void audio_pipeline_save_matrix();
 void audio_pipeline_load_matrix();
+
+// Cross-core audio pause/resume protocol.
+// Callers that teardown/reinstall I2S drivers MUST use these instead of
+// directly setting appState.audio.paused.
+//
+// request_pause() sets paused=true, then waits for the audio task to
+// acknowledge via the binary semaphore (taskPausedAck).  This guarantees the
+// audio task has exited i2s_read() before the caller proceeds with driver
+// teardown.  Returns true if the audio task acknowledged within timeout_ms,
+// false on timeout (caller may LOG_W but should proceed).
+//
+// resume() clears the paused flag, allowing the audio task to run again.
+#ifdef NATIVE_TEST
+inline bool audio_pipeline_request_pause(uint32_t timeout_ms = 50) { (void)timeout_ms; return true; }
+inline void audio_pipeline_resume() {}
+#else
+bool audio_pipeline_request_pause(uint32_t timeout_ms = 50);
+void audio_pipeline_resume();
+#endif
 
 #endif // AUDIO_PIPELINE_H
