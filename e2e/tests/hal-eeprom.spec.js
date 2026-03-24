@@ -4,7 +4,7 @@
  *
  * The EEPROM Programming card lives in the Devices tab.
  * eepromScan() sends a WS command {type: 'eepromScan'} and the
- * response comes as a dacState message with eeprom data.
+ * response comes as a hardware_stats message with EEPROM data nested at dac.eeprom.
  */
 
 const { test, expect } = require('../helpers/fixtures');
@@ -41,31 +41,34 @@ test.describe('@hal @ws HAL EEPROM', () => {
     expect(eepromCmd).toBeDefined();
   });
 
-  test('scan results display in UI via dacState WS message', async ({ connectedPage: page }) => {
+  test('scan results display in UI via hardwareStats WS message', async ({ connectedPage: page }) => {
     await openDevicesTab(page);
 
     const eepromCard = page.locator('#eepromCard');
     await expect(eepromCard).toBeVisible({ timeout: 5000 });
 
-    // Push a dacState with eeprom data showing a found EEPROM
+    // Push a hardware_stats with eeprom data nested at dac.eeprom showing a found EEPROM
     page.wsRoute.send({
-      type: 'dacState',
-      eeprom: {
-        scanned: true,
-        found: true,
-        addr: 80,
-        i2cMask: 1,
-        i2cDevices: 1,
-        readErrors: 0,
-        writeErrors: 0,
-        deviceName: 'ES9822PRO',
-        manufacturer: 'ESS Technology',
-        deviceId: 7,
-        hwRevision: 1,
-        maxChannels: 2,
-        dacI2cAddress: 64,
-        flags: 0,
-        sampleRates: [44100, 48000, 96000]
+      type: 'hardware_stats',
+      cpu: { usageTotal: 10, usageCore0: 5, usageCore1: 5, temperature: 40, freqMHz: 360, model: 'ESP32-P4', revision: '1', cores: 2 },
+      dac: {
+        eeprom: {
+          scanned: true,
+          found: true,
+          addr: 80,
+          i2cMask: 1,
+          i2cDevices: 1,
+          readErrors: 0,
+          writeErrors: 0,
+          deviceName: 'ES9822PRO',
+          manufacturer: 'ESS Technology',
+          deviceId: 7,
+          hwRevision: 1,
+          maxChannels: 2,
+          dacI2cAddress: 64,
+          flags: 0,
+          sampleRates: [44100, 48000, 96000]
+        }
       }
     });
 
@@ -101,14 +104,17 @@ test.describe('@hal @ws HAL EEPROM', () => {
 
     // Push scan result with nothing found
     page.wsRoute.send({
-      type: 'dacState',
-      eeprom: {
-        scanned: true,
-        found: false,
-        i2cMask: 0,
-        i2cDevices: 0,
-        readErrors: 0,
-        writeErrors: 0
+      type: 'hardware_stats',
+      cpu: { usageTotal: 10, usageCore0: 5, usageCore1: 5, temperature: 40, freqMHz: 360, model: 'ESP32-P4', revision: '1', cores: 2 },
+      dac: {
+        eeprom: {
+          scanned: true,
+          found: false,
+          i2cMask: 0,
+          i2cDevices: 0,
+          readErrors: 0,
+          writeErrors: 0
+        }
       }
     });
 

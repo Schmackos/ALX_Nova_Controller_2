@@ -39,7 +39,7 @@ sequenceDiagram
     alt DAC-path device
         REST->>Queue: appState.halCoord.requestDeviceToggle(slot, -1)
         Queue-->>REST: true (enqueued) or false (queue full → HTTP 503)
-        REST->>REST: cfg->enabled = false\nappState.markDacDirty()
+        REST->>REST: cfg->enabled = false\nappState.markHalDeviceDirty()
     end
 
     REST->>HAL: dev->deinit()
@@ -119,7 +119,7 @@ appState.halCoord.requestDeviceToggle(slot, -1)
 
 This enqueues a deactivation request in `HalCoordState` (`src/state/hal_coord_state.h`). The queue has a capacity of 8 with same-slot deduplication. If the queue is full, `requestDeviceToggle` returns `false`, the handler logs `LOG_W`, and the REST endpoint returns HTTP 503. The caller must retry after the main loop has had a chance to drain the queue.
 
-The handler also marks the `HalDeviceConfig` field `enabled = false` and calls `appState.markDacDirty()` so the WebSocket broadcasts the new enabled state without waiting for the deferred deactivation.
+The handler also marks the `HalDeviceConfig` field `enabled = false` and calls `appState.markHalDeviceDirty()` so the WebSocket broadcasts the new enabled state without waiting for the deferred deactivation.
 
 ### 4. Synchronous deinit and HAL removal
 
@@ -187,7 +187,7 @@ if (appState.halCoord.hasPendingToggles()) {
         PendingDeviceToggle t = appState.halCoord.pendingToggleAt(i);
         if (t.action < 0) {
             hal_pipeline_deactivate_device(t.halSlot);
-            appState.markDacDirty();
+            appState.markHalDeviceDirty();
         }
     }
     appState.halCoord.clearPendingToggles();

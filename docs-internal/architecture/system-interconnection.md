@@ -246,7 +246,7 @@ sequenceDiagram
     Loop->>AS: clearXxxDirty()
 ```
 
-**Active event bits (16 assigned, 8 spare):**
+**Active event bits (14 assigned, 10 spare):**
 
 | Bit | Define | Dirty flag | WebSocket dispatch |
 |---|---|---|---|
@@ -255,14 +255,14 @@ sequenceDiagram
 | 2 | `EVT_BUZZER` | `_buzzerDirty` | `sendBuzzerSettings()` |
 | 3 | `EVT_SIGGEN` | `_siggenDirty` | `sendSignalGenState()` |
 | 4 | `EVT_DSP_CONFIG` | `_dspConfigDirty` | `sendDspConfig()` |
-| 5 | `EVT_DAC` | `_dacDirty` | `sendDacState()` |
-| 6 | `EVT_EEPROM` | `_eepromDirty` | `sendDacState()` |
+| 5 | _(freed)_ | — | — |
+| 6 | `EVT_EEPROM` | `_eepromDirty` | `sendHardwareStats()` |
 | 7 | `EVT_USB_AUDIO` | `_usbAudioDirty` | `sendUsbAudioState()` |
 | 8 | `EVT_USB_VU` | `_usbVuDirty` | `sendUsbAudioLevels()` |
 | 9 | `EVT_SETTINGS` | `_settingsDirty` | `sendSettings()` |
 | 10 | `EVT_ADC_ENABLED` | `_adcEnabledDirty` | `sendAdcEnabled()` |
 | 11 | `EVT_ETHERNET` | `_ethernetDirty` | `sendWiFiStatus()` |
-| 12 | `EVT_DAC_SETTINGS` | `_dacSettingsDirty` | `sendDacSettings()` |
+| 12 | _(freed)_ | — | — |
 | 13 | `EVT_HAL_DEVICE` | `_halDeviceDirty` | `sendHalDeviceState()` + `sendAudioChannelMap()` |
 | 14 | `EVT_AUDIO_UPDATE` | `_audioUpdateDirty` | `sendAudioUpdate()` |
 | 15 | `EVT_CHANNEL_MAP` | `_channelMapDirty` | `sendAudioChannelMap()` |

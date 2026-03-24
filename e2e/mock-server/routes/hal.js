@@ -162,4 +162,34 @@ router.delete('/devices/custom', (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /eeprom — read EEPROM state (moved from /api/dac/eeprom)
+router.get('/eeprom', (req, res) => {
+  res.json({
+    scanned: false,
+    found: false,
+    i2cMask: 0,
+    i2cDevices: 0,
+    readErrors: 0,
+    writeErrors: 0,
+  });
+});
+
+// POST /eeprom/scan — trigger EEPROM rescan (moved from /api/dac/eeprom/scan)
+router.post('/eeprom/scan', (req, res) => {
+  res.json({ success: true, scanned: true });
+});
+
+// GET /eeprom/presets — list EEPROM presets (moved from /api/dac/eeprom/presets)
+router.get('/eeprom/presets', (req, res) => {
+  res.json({ presets: DB_PRESETS });
+});
+
+// POST /eeprom — program EEPROM (moved from /api/dac/eeprom POST)
+router.post('/eeprom', (req, res) => {
+  if (!req.body || !req.body.deviceId) {
+    return res.status(400).json({ error: 'Missing deviceId' });
+  }
+  res.json({ success: true });
+});
+
 module.exports = router;

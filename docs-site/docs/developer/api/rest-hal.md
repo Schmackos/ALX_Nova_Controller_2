@@ -680,41 +680,6 @@ Call `POST /api/hal/scan` first to ensure the address list is fresh, then call t
 
 ---
 
-## DAC State by HAL Slot
-
-The `GET /api/dac` endpoint (documented in [REST API — DAC](./rest-dac.md)) supports a `?slot=N` query parameter that queries the DAC state of any `HAL_CAP_DAC_PATH` device by its HAL slot index rather than always returning the legacy primary slot (slot 0).
-
-This is required when multiple DAC-path devices are registered simultaneously — for example, a PCM5102A onboard DAC at slot 0 and an ES9038Q2M mezzanine DAC at slot 4.
-
-**Usage**
-
-```
-GET /api/dac?slot=4
-```
-
-When `slot` is omitted, the endpoint returns state for the first registered DAC-path device (backward-compatible default behaviour). When `slot` is provided, the endpoint queries the `HalAudioDacInterface` for the device at that slot index.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `slot` | integer (query) | HAL slot index (0 – `HAL_MAX_DEVICES - 1`). Must correspond to a device with `HAL_CAP_DAC_PATH`. |
-
-**Error codes for the slot parameter**
-
-| Status | Meaning |
-|--------|---------|
-| 200 | Success — state returned for the requested slot |
-| 400 | `slot` out of range |
-| 404 | No device registered at the specified slot |
-| 422 | Device at slot does not have `HAL_CAP_DAC_PATH` |
-
-The same slot-routing logic applies to `POST /api/dac` (deprecated). For new integrations targeting a specific slot, prefer `PUT /api/hal/devices` with an explicit `slot` field.
-
-:::tip Multi-DAC routing
-When using an 8-channel mezzanine DAC (ES9038PRO, ES9038Q2M, etc.) alongside the onboard PCM5102A, query each device's state independently using the slot index returned by `GET /api/hal/devices`. The `GET /api/dac?slot=N` endpoint returns volume and mute state for the device's primary stereo pair (CH1/2 for multi-channel devices).
-:::
-
----
-
 ## GET /api/i2s/ports
 
 Returns the status of all 3 I2S ports, or a single port when the `?id=N` query parameter is provided. Each port entry includes its current mode (STD/TDM/off), direction (TX/RX), pin assignments, clock master status, sample rate, and configurable audio parameters (`format`, `bitDepth`, `mclkMultiple`).

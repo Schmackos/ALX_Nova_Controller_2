@@ -26,17 +26,6 @@ class TestAudio:
             "Pipeline matrix response has unexpected type"
         )
 
-    def test_dac_status(self, api):
-        """DAC status endpoint returns valid data."""
-        resp = api.get("/api/dac")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert isinstance(data, dict), "DAC response is not a JSON object"
-        # Should have at least enabled and volume fields
-        assert "enabled" in data or "state" in data, (
-            f"DAC response missing expected fields: {list(data.keys())}"
-        )
-
     def test_psram_healthy(self, api):
         """PSRAM should not be in warning or critical state."""
         resp = api.get("/api/psram/status")

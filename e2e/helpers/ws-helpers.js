@@ -75,7 +75,7 @@ function handleCommand(type, data) {
       return [{ type: 'smartSensing', sensingMode: data.mode, ampOn: false, signalDetected: false, audioLevel: -96.0, audioVrms: 0.0, timerDuration: 15, audioThreshold: -60, timerActive: false, timerRemaining: 0 }];
 
     case 'eepromScan':
-      return [{ type: 'dacState', eeprom: { scanned: true, found: false, i2cMask: 0, i2cDevices: 0, readErrors: 0, writeErrors: 0 } }];
+      return [{ type: 'hardware_stats', cpu: { usage: 0 }, dac: { eeprom: { scanned: true, found: false, i2cMask: 0, i2cDevices: 0, readErrors: 0, writeErrors: 0 } } }];
 
     case 'setEthConfig':
       return [{ type: 'wifiStatus', ethHostname: data.hostname || 'alx-nova', ethUseStaticIP: !!data.useStaticIP, ethPendingConfirm: !!data.useStaticIP }];

@@ -190,31 +190,6 @@ class TestPipelineMatrix:
         assert isinstance(data, list)
 
 
-@pytest.mark.audio
-class TestDacEndpoints:
-    """Verify DAC management endpoints."""
-
-    def test_dac_status_valid(self, api):
-        """GET /api/dac returns valid DAC status."""
-        resp = api.get("/api/dac")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "success" in data
-
-    def test_dac_volume_in_range(self, api):
-        """DAC volume should be 0-100."""
-        data = api.get("/api/dac").json()
-        volume = data.get("volume")
-        if volume is not None:
-            assert 0 <= volume <= 100, f"Volume out of range: {volume}"
-
-    def test_dac_drivers_list(self, api):
-        """GET /api/dac/drivers returns registered DAC drivers."""
-        resp = api.get("/api/dac/drivers")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "drivers" in data or "success" in data
-
 
 @pytest.mark.audio
 class TestThdMeasurement:

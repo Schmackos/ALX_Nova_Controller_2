@@ -46,7 +46,7 @@ const sidebars = {
         'developer/api/rest-hal',
         'developer/api/rest-dsp',
         'developer/api/rest-pipeline',
-        'developer/api/rest-dac',
+        'developer/api/rest-eeprom',
         'developer/api/rest-health',
         'developer/websocket',
       ],

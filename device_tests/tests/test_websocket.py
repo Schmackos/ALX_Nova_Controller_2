@@ -88,7 +88,7 @@ class TestWebSocketAuth:
         types = {m.get("type") for m in messages}
         # At minimum we expect some of the 17 init state types
         expected_any = {
-            "wiFiStatus", "halDeviceState", "dspState", "dacState",
+            "wiFiStatus", "halDeviceState", "dspState",
             "displayState", "debugState", "hardwareStats",
             "audioChannelMap", "buzzerState",
         }

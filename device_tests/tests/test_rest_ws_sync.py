@@ -131,10 +131,10 @@ class TestRestWsSync:
         })
         assert resp.status_code == 200
 
-        # Wait for broadcast (halDeviceState or dacState)
+        # Wait for broadcast (halDeviceState or hardwareStats)
         msg = ws_client.recv_until("halDeviceState", timeout=5)
         if msg is None:
-            msg = ws_client.recv_until("dacState", timeout=3)
+            msg = ws_client.recv_until("hardwareStats", timeout=3)
         assert msg is not None, "No device state broadcast after mute toggle"
 
         # Restore

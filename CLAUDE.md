@@ -88,7 +88,7 @@ Application state is decomposed across 15 lightweight domain-specific headers un
 
 **Cross-domain coordination**: AppState retains `volatile bool _mqttReconfigPending`, `volatile int8_t _pendingApToggle`, backoff delays, and `HalCoordState halCoord` (deferred device toggle queue) — inherently cross-cutting concerns unrelated to a single domain.
 
-AppState uses **dirty flags** (e.g., `isBuzzerDirty()`, `isDisplayDirty()`, `isOTADirty()`) to detect changes and minimize unnecessary WebSocket broadcasts and MQTT publishes. Every dirty-flag setter also calls `app_events_signal(EVT_XXX)` (defined in `src/app_events.h`) so the main loop can replace `delay(5)` with `app_events_wait(5)` — waking immediately on any state change and falling back to a 5 ms tick when idle. The event group uses 24 usable bits (`EVT_ANY = 0x00FFFFFF`; bits 24-31 are reserved by FreeRTOS). Currently 16 event bits are assigned (bits 0-15) with 8 spare.
+AppState uses **dirty flags** (e.g., `isBuzzerDirty()`, `isDisplayDirty()`, `isOTADirty()`) to detect changes and minimize unnecessary WebSocket broadcasts and MQTT publishes. Every dirty-flag setter also calls `app_events_signal(EVT_XXX)` (defined in `src/app_events.h`) so the main loop can replace `delay(5)` with `app_events_wait(5)` — waking immediately on any state change and falling back to a 5 ms tick when idle. The event group uses 24 usable bits (`EVT_ANY = 0x00FFFFFF`; bits 24-31 are reserved by FreeRTOS). Currently 14 event bits are assigned (bits 0-15, with bits 5 and 13 freed) with 10 spare.
 
 Legacy code uses `#define` macros (e.g., `#define wifiSSID appState.wifiSSID`) to alias global variable names to AppState members. New code should use `appState.fieldName` directly; domain lookups use `appState.domain.fieldName` (e.g., `appState.wifi.ssid`).
 
@@ -170,7 +170,7 @@ Each subsystem is a separate module in `src/`:
 - **thd_measurement** — THD+N measurement engine: starts signal generator at test frequency, averages multiple FFT frames, reports THD+N percentage/dB + per-harmonic levels. Guarded by `DSP_ENABLED`. Lives in `src/thd_measurement.h/.cpp`
 - **dsp_convolution** — FIR convolution/IR processing engine with slot-based management. PSRAM allocation preferred. Lives in `src/dsp_convolution.h/.cpp`
 - **pipeline_api** — REST API for audio pipeline matrix CRUD + per-output DSP config. Deferred matrix save with 2s debounce. Registered via `registerPipelineApiEndpoints()`. Lives in `src/pipeline_api.h/.cpp`
-- **dac_api** — REST API for DAC state, capabilities, volume, enable/disable. HAL-routed via `HalAudioDevice` per pipeline sink slot. Optional `?slot=N` query parameter on `GET /api/dac` for generic DAC-path device queries by HAL slot; without it defaults to backward-compatible PCM5102A lookup. Registered via `registerDacApiEndpoints()`. Lives in `src/dac_api.h/.cpp`
+- **hal_eeprom_api** — REST endpoints for EEPROM programming and diagnostics: GET/POST /api/hal/eeprom, POST /api/hal/eeprom/erase, POST /api/hal/eeprom/scan, GET /api/hal/eeprom/presets. Auth-guarded. Registered via `registerHalEepromApiEndpoints()`. Lives in `src/hal/hal_eeprom_api.h/.cpp`
 - **diag_api** — REST API for diagnostics: `GET /api/diagnostics`, `GET/DELETE /api/diagnostics/journal`, `GET /api/diag/snapshot`. Registered via `registerDiagApiEndpoints()`. Lives in `src/diag_api.h/.cpp`
 - **siggen_api** — REST API for signal generator configuration: `GET/POST /api/signalgenerator`. Registered via `registerSignalGenApiEndpoints()`. Lives in `src/siggen_api.h/.cpp`
 - **sink_write_utils** — Shared float buffer utilities for all HAL sink drivers: `sink_apply_volume()`, `sink_apply_mute_ramp()` (click-free ramping), `sink_float_to_i2s_int32()` (left-justified conversion for I2S DMA). Lives in `src/sink_write_utils.h/.cpp`
@@ -180,7 +180,7 @@ Each subsystem is a separate module in `src/`:
 - **heap_budget** — Lightweight per-subsystem allocation tracker. Fixed-size array of 32 `HeapBudgetEntry` structs (label, bytes, isPsram). `heap_budget_record()` adds/updates, `heap_budget_remove()` removes entries. No dynamic allocation. Records audio pipeline, DSP, and other subsystem allocations. Exposed via WS `hardwareStats` and REST `/api/diag/snapshot`. Lives in `src/heap_budget.h/.cpp`
 - **websocket subsystem** — Real-time state broadcasting to web clients (port 81, `MAX_WS_CLIENTS=16`). Split across 4 focused files sharing the public API in `websocket_handler.h`:
   - `src/websocket_command.cpp` — WS event handler (`webSocketEvent()`), command dispatch, deferred init state drain
-  - `src/websocket_broadcast.cpp` — 17 state broadcast functions (`sendDspState()`, `sendHardwareStats()`, etc.) + audio data streaming
+  - `src/websocket_broadcast.cpp` — 16 state broadcast functions (`sendDspState()`, `sendHardwareStats()`, etc.) + audio data streaming
   - `src/websocket_auth.cpp` — Client authentication tracking, session validation, auth count recalibration
   - `src/websocket_cpu_monitor.cpp` — FreeRTOS idle hook CPU usage measurement
   - `src/websocket_internal.h` — Cross-file accessor functions for shared state
