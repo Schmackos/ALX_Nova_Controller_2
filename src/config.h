@@ -151,6 +151,9 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define PBKDF2_ITERATIONS_V1   10000   // Legacy p1: format
 #define PBKDF2_ITERATIONS      50000   // Current p2: format
 
+// ===== WebSocket Protocol Version =====
+#define WS_PROTOCOL_VERSION "1.0"
+
 // ===== WebSocket Binary Rate Scaling =====
 #define WS_BINARY_SKIP_2_CLIENTS      2       // Send every 2nd binary frame for 2 clients
 #define WS_BINARY_SKIP_3PLUS          4       // Send every 4th binary frame for 3-4 clients

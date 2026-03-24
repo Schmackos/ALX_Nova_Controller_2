@@ -229,5 +229,7 @@
                 handleAudioChannelMap(data);
             } else if (data.type === 'diagEvent') {
                 handleDiagEvent(data);
+            } else if (data.type === 'protocolVersion') {
+                console.log('[WS] Protocol version: ' + data.version);
             }
         }

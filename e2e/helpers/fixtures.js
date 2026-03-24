@@ -85,6 +85,7 @@ const test = base.extend({
         if (type === 'auth') {
           // Complete the auth handshake
           ws.send(JSON.stringify({ type: 'authSuccess' }));
+          ws.send(JSON.stringify({ type: 'protocolVersion', version: '1.0' }));
 
           // Broadcast all initial state messages in sequence
           const initialMessages = buildInitialState();

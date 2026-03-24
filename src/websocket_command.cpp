@@ -135,6 +135,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             wsAuthTimeout[num] = 0;
             ws_set_session_id(num, sessionId);
             webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
+            webSocket.sendTXT(num, "{\"type\":\"protocolVersion\",\"version\":\"" WS_PROTOCOL_VERSION "\"}");
             LOG_D("[WebSocket] Client [%u] authenticated (total: %u)", num, ws_auth_count());
 
             // Defer initial state sends — drainPendingInitState() will send
