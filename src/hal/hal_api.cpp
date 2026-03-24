@@ -13,6 +13,7 @@
 #include "hal_custom_device.h"
 #include "../debug_serial.h"
 #include "../app_state.h"
+#include "../audio_pipeline.h"
 #include "../globals.h"
 #include "../settings_manager.h"
 #include <ArduinoJson.h>
@@ -404,7 +405,8 @@ void registerHalApiEndpoints(WebServer& server) {
         HalDevice* dev = mgr.getDevice(slot);
         if (!dev) { server_send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
 
-        // Deinit then re-init
+        // Deinit then re-init (pause audio pipeline for safe I2S teardown)
+        audio_pipeline_request_pause(500);
         dev->deinit();
         dev->setReady(false);
         dev->_state = HAL_STATE_CONFIGURING;
@@ -423,6 +425,7 @@ void registerHalApiEndpoints(WebServer& server) {
             dev->_state = HAL_STATE_ERROR;
             LOG_W("[HAL] Reinit failed for slot %d: %s", slot, reinitResult.reason);
         }
+        audio_pipeline_resume();
         appState.markHalDeviceDirty();
 
         JsonDocument resp;
