@@ -69,7 +69,7 @@
 
 // ---------------------------------------------------------------------------
 // HalTdmInterleaver — self-contained interleaver state machine.
-// One instance lives inside a multi-channel DAC driver (e.g. HalEs9038pro).
+// One instance lives inside a multi-channel DAC driver (e.g. HalEssDac8ch).
 // The driver calls init() once during its own init(), then passes the four
 // AudioOutputSink pointers to the pipeline bridge via buildSinks().
 // ---------------------------------------------------------------------------

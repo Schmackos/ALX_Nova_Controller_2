@@ -270,19 +270,23 @@ Expansion modules can carry an AT24C02 EEPROM programmed with device identity in
 
 The ESP32-P4 board has three I2C buses with distinct safety characteristics:
 
-| Index | Constant | SDA | SCL | Safety | Devices |
-|---|---|---|---|---|---|
-| 0 | `HAL_I2C_BUS_EXT` | GPIO 48 | GPIO 54 | Skip when WiFi active | External expansion |
-| 1 | `HAL_I2C_BUS_ONBOARD` | GPIO 7 | GPIO 8 | Always safe | ES8311 codec |
-| 2 | `HAL_I2C_BUS_EXP` | GPIO 28 | GPIO 29 | Always safe | Expansion modules |
+| Index | Constant | Wire Instance | SDA | SCL | Safety | Devices |
+|---|---|---|---|---|---|---|
+| 0 | `HAL_I2C_BUS_EXT` | `Wire1` | GPIO 48 | GPIO 54 | Skip when WiFi active | External expansion |
+| 1 | `HAL_I2C_BUS_ONBOARD` | `Wire` | GPIO 7 | GPIO 8 | Always safe | ES8311 codec |
+| 2 | `HAL_I2C_BUS_EXP` | `Wire2` | GPIO 28 | GPIO 29 | Always safe | Expansion modules |
+
+:::tip Bus 0 maps to Wire1
+Bus 0 uses `Wire1`, not `Wire`, because `Wire` is already initialised by the ES8311 codec on Bus 1. All I2C access goes through `HalI2cBus::get(busIndex)` which handles this mapping automatically — drivers should never reference Wire globals directly.
+:::
 
 :::danger SDIO Conflict on Bus 0
-GPIO 48 and GPIO 54 are shared with the ESP32-C6 WiFi co-processor SDIO interface. Any I2C transaction on Bus 0 while WiFi is active causes `sdmmc_send_cmd` errors and triggers an MCU reset. The discovery routine automatically skips Bus 0 when `hal_wifi_sdio_active()` returns true. Never scan Bus 0 without this guard.
+GPIO 48 and GPIO 54 are shared with the ESP32-C6 WiFi co-processor SDIO interface. Any I2C transaction on Bus 0 while WiFi is active causes `sdmmc_send_cmd` errors and triggers an MCU reset. All I2C access goes through `HalI2cBus::get(busIndex)` which checks `isSdioBlocked()` automatically. The discovery routine also skips Bus 0 when `hal_wifi_sdio_active()` returns true. Never access Bus 0 without this guard.
 :::
 
 The `hal_wifi_sdio_active()` helper function checks `connectSuccess || connecting || activeInterface == NET_WIFI`. `wifi_manager.cpp` sets `activeInterface = NET_WIFI` when a connection is established and clears it on disconnect. When Bus 0 is skipped, `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101) is emitted and `POST /api/hal/scan` returns a `partialScan: true` flag in its response body.
 
-Discovery scans Bus 1 (ONBOARD) only through the ES8311 driver's existing Wire instance. Buses 0 and 2 are initialised, scanned, then released in `hal_i2c_scan_bus()` to avoid holding GPIO pins unnecessarily.
+All bus access — including discovery scans and driver I2C transactions — goes through `HalI2cBus`, a singleton-per-bus abstraction with per-bus recursive FreeRTOS mutex for thread safety. `HalI2cBus::get(busIndex)` returns the bus instance. The three base classes (`HalEssSabreAdcBase`, `HalEssSabreDacBase`, `HalCirrusDacBase`) and standalone consumers (`hal_es8311`, `hal_mcp4725`, `hal_custom_device`, `hal_discovery`) all delegate I2C to `HalI2cBus` via a protected `_bus()` helper instead of using raw Wire globals.
 
 #### I2C Probe Retry
 
