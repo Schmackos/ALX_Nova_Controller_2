@@ -1,251 +1,20 @@
 #ifdef DAC_ENABLED
 
-#include "dac_api.h"
-#include "dac_hal.h"
-#include "dac_eeprom.h"
-#include "audio_pipeline.h"
-#include "app_state.h"
-#include "globals.h"
-#include "auth_handler.h"
-#include "debug_serial.h"
-#include "hal/hal_device_manager.h"
-#include "hal/hal_pipeline_bridge.h"
-#include "hal/hal_audio_device.h"
-#include "hal/hal_settings.h"
-#include "hal/hal_types.h"
-#include "http_security.h"
+#include "hal_eeprom_api.h"
+#include "../dac_eeprom.h"
+#include "../app_state.h"
+#include "../globals.h"
+#include "../auth_handler.h"
+#include "../debug_serial.h"
+#include "hal_device_manager.h"
+#include "hal_types.h"
+#include "../http_security.h"
 #include <ArduinoJson.h>
 extern bool requireAuth();
 
-// Find the first registered DAC-path device (capability-based, no compatible-string coupling).
-// Returns nullptr when no DAC-path device is registered in the HAL.
-static HalDevice* _dacApiFindFirstDacDevice() {
-    HalDeviceManager& mgr = HalDeviceManager::instance();
-    for (uint8_t i = 0; i < HAL_MAX_DEVICES; ++i) {
-        HalDevice* d = mgr.getDevice(i);
-        if (d && (d->getDescriptor().capabilities & HAL_CAP_DAC_PATH)) return d;
-    }
-    return nullptr;
-}
-
-// Get HalAudioDevice* for a given pipeline sink slot (nullptr if not found)
-static HalAudioDevice* _dacApiAudioDeviceForSlot(uint8_t sinkSlot) {
-    int8_t halSlot = hal_pipeline_get_slot_for_sink(sinkSlot);
-    if (halSlot < 0) return nullptr;
-    HalDevice* dev = HalDeviceManager::instance().getDevice((uint8_t)halSlot);
-    if (!dev) return nullptr;
-    if (dev->getType() != HAL_DEV_DAC && dev->getType() != HAL_DEV_CODEC) return nullptr;
-    return static_cast<HalAudioDevice*>(dev);
-}
-
-void registerDacApiEndpoints() {
-    // GET /api/dac — Full DAC state + capabilities (queries HAL)
-    // Optional ?slot=N query parameter: query any DAC-path device by HAL slot.
-    // Without ?slot, defaults to backward-compatible PCM5102A lookup.
-    server.on("/api/dac", HTTP_GET, []() {
-        if (!requireAuth()) return;
-
-        JsonDocument doc;
-        doc["success"] = true;
-
-        HalDeviceManager& mgr = HalDeviceManager::instance();
-
-        // Slot-based lookup when ?slot=N is provided
-        int slotParam = server.hasArg("slot") ? server.arg("slot").toInt() : -1;
-        if (slotParam >= HAL_MAX_DEVICES) {
-            server_send(400, "application/json", "{\"error\":\"Invalid slot\"}");
-            return;
-        }
-        HalDevice* dev;
-        if (slotParam >= 0) {
-            dev = mgr.getDevice((uint8_t)slotParam);
-            // Validate it is a DAC-path device
-            if (dev && !(dev->getDescriptor().capabilities & HAL_CAP_DAC_PATH)) {
-                dev = nullptr; // Not a DAC device
-            }
-        } else {
-            // Default: first registered DAC-path device (capability-based, not tied to PCM5102A)
-            dev = _dacApiFindFirstDacDevice();
-        }
-
-        HalDeviceConfig* cfg = dev ? mgr.getConfig(dev->getSlot()) : nullptr;
-
-        doc["enabled"] = cfg ? cfg->enabled : false;
-        doc["volume"] = cfg ? cfg->volume : 80;
-        doc["mute"] = cfg ? cfg->mute : false;
-        doc["deviceId"] = dev ? dev->getDescriptor().legacyId : 0x0001;
-        doc["modelName"] = dev ? dev->getDescriptor().name : "PCM5102A";
-        doc["outputChannels"] = dev ? dev->getDescriptor().channelCount : 2;
-        doc["detected"] = (dev != nullptr);
-        doc["ready"] = dev ? dev->_ready : false;
-        doc["filterMode"] = cfg ? cfg->filterMode : 0;
-        doc["txUnderruns"] = appState.dac.txUnderruns;
-        doc["halSlot"] = dev ? (int)dev->getSlot() : -1;
-
-        // Capabilities from HAL device descriptor
-        if (dev) {
-            const HalDeviceDescriptor& desc = dev->getDescriptor();
-            int8_t devSinkSlot = hal_pipeline_get_sink_slot(dev->getSlot());
-            HalAudioDevice* audioDev = (devSinkSlot >= 0)
-                ? _dacApiAudioDeviceForSlot((uint8_t)devSinkSlot)
-                : nullptr;
-            JsonObject capsObj = doc["capabilities"].to<JsonObject>();
-            capsObj["name"] = desc.name;
-            capsObj["manufacturer"] = desc.manufacturer;
-            capsObj["maxChannels"] = desc.channelCount;
-            capsObj["hasHardwareVolume"] = audioDev ? audioDev->hasHardwareVolume() : false;
-            capsObj["hasI2cControl"] = (desc.i2cAddr != 0);
-            capsObj["needsIndependentClock"] = false;
-            capsObj["hasFilterModes"] = false;
-            capsObj["numFilterModes"] = 0;
-        }
-
-        String json;
-        serializeJson(doc, json);
-        server_send(200, "application/json", json);
-    });
-
-    // POST /api/dac — Update DAC settings
-    server.on("/api/dac", HTTP_POST, []() {
-        if (!requireAuth()) return;
-
-        if (!server.hasArg("plain")) {
-            server_send(400, "application/json",
-                        "{\"success\":false,\"message\":\"No data\"}");
-            return;
-        }
-
-        JsonDocument doc;
-        if (deserializeJson(doc, server.arg("plain"))) {
-            server_send(400, "application/json",
-                        "{\"success\":false,\"message\":\"Invalid JSON\"}");
-            return;
-        }
-
-        bool changed = false;
-
-        // HAL device lookup — first registered DAC-path device (capability-based)
-        HalDevice* dev = _dacApiFindFirstDacDevice();
-        uint8_t halSlot = dev ? dev->getSlot() : 0xFF;
-        HalDeviceConfig* cfg = (halSlot < 0xFF) ? HalDeviceManager::instance().getConfig(halSlot) : nullptr;
-
-        if (doc["enabled"].is<bool>()) {
-            bool en = doc["enabled"].as<bool>();
-            bool was = cfg ? cfg->enabled : false;
-            if (en != was) {
-                LOG_I("[DAC] API: enabled %s -> %s (deferred)", was ? "ON" : "OFF", en ? "ON" : "OFF");
-                if (cfg) cfg->enabled = en;
-                if (halSlot < 0xFF) {
-                    bool ok = true;
-                    if (en && !was) {
-                        ok = appState.halCoord.requestDeviceToggle(halSlot, 1);
-                    } else if (!en && was) {
-                        ok = appState.halCoord.requestDeviceToggle(halSlot, -1);
-                    }
-                    if (!ok) {
-                        LOG_W("[DAC] API: toggle queue full for slot %u", halSlot);
-                        server_send(503, "application/json",
-                                    "{\"success\":false,\"message\":\"Device busy, retry shortly\"}");
-                        return;
-                    }
-                } else {
-                    LOG_W("[DAC] API: enabled toggle requested but no HAL device found (halSlot=0xFF)");
-                }
-                changed = true;
-            }
-        }
-
-        if (doc["volume"].is<int>()) {
-            int v = doc["volume"].as<int>();
-            if (v >= 0 && v <= 100) {
-                if (cfg) cfg->volume = (uint8_t)v;
-                int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
-                if (sinkSlot >= 0) {
-                    audio_pipeline_set_sink_volume((uint8_t)sinkSlot, dac_volume_to_linear((uint8_t)v));
-                    HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot((uint8_t)sinkSlot);
-                    if (audioDev && audioDev->hasHardwareVolume()) {
-                        audioDev->setVolume((uint8_t)v);
-                    }
-                }
-                changed = true;
-            }
-        }
-
-        if (doc["mute"].is<bool>()) {
-            bool newMute = doc["mute"].as<bool>();
-            bool prev = cfg ? cfg->mute : false;
-            if (cfg) cfg->mute = newMute;
-            int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
-            if (sinkSlot >= 0) {
-                audio_pipeline_set_sink_muted((uint8_t)sinkSlot, newMute);
-                HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot((uint8_t)sinkSlot);
-                if (audioDev) audioDev->setMute(newMute);
-            }
-            if (prev != newMute) {
-                LOG_I("[DAC] API: mute %s -> %s", prev ? "ON" : "OFF", newMute ? "ON" : "OFF");
-            }
-            changed = true;
-        }
-
-        if (doc["deviceId"].is<int>()) {
-            uint16_t id = (uint16_t)doc["deviceId"].as<int>();
-            // Runtime DAC model switching is not supported via HAL — device type is fixed at boot
-            LOG_W("[DAC] API: deviceId change (0x%04X) ignored — use HAL device config", id);
-        }
-
-        if (doc["filterMode"].is<int>()) {
-            uint8_t fm = (uint8_t)doc["filterMode"].as<int>();
-            if (cfg) cfg->filterMode = fm;
-            HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot(0);
-            if (audioDev) audioDev->setFilterMode(fm);
-            changed = true;
-        }
-
-        if (changed) {
-            if (halSlot < 0xFF) {
-                hal_save_device_config_deferred(halSlot);
-            } else {
-                LOG_W("[DAC API] No HAL device for POST /api/dac — settings not persisted");
-            }
-            appState.markDacDirty();
-        }
-
-        server_send(200, "application/json", "{\"success\":true}");
-    });
-
-    // GET /api/dac/drivers -- List all DAC-path devices from HAL
-    server.on("/api/dac/drivers", HTTP_GET, []() {
-        if (!requireAuth()) return;
-
-        JsonDocument doc;
-        doc["success"] = true;
-        JsonArray drivers = doc["drivers"].to<JsonArray>();
-
-        HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
-            JsonArray* a = static_cast<JsonArray*>(ctx);
-            const HalDeviceDescriptor& desc = dev->getDescriptor();
-            if (desc.capabilities & HAL_CAP_DAC_PATH) {
-                JsonObject drv = a->add<JsonObject>();
-                drv["id"] = desc.legacyId;
-                drv["name"] = desc.name;
-                drv["manufacturer"] = desc.manufacturer;
-                drv["maxChannels"] = desc.channelCount;
-                drv["hasHardwareVolume"] = (desc.i2cAddr != 0);
-                drv["hasI2cControl"] = (desc.i2cAddr != 0);
-                drv["needsIndependentClock"] = false;
-                drv["hasFilterModes"] = false;
-            }
-        }, (void*)&drivers);
-
-        String json;
-        serializeJson(doc, json);
-        server_send(200, "application/json", json);
-    });
-
-    // ===== EEPROM Endpoints =====
-
-    // GET /api/dac/eeprom — Read EEPROM state, parsed fields, raw hex dump
-    server.on("/api/dac/eeprom", HTTP_GET, []() {
+void registerHalEepromApiEndpoints() {
+    // GET /api/hal/eeprom — Read EEPROM state, parsed fields, raw hex dump
+    server.on("/api/hal/eeprom", HTTP_GET, []() {
         if (!requireAuth()) return;
 
         JsonDocument doc;
@@ -303,8 +72,8 @@ void registerDacApiEndpoints() {
         server_send(200, "application/json", json);
     });
 
-    // POST /api/dac/eeprom — Program EEPROM
-    server.on("/api/dac/eeprom", HTTP_POST, []() {
+    // POST /api/hal/eeprom — Program EEPROM
+    server.on("/api/hal/eeprom", HTTP_POST, []() {
         if (!requireAuth()) return;
 
         if (!server.hasArg("plain")) {
@@ -362,7 +131,7 @@ void registerDacApiEndpoints() {
             targetAddr = DAC_EEPROM_ADDR_START; // Default to 0x50
         }
 
-        LOG_I("[DAC] API: Program EEPROM at 0x%02X — %s by %s (ID=0x%04X)",
+        LOG_I("[HAL EEPROM] API: Program EEPROM at 0x%02X — %s by %s (ID=0x%04X)",
               targetAddr, eepData.deviceName, eepData.manufacturer, eepData.deviceId);
 
 #ifndef NATIVE_TEST
@@ -409,8 +178,8 @@ void registerDacApiEndpoints() {
         server_send(200, "application/json", "{\"success\":true}");
     });
 
-    // POST /api/dac/eeprom/erase — Erase EEPROM
-    server.on("/api/dac/eeprom/erase", HTTP_POST, []() {
+    // POST /api/hal/eeprom/erase — Erase EEPROM
+    server.on("/api/hal/eeprom/erase", HTTP_POST, []() {
         if (!requireAuth()) return;
 
         // Get target address from body or use stored address
@@ -427,7 +196,7 @@ void registerDacApiEndpoints() {
             targetAddr = DAC_EEPROM_ADDR_START;
         }
 
-        LOG_I("[DAC] API: Erase EEPROM at 0x%02X", targetAddr);
+        LOG_I("[HAL EEPROM] API: Erase EEPROM at 0x%02X", targetAddr);
 
 #ifndef NATIVE_TEST
         if (!dac_eeprom_erase(targetAddr)) {
@@ -458,11 +227,11 @@ void registerDacApiEndpoints() {
         server_send(200, "application/json", "{\"success\":true}");
     });
 
-    // POST /api/dac/eeprom/scan — Re-scan I2C bus + EEPROM
-    server.on("/api/dac/eeprom/scan", HTTP_POST, []() {
+    // POST /api/hal/eeprom/scan — Re-scan I2C bus + EEPROM
+    server.on("/api/hal/eeprom/scan", HTTP_POST, []() {
         if (!requireAuth()) return;
 
-        LOG_I("[DAC] API: Re-scan I2C bus + EEPROM");
+        LOG_I("[HAL EEPROM] API: Re-scan I2C bus + EEPROM");
 
 #ifndef NATIVE_TEST
         EepromDiag& ed = appState.dac.eepromDiag;
@@ -515,8 +284,8 @@ void registerDacApiEndpoints() {
         server_send(200, "application/json", json);
     });
 
-    // GET /api/dac/eeprom/presets -- Pre-fill data from HAL device DB
-    server.on("/api/dac/eeprom/presets", HTTP_GET, []() {
+    // GET /api/hal/eeprom/presets — Pre-fill data from HAL device DB
+    server.on("/api/hal/eeprom/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
 
         JsonDocument doc;
@@ -555,7 +324,7 @@ void registerDacApiEndpoints() {
         server_send(200, "application/json", json);
     });
 
-    LOG_I("[DAC] REST API endpoints registered");
+    LOG_I("[HAL EEPROM] REST API endpoints registered");
 }
 
 #endif // DAC_ENABLED

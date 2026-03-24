@@ -58,7 +58,6 @@ enum InitStateBit : uint32_t {
     INIT_DEBUG       = (1u << 6),
     INIT_ADC_STATE   = (1u << 7),
     INIT_DSP         = (1u << 8),
-    INIT_DAC         = (1u << 9),
     INIT_USB_AUDIO   = (1u << 10),
     INIT_UPDATED     = (1u << 11),
     INIT_HAL_DEVICE    = (1u << 13),
@@ -1295,11 +1294,9 @@ void drainPendingInitState() {
         pending &= ~INIT_DSP;
 #endif
 #ifdef DAC_ENABLED
-        if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_HAL_DEVICE))  { sendHalDeviceState();              pending &= ~INIT_HAL_DEVICE;  sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_CHANNEL_MAP)) { sendAudioChannelMap();             pending &= ~INIT_CHANNEL_MAP; sent++; }
 #else
-        pending &= ~INIT_DAC;
         pending &= ~INIT_HAL_DEVICE;
         pending &= ~INIT_CHANNEL_MAP;
 #endif

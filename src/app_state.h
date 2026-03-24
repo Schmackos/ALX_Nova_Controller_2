@@ -153,10 +153,6 @@ public:
 #ifdef DAC_ENABLED
   DacState dac;
 
-  void markDacDirty() { _dacDirty = true; app_events_signal(EVT_DAC); }
-  bool isDacDirty() const { return _dacDirty; }
-  void clearDacDirty() { _dacDirty = false; }
-
   void markEepromDirty() { _eepromDirty = true; app_events_signal(EVT_EEPROM); }
   bool isEepromDirty() const { return _eepromDirty; }
   void clearEepromDirty() { _eepromDirty = false; }
@@ -245,7 +241,6 @@ private:
   bool _usbAudioVuDirty = false;
 #endif
 #ifdef DAC_ENABLED
-  bool _dacDirty = false;
   bool _eepromDirty = false;
   bool _halDeviceDirty = false;
   bool _channelMapDirty = false;

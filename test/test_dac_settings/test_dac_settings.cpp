@@ -25,7 +25,7 @@ static void resetDacFields() {
     AppState& as = AppState::getInstance();
     as.dac.txUnderruns = 0;
     memset(&as.dac.eepromDiag, 0, sizeof(as.dac.eepromDiag));
-    as.clearDacDirty();
+    as.clearEepromDirty();
 }
 
 // ---------------------------------------------------------------------------
@@ -93,16 +93,16 @@ void test_eeprom_diag_fields(void) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: DAC dirty flag lifecycle
+// Test: EEPROM dirty flag lifecycle
 // ---------------------------------------------------------------------------
 
-void test_dac_dirty_flag_lifecycle(void) {
+void test_eeprom_dirty_flag_lifecycle(void) {
     AppState& as = AppState::getInstance();
-    TEST_ASSERT_FALSE(as.isDacDirty());
-    as.markDacDirty();
-    TEST_ASSERT_TRUE(as.isDacDirty());
-    as.clearDacDirty();
-    TEST_ASSERT_FALSE(as.isDacDirty());
+    TEST_ASSERT_FALSE(as.isEepromDirty());
+    as.markEepromDirty();
+    TEST_ASSERT_TRUE(as.isEepromDirty());
+    as.clearEepromDirty();
+    TEST_ASSERT_FALSE(as.isEepromDirty());
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
     RUN_TEST(test_filter_mode_in_hal_device_config);
     RUN_TEST(test_dac_state_tx_underruns);
     RUN_TEST(test_eeprom_diag_fields);
-    RUN_TEST(test_dac_dirty_flag_lifecycle);
+    RUN_TEST(test_eeprom_dirty_flag_lifecycle);
 
     return UNITY_END();
 }
