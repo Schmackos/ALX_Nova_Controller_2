@@ -25,7 +25,7 @@
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
-#include "dac_api.h"
+#include "hal/hal_eeprom_api.h"
 #include "hal/hal_builtin_devices.h"
 #include "hal/hal_device_db.h"
 #include "hal/hal_device_manager.h"
@@ -762,7 +762,7 @@ void setup() {
 
 #ifdef DAC_ENABLED
   // Register DAC REST API endpoints
-  registerDacApiEndpoints();
+  registerHalEepromApiEndpoints();
   registerHalApiEndpoints(server);
   registerPipelineApiEndpoints(server);
 
@@ -1147,11 +1147,11 @@ void loop() {
       if (t.action > 0) {
         LOG_I("[HAL] Deferred device activation for HAL slot %u", t.halSlot);
         hal_pipeline_activate_device(t.halSlot);
-        appState.markDacDirty();
+        appState.markHalDeviceDirty();
       } else if (t.action < 0) {
         LOG_I("[HAL] Deferred device deactivation for HAL slot %u", t.halSlot);
         hal_pipeline_deactivate_device(t.halSlot);
-        appState.markDacDirty();
+        appState.markHalDeviceDirty();
       }
     }
     appState.halCoord.clearPendingToggles();
@@ -1165,14 +1165,9 @@ void loop() {
               "HalCoord", "Toggle queue full");
   }
 
-  // Broadcast DAC state changes (WS/API/MQTT -> all clients)
-  if (appState.isDacDirty()) {
-    sendDacState();
-    appState.clearDacDirty();
-  }
   // Broadcast EEPROM state changes
   if (appState.isEepromDirty()) {
-    sendDacState();  // dacState includes EEPROM diag data
+    sendHardwareStats();
     appState.clearEepromDirty();
   }
   // Broadcast HAL device state changes

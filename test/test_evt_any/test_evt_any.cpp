@@ -16,21 +16,19 @@
 #include "../../src/app_events.h"
 
 // ===== Helper: collect all defined EVT_* bit constants into an array =====
-// 15 individual event bits are defined (bits 0-11, 13-15; bit 12 is spare).
+// 13 individual event bits are defined (bits 0-4, 6-12, 14-17; bits 5 & 13 freed).
 static const unsigned long ALL_EVT_BITS[] = {
     EVT_OTA,
     EVT_DISPLAY,
     EVT_BUZZER,
     EVT_SIGGEN,
     EVT_DSP_CONFIG,
-    EVT_DAC,
     EVT_EEPROM,
     EVT_USB_AUDIO,
     EVT_USB_VU,
     EVT_SETTINGS,
     EVT_ADC_ENABLED,
     EVT_ETHERNET,
-    EVT_DAC_SETTINGS,
     EVT_HAL_DEVICE,
     EVT_CHANNEL_MAP,
 };

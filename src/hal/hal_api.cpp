@@ -366,7 +366,7 @@ void registerHalApiEndpoints(WebServer& server) {
             // Update HalDeviceConfig (authoritative source)
             HalDeviceConfig* cfg = mgr.getConfig(slot);
             if (cfg) cfg->enabled = false;
-            appState.markDacDirty();
+            appState.markHalDeviceDirty();
         }
 
         // Deinit and remove
