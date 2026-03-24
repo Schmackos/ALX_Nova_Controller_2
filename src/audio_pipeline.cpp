@@ -581,8 +581,8 @@ static void audio_pipeline_task_fn(void * /*param*/) {
         pipeline_sync_flags();
 
         // --- Timing: input read ---
-        uint32_t _tFrameStart    = micros();
-        uint32_t _tInputStart    = _tFrameStart;
+        uint32_t _tE2eStart      = micros();
+        uint32_t _tInputStart    = _tE2eStart;
         pipeline_read_inputs();
         uint32_t _tInputEnd      = micros();
 
@@ -593,8 +593,9 @@ static void audio_pipeline_task_fn(void * /*param*/) {
         pipeline_run_dsp();
         uint32_t _tInputDspEnd   = micros();
 
-        // --- Timing: matrix mix ---
-        uint32_t _tMatrixStart   = micros();
+        // --- Timing: matrix mix (backward compat: _tFrameStart stays here) ---
+        uint32_t _tFrameStart    = micros();
+        uint32_t _tMatrixStart   = _tFrameStart;
         pipeline_mix_matrix();
         uint32_t _tMatrixEnd     = micros();
 
@@ -634,6 +635,7 @@ static void audio_pipeline_task_fn(void * /*param*/) {
             _timingMetrics.inputReadUs     = inputReadUs;
             _timingMetrics.perInputDspUs   = inputDspUs;
             _timingMetrics.sinkWriteUs     = sinkWriteUs;
+            _timingMetrics.totalE2eUs      = _tSinkEnd - _tE2eStart;
         }
         // Feed raw ADC1 data into waveform/FFT accumulator for WebSocket graph display.
         // Uses pre-float int32 data; adcIndex 0 = ADC1.
