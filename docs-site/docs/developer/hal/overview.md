@@ -183,6 +183,20 @@ HalDeviceManager::instance().releasePin(myGpio);
 
 The pin table tracks up to `HAL_MAX_PINS` (56) simultaneous claims, covering all ESP32-P4 GPIOs (0–54). GPIO numbers outside this range are rejected with a warning log.
 
+### Discovery Methods
+
+Every registered device carries a `HalDiscovery` enum recording **how** it was found. This is distinct from the device's current **state** (its position in the [lifecycle state machine](./device-lifecycle)). A device discovered via EEPROM can be in any state — AVAILABLE, DISABLED, ERROR, etc.
+
+| Value | Constant | Meaning |
+|---|---|---|
+| 0 | `HAL_DISC_BUILTIN` | Hardcoded onboard device — registered by `hal_register_builtins()` at boot (PCM5102A, ES8311, PCM1808, etc.) |
+| 1 | `HAL_DISC_EEPROM` | Auto-discovered via AT24C02 EEPROM on a mezzanine expansion connector |
+| 2 | `HAL_DISC_GPIO_ID` | Resistor ID on GPIO (placeholder — not yet implemented) |
+| 3 | `HAL_DISC_MANUAL` | User-configured via the web UI custom device creator or `POST /api/hal/devices` |
+| 4 | `HAL_DISC_ONLINE` | Fetched from GitHub YAML device database (placeholder — not yet implemented) |
+
+The discovery method is set at registration time and never changes. It is exposed in REST API responses (`GET /api/hal/devices` → `discovery` field) and in the web UI device cards.
+
 ### Priority-Sorted Initialisation
 
 `initAll()` sorts all registered devices by `_initPriority` descending before calling `init()` on each one. This guarantees bus controllers are ready before their clients:

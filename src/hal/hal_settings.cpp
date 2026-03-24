@@ -136,17 +136,17 @@ void hal_apply_config(uint8_t slot) {
 
     const HalDeviceDescriptor& desc = dev->getDescriptor();
 
-    // DISABLE: deinit device and mark MANUAL (persisted disabled state)
+    // DISABLE: deinit device and mark DISABLED (persisted disabled state)
     if (!cfg->enabled) {
         // DAC-path devices: deferred legacy teardown via main loop
         // (I2S driver lifecycle is too heavy for direct call — must pause audio pipeline first)
         if (desc.capabilities & HAL_CAP_DAC_PATH) {
             HalDeviceState oldState = dev->_state;
             dev->setReady(false);
-            dev->_state = HAL_STATE_MANUAL;
+            dev->_state = HAL_STATE_DISABLED;
             // Fire state change callback — bridge removes the sink immediately,
             // then the deferred deinit tears down the I2S driver safely.
-            hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
+            hal_pipeline_state_change(slot, oldState, HAL_STATE_DISABLED);
             // Use generic HAL-aware toggle — no device-type checking
             if (!appState.halCoord.requestDeviceToggle(slot, -1)) {
                 LOG_W("[HAL:Settings] Toggle queue full for slot %u (disable)", slot);
@@ -162,16 +162,16 @@ void hal_apply_config(uint8_t slot) {
         {
             HalDeviceState oldState = dev->_state;
             dev->setReady(false);
-            dev->_state = HAL_STATE_MANUAL;
-            hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
+            dev->_state = HAL_STATE_DISABLED;
+            hal_pipeline_state_change(slot, oldState, HAL_STATE_DISABLED);
         }
         LOG_I("[HAL:Settings] Device slot %u disabled", slot);
         appState.markHalDeviceDirty();
         return;
     }
 
-    // RE-ENABLE from MANUAL state: probe + init
-    if (dev->_state == HAL_STATE_MANUAL) {
+    // RE-ENABLE from DISABLED state: probe + init
+    if (dev->_state == HAL_STATE_DISABLED) {
         // DAC-path devices: deferred HAL-aware re-init via main loop (device-independent)
         if (desc.capabilities & HAL_CAP_DAC_PATH) {
             // Use generic HAL-aware toggle — no device-type checking
@@ -183,7 +183,7 @@ void hal_apply_config(uint8_t slot) {
             return;
         }
         dev->_state = HAL_STATE_CONFIGURING;
-        hal_pipeline_state_change(slot, HAL_STATE_MANUAL, HAL_STATE_CONFIGURING);
+        hal_pipeline_state_change(slot, HAL_STATE_DISABLED, HAL_STATE_CONFIGURING);
         bool ok = dev->probe() && dev->init().success;
         dev->_state = ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR;
         hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING,

@@ -1,5 +1,5 @@
 %% @validate-symbols
-%% src/hal/hal_types.h: HAL_STATE_UNKNOWN, HAL_STATE_DETECTED, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE, HAL_STATE_UNAVAILABLE, HAL_STATE_MANUAL, HAL_STATE_ERROR, HAL_STATE_REMOVED
+%% src/hal/hal_types.h: HAL_STATE_UNKNOWN, HAL_STATE_DETECTED, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE, HAL_STATE_UNAVAILABLE, HAL_STATE_DISABLED, HAL_STATE_ERROR, HAL_STATE_REMOVED
 %% src/hal/hal_pipeline_bridge.h: hal_pipeline_state_change
 %% src/state/hal_coord_state.h: requestDeviceToggle
 %% @end-validate
@@ -18,8 +18,8 @@ stateDiagram-v2
     UNAVAILABLE --> AVAILABLE: healthCheck pass\n[bridge: no action, _ready=true]
     UNAVAILABLE --> ERROR: 3 consecutive fails\n[bridge: remove_sink(slot)]
 
-    AVAILABLE --> MANUAL: user disable via Web UI\n[bridge: remove_sink(slot)]
-    MANUAL --> CONFIGURING: user re-enable\n[deferred via halCoord.requestDeviceToggle()]
+    AVAILABLE --> DISABLED: user disable via Web UI\n[bridge: remove_sink(slot)]
+    DISABLED --> CONFIGURING: user re-enable\n[deferred via halCoord.requestDeviceToggle()]
 
     AVAILABLE --> ERROR: fatal I2C/driver error\n[bridge: remove_sink(slot)]
     ERROR --> CONFIGURING: reinit requested\n[POST /api/hal/devices/reinit]
@@ -44,7 +44,7 @@ stateDiagram-v2
         - Auto-recovery when _ready=true
     end note
 
-    note right of MANUAL
+    note right of DISABLED
         Explicit teardown:
         - remove_sink(slot) called
         - DAC: deferred I2S deinit

@@ -33,7 +33,7 @@ enum HalDeviceState : uint8_t {
     HAL_STATE_AVAILABLE   = 3,   // probe() + init() succeeded, _ready=true
     HAL_STATE_UNAVAILABLE = 4,   // healthCheck() failed, _ready=false
     HAL_STATE_ERROR       = 5,   // init() failed or 3 consecutive health failures
-    HAL_STATE_MANUAL      = 6,   // User-configured via web UI
+    HAL_STATE_DISABLED    = 6,   // User-disabled via web UI
     HAL_STATE_REMOVED     = 7,   // Device removed or absent on rescan
 };
 

@@ -98,8 +98,8 @@ When a device has a saved config (`cfgEnabled` is present), additional fields ar
 | 3 | `HAL_STATE_AVAILABLE` | Initialized and ready |
 | 4 | `HAL_STATE_UNAVAILABLE` | Temporarily unavailable (auto-recovery active) |
 | 5 | `HAL_STATE_ERROR` | Initialization failed |
-| 6 | `HAL_STATE_REMOVED` | Explicitly removed |
-| 7 | `HAL_STATE_MANUAL` | Manually disabled by user |
+| 6 | `HAL_STATE_DISABLED` | User-disabled via web UI |
+| 7 | `HAL_STATE_REMOVED` | Explicitly removed |
 
 ### Capability bitmask (`capabilities`)
 

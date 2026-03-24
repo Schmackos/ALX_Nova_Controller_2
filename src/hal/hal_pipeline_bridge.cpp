@@ -466,7 +466,7 @@ void hal_pipeline_on_device_unavailable(uint8_t slot) {
 }
 
 // ---------------------------------------------------------------------------
-// on_device_removed — permanent removal (ERROR, REMOVED, MANUAL)
+// on_device_removed — permanent removal (ERROR, REMOVED, DISABLED)
 // ---------------------------------------------------------------------------
 void hal_pipeline_on_device_removed(uint8_t slot) {
     if (slot >= HAL_MAX_DEVICES) return;
@@ -540,7 +540,7 @@ void hal_pipeline_state_change(uint8_t slot, HalDeviceState oldState, HalDeviceS
             break;
         case HAL_STATE_ERROR:
         case HAL_STATE_REMOVED:
-        case HAL_STATE_MANUAL:
+        case HAL_STATE_DISABLED:
             hal_pipeline_on_device_removed(slot);
             break;
         default:

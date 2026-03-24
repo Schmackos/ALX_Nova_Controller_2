@@ -8565,7 +8565,7 @@ body.night-mode {
                 case 3: return { cls: 'green', label: 'Available' };
                 case 4: return { cls: 'red', label: 'Unavailable' };
                 case 5: return { cls: 'red', label: 'Error' };
-                case 6: return { cls: 'amber', label: 'Manual' };
+                case 6: return { cls: 'amber', label: 'Disabled' };
                 case 7: return { cls: 'grey', label: 'Removed' };
                 default: return { cls: 'grey', label: 'Unknown' };
             }

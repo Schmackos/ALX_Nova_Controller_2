@@ -95,7 +95,7 @@ The tool parses `@validate-symbols` blocks, reads each referenced source file, a
 **`hal-lifecycle.mmd`** — Device state enum values:
 ```
 %% @validate-symbols
-%% src/hal/hal_types.h: HAL_STATE_UNKNOWN, HAL_STATE_DETECTED, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE, HAL_STATE_UNAVAILABLE, HAL_STATE_MANUAL, HAL_STATE_REMOVED
+%% src/hal/hal_types.h: HAL_STATE_UNKNOWN, HAL_STATE_DETECTED, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE, HAL_STATE_UNAVAILABLE, HAL_STATE_DISABLED, HAL_STATE_REMOVED
 %% src/hal/hal_pipeline_bridge.h: hal_pipeline_state_change
 %% src/state/hal_coord_state.h: requestDeviceToggle
 %% @end-validate

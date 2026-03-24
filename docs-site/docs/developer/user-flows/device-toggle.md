@@ -17,7 +17,7 @@ Enabling or disabling a HAL device cannot happen synchronously from the REST API
 
 **To enable (re-enable) a device:**
 - Device is registered in the HAL manager.
-- Device is in `MANUAL`, `UNAVAILABLE`, or `ERROR` state.
+- Device is in `DISABLED`, `UNAVAILABLE`, or `ERROR` state.
 - Toggle queue has capacity.
 
 ## Sequence Diagram
@@ -104,7 +104,7 @@ sequenceDiagram
     Note over Pipeline: Slot-indexed removal only.<br/>Never call audio_pipeline_clear_sinks().
     Bridge->>Bridge: appState.audio.paused = false
 
-    HAL->>HAL: setState(MANUAL), _ready = false
+    HAL->>HAL: setState(DISABLED), _ready = false
     MainLoop->>Queue: clearPendingToggles()
     MainLoop->>MainLoop: markDacDirty()
     MainLoop-->>WS: sendHalDeviceState() + sendDacState()
@@ -167,14 +167,14 @@ sequenceDiagram
 
 5. **After `deinit()`** completes, the bridge calls `audio_pipeline_remove_sink(sinkSlot)` to free the pipeline slot. It then clears `appState.audio.paused = false`, allowing the audio task to resume on the next tick.
 
-6. The HAL manager transitions the device to `MANUAL` and sets `_ready = false`. The main loop broadcasts the updated state.
+6. The HAL manager transitions the device to `DISABLED` and sets `_ready = false`. The main loop broadcasts the updated state.
 
 :::warning Slot-indexed removal only
 Always use `audio_pipeline_remove_sink(sinkSlot)` targeting the specific slot. Never call `audio_pipeline_clear_sinks()` from a deactivation path — it removes every registered sink, including ones owned by other devices.
 :::
 
 :::info ADC path differences
-For ADC devices, `dac_deactivate_for_hal()` calls `audio_pipeline_remove_source(lane)` instead. The I2S DMA for ADC hardware keeps running while the device is in `UNAVAILABLE` (transient); it is stopped only on `MANUAL`/`ERROR`/`REMOVED` (permanent) transitions. See [HAL Device Lifecycle — Hybrid Transient Policy](../hal/device-lifecycle#hal_pipeline_on_device_unavailable-hybrid-transient-policy) for details.
+For ADC devices, `dac_deactivate_for_hal()` calls `audio_pipeline_remove_source(lane)` instead. The I2S DMA for ADC hardware keeps running while the device is in `UNAVAILABLE` (transient); it is stopped only on `DISABLED`/`ERROR`/`REMOVED` (permanent) transitions. See [HAL Device Lifecycle — Hybrid Transient Policy](../hal/device-lifecycle#hal_pipeline_on_device_unavailable-hybrid-transient-policy) for details.
 :::
 
 ## Postconditions
@@ -186,11 +186,11 @@ For ADC devices, `dac_deactivate_for_hal()` calls `audio_pipeline_remove_source(
 - WebSocket `halDevices` message includes the device with `state: "AVAILABLE"` and `ready: true`.
 
 **After a successful disable:**
-- Device state is `MANUAL`, `_ready == false`.
+- Device state is `DISABLED`, `_ready == false`.
 - Sink slot or input lane has been removed from the audio pipeline.
 - I2S port is disabled (if the device owned one).
 - GPIO claims are released.
-- WebSocket `halDevices` message includes the device with `state: "MANUAL"` and `ready: false`.
+- WebSocket `halDevices` message includes the device with `state: "DISABLED"` and `ready: false`.
 
 ## Error Scenarios
 

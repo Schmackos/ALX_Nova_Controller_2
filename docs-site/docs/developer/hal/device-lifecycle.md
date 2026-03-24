@@ -26,9 +26,9 @@ stateDiagram-v2
     ERROR --> AVAILABLE : POST /api/hal/devices/reinit
     ERROR --> REMOVED : removeDevice() or DELETE /api/hal/devices
 
-    AVAILABLE --> MANUAL : user disables via web UI
-    MANUAL --> CONFIGURING : user re-enables and reinits
-    MANUAL --> REMOVED : removeDevice()
+    AVAILABLE --> DISABLED : user disables via web UI
+    DISABLED --> CONFIGURING : user re-enables and reinits
+    DISABLED --> REMOVED : removeDevice()
 
     AVAILABLE --> REMOVED : removeDevice()
 ```
@@ -41,7 +41,7 @@ stateDiagram-v2
 | `AVAILABLE` | 3 | `true` | `probe()` and `init()` succeeded; device is in service |
 | `UNAVAILABLE` | 4 | `false` | `healthCheck()` failed; self-healing retry is scheduled |
 | `ERROR` | 5 | `false` | `init()` failed, or retry budget exhausted |
-| `MANUAL` | 6 | `false` | User-disabled via web UI |
+| `DISABLED` | 6 | `false` | User-disabled via web UI |
 | `REMOVED` | 7 | `false` | Device permanently gone or explicitly removed |
 
 :::note DETECTED state
