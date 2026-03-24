@@ -260,19 +260,6 @@ bool HalEs9826::setFilterPreset(uint8_t preset) {
     return ok;
 }
 
-bool HalEs9826::setChannelVolume(uint8_t channel, uint16_t vol16) {
-    if (!_initialized) return false;
-    bool ok = false;
-    if (channel == 0 || channel == 1) {
-        uint8_t regLsb = (channel == 0) ? ES9826_REG_CH1_VOL_LSB : ES9826_REG_CH2_VOL_LSB;
-        ok = _writeReg16(regLsb, vol16);
-        LOG_D("[HAL:ES9826] Channel %u volume: 0x%04X", channel, vol16);
-    } else {
-        LOG_W("[HAL:ES9826] setChannelVolume: invalid channel %u (0 or 1 only)", channel);
-    }
-    return ok;
-}
-
 // ===== AudioInputSource =====
 
 const AudioInputSource* HalEs9826::getInputSource() const {

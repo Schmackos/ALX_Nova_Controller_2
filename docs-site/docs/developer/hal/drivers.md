@@ -292,7 +292,7 @@ These devices output stereo audio via standard I2S on the mezzanine DIN pin (pin
 | `hpfEnabled` | `true` | High-pass filter enable |
 | `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)` (per-channel 16-bit volume).
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7).
 
 **probe():** Reads chip ID register 0xE1 and verifies it matches the ES9822PRO chip ID.
 
@@ -322,7 +322,7 @@ Note: `adcSetHpfEnabled()` stores the flag for UI state but does not write a ded
 | `pgaGain` | 0 | PGA gain in dB: 0–30 in 3 dB steps |
 | `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7).
 
 ---
 
@@ -350,7 +350,7 @@ Both compatible strings (`ess,es9823pro` and `ess,es9823mpro`) are registered in
 | `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, 18, 24, 30, 36, or 42 |
 | `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7).
 
 ---
 
@@ -373,7 +373,7 @@ Both compatible strings (`ess,es9823pro` and `ess,es9823mpro`) are registered in
 |---|---|---|
 | `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7).
 
 ---
 
@@ -397,7 +397,7 @@ Entry-tier 2-channel SABRE ADC with per-channel 16-bit digital volume, 2-bit DAT
 | `hpfEnabled` | `true` | High-pass filter enable |
 | `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to both channels), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to both channels).
 
 ---
 
@@ -436,7 +436,7 @@ Frame splitting is handled by `HalTdmDeinterleaver` embedded in each driver — 
 | `hpfEnabled` | `true` | High-pass filter enable |
 | `volume` | 100 | Master volume 0–100 (maps to 8-bit per-channel register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7 global), `setChannelVolume(uint8_t ch, uint8_t vol8)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7 global).
 
 **Registered sources:** "ES9843PRO CH1/2" and "ES9843PRO CH3/4".
 
@@ -462,7 +462,7 @@ Frame splitting is handled by `HalTdmDeinterleaver` embedded in each driver — 
 | `hpfEnabled` | `true` | High-pass filter enable |
 | `volume` | 100 | Master volume 0–100 (maps to 16-bit per-channel register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to all 4 channels), `setChannelVolume16(uint8_t ch, uint16_t vol)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to all 4 channels).
 
 **Registered sources:** "ES9842PRO CH1/2" and "ES9842PRO CH3/4".
 
@@ -490,7 +490,7 @@ Frame splitting is handled by `HalTdmDeinterleaver` embedded in each driver — 
 | `hpfEnabled` | `true` | High-pass filter enable |
 | `volume` | 100 | Master volume 0–100 (maps to 8-bit per-channel register, 0xFF=0dB) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7 global), `setChannelVolume(uint8_t ch, uint8_t vol8)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7 global).
 
 **Registered sources:** "ES9841 CH1/2" and "ES9841 CH3/4".
 
@@ -516,7 +516,7 @@ Entry-tier 4-channel SABRE ADC. Architecturally identical to the ES9842PRO — s
 | `hpfEnabled` | `true` | High-pass filter enable |
 | `volume` | 100 | Master volume 0–100 (maps to 16-bit per-channel register) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to all 4 channels), `setChannelVolume16(uint8_t ch, uint16_t vol)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to all 4 channels).
 
 **Registered sources:** "ES9840 CH1/2" and "ES9840 CH3/4".
 

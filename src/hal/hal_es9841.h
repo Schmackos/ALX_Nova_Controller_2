@@ -64,7 +64,6 @@ public:
 
     // ES9841-specific extensions
     bool setFilterPreset(uint8_t preset);              // 0-7 global filter shape
-    bool setChannelVolume(uint8_t ch, uint8_t vol8);   // per-channel 8-bit volume
 
 private:
     uint8_t  _savedVol     = 0xFF;   // Saved volume (0xFF=0dB) for mute/unmute

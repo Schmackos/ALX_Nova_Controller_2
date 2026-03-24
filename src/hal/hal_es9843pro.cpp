@@ -341,23 +341,6 @@ bool HalEs9843pro::setFilterPreset(uint8_t preset) {
     return ok;
 }
 
-bool HalEs9843pro::setChannelVolume(uint8_t ch, uint8_t vol8) {
-    if (!_initialized) return false;
-    const uint8_t volRegs[4] = {
-        ES9843PRO_REG_CH1_VOLUME,
-        ES9843PRO_REG_CH2_VOLUME,
-        ES9843PRO_REG_CH3_VOLUME,
-        ES9843PRO_REG_CH4_VOLUME
-    };
-    if (ch >= 4) {
-        LOG_W("[HAL:ES9843PRO] setChannelVolume: invalid channel %u (0-3 only)", ch);
-        return false;
-    }
-    bool ok = _writeReg(volRegs[ch], vol8);
-    LOG_D("[HAL:ES9843PRO] Channel %u volume: 0x%02X", ch, vol8);
-    return ok;
-}
-
 // ===== AudioInputSource — dual-source TDM accessor =====
 
 const AudioInputSource* HalEs9843pro::getInputSourceAt(int idx) const {

@@ -10,7 +10,6 @@
 //   - Gain settings: 0, 6, 12, 18, 24, 30, 36, 42 dB (42 dB max, values above clamped)
 //   - HPF per-channel enable/disable via I2C (all 4 channels simultaneously)
 //   - 8 global digital filter presets (0-7)
-//   - Per-channel volume via setChannelVolume(ch, vol8) for channels 0-3
 //   - Mute via I2C register (all 4 channels)
 //   - getInputSource() returns AudioInputSource with isHardwareAdc=true
 //
@@ -22,7 +21,6 @@
 //   - adcSetSampleRate(): accepts 44100, 48000, 96000, 192000; rejects 8000
 //   - setFilterPreset(): accepts 0-7 (global); rejects >=8
 //   - setVolume(): 0%->mute(0xFF), 100%->0dB(0x00)
-//   - setChannelVolume(): per-channel 8-bit volume for channels 0-3
 //   - setMute(): all 4 channels muted/unmuted
 //   - configure(): accepts 44100/48000/96000/192000 with 16/24/32 bit depth
 //   - type = HAL_DEV_ADC
@@ -225,14 +223,6 @@ public:
     bool setFilterPreset(uint8_t preset) {
         if (preset >= 8) return false;
         _filterPreset = preset;
-        return true;
-    }
-
-    // ----- ES9843PRO-specific: per-channel 8-bit volume -----
-
-    bool setChannelVolume(uint8_t ch, uint8_t vol8) {
-        if (ch >= 4) return false;
-        _chVolume[ch] = vol8;
         return true;
     }
 };
@@ -537,59 +527,7 @@ void test_volume_all_channels_equal(void) {
 }
 
 // ==========================================================================
-// Section 6: Per-channel volume tests
-// ==========================================================================
-
-// ----- 34. setChannelVolume(0, 0x00) succeeds (CH1, 0dB) -----
-void test_channel_volume_ch0_0db(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume(0, 0x00));
-    TEST_ASSERT_EQUAL_HEX8(0x00, adc->_chVolume[0]);
-}
-
-// ----- 35. setChannelVolume(1, 0xFF) succeeds (CH2, mute) -----
-void test_channel_volume_ch1_mute(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume(1, 0xFF));
-    TEST_ASSERT_EQUAL_HEX8(0xFF, adc->_chVolume[1]);
-}
-
-// ----- 36. setChannelVolume(2, 0x40) succeeds (CH3, mid attenuation) -----
-void test_channel_volume_ch2_mid(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume(2, 0x40));
-    TEST_ASSERT_EQUAL_HEX8(0x40, adc->_chVolume[2]);
-}
-
-// ----- 37. setChannelVolume(3, 0x20) succeeds (CH4) -----
-void test_channel_volume_ch3_custom(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume(3, 0x20));
-    TEST_ASSERT_EQUAL_HEX8(0x20, adc->_chVolume[3]);
-}
-
-// ----- 38. setChannelVolume(4, ...) returns false (out of range) -----
-void test_channel_volume_invalid_channel(void) {
-    adc->init();
-    TEST_ASSERT_FALSE(adc->setChannelVolume(4, 0x00));
-    TEST_ASSERT_FALSE(adc->setChannelVolume(255, 0x00));
-}
-
-// ----- 39. per-channel writes are independent -----
-void test_channel_volume_independent(void) {
-    adc->init();
-    adc->setChannelVolume(0, 0x00);   // CH1: 0dB
-    adc->setChannelVolume(1, 0x40);   // CH2: moderate
-    adc->setChannelVolume(2, 0x80);   // CH3: more attenuation
-    adc->setChannelVolume(3, 0xFF);   // CH4: mute
-    TEST_ASSERT_EQUAL_HEX8(0x00, adc->_chVolume[0]);
-    TEST_ASSERT_EQUAL_HEX8(0x40, adc->_chVolume[1]);
-    TEST_ASSERT_EQUAL_HEX8(0x80, adc->_chVolume[2]);
-    TEST_ASSERT_EQUAL_HEX8(0xFF, adc->_chVolume[3]);
-}
-
-// ==========================================================================
-// Section 7: HPF tests (all 4 channels simultaneously)
+// Section 6: HPF tests (all 4 channels simultaneously)
 // ==========================================================================
 
 // ----- 40. adcSetHpfEnabled(true) enables HPF -----
@@ -615,7 +553,7 @@ void test_hpf_toggle_round_trip(void) {
 }
 
 // ==========================================================================
-// Section 8: Sample rate tests
+// Section 7: Sample rate tests
 // ==========================================================================
 
 // ----- 43. adcSetSampleRate(44100) succeeds -----
@@ -661,7 +599,7 @@ void test_get_sample_rate(void) {
 }
 
 // ==========================================================================
-// Section 9: Filter preset tests (global, single register)
+// Section 8: Filter preset tests (global, single register)
 // ==========================================================================
 
 // ----- 50. setFilterPreset(0-7) all succeed -----
@@ -681,7 +619,7 @@ void test_filter_preset_invalid(void) {
 }
 
 // ==========================================================================
-// Section 10: Mute tests
+// Section 9: Mute tests
 // ==========================================================================
 
 // ----- 52. setMute(true) mutes all channels -----
@@ -707,7 +645,7 @@ void test_mute_off(void) {
 }
 
 // ==========================================================================
-// Section 11: Configure tests
+// Section 10: Configure tests
 // ==========================================================================
 
 // ----- 54. configure(48000, 32) succeeds -----
@@ -812,20 +750,12 @@ int main(int argc, char** argv) {
     RUN_TEST(test_volume_50_percent_midrange);
     RUN_TEST(test_volume_all_channels_equal);
 
-    // Section 6: Per-channel volume
-    RUN_TEST(test_channel_volume_ch0_0db);
-    RUN_TEST(test_channel_volume_ch1_mute);
-    RUN_TEST(test_channel_volume_ch2_mid);
-    RUN_TEST(test_channel_volume_ch3_custom);
-    RUN_TEST(test_channel_volume_invalid_channel);
-    RUN_TEST(test_channel_volume_independent);
-
-    // Section 7: HPF
+    // Section 6: HPF
     RUN_TEST(test_hpf_enable);
     RUN_TEST(test_hpf_disable);
     RUN_TEST(test_hpf_toggle_round_trip);
 
-    // Section 8: Sample rate
+    // Section 7: Sample rate
     RUN_TEST(test_sample_rate_44k1);
     RUN_TEST(test_sample_rate_48k);
     RUN_TEST(test_sample_rate_96k);
@@ -834,15 +764,15 @@ int main(int argc, char** argv) {
     RUN_TEST(test_sample_rate_384k_rejected);
     RUN_TEST(test_get_sample_rate);
 
-    // Section 9: Filter preset
+    // Section 8: Filter preset
     RUN_TEST(test_filter_preset_valid);
     RUN_TEST(test_filter_preset_invalid);
 
-    // Section 10: Mute
+    // Section 9: Mute
     RUN_TEST(test_mute_on);
     RUN_TEST(test_mute_off);
 
-    // Section 11: Configure
+    // Section 10: Configure
     RUN_TEST(test_configure_valid);
     RUN_TEST(test_configure_44k1_24bit);
     RUN_TEST(test_configure_96k_24bit);

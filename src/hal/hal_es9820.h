@@ -40,7 +40,6 @@ public:
 
     // ES9820-specific extensions
     bool setFilterPreset(uint8_t preset);                      // 0-7 per-channel filter shapes (both set simultaneously)
-    bool setChannelVolume(uint8_t channel, uint16_t vol16);    // per-channel 16-bit volume
 
 private:
     AudioInputSource _inputSrc      = {};

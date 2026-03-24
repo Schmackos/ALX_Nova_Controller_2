@@ -40,7 +40,6 @@ public:
 
     // ES9823PRO-specific extensions
     bool setFilterPreset(uint8_t preset);                      // 0-7 filter shapes
-    bool setChannelVolume(uint8_t channel, uint16_t vol16);    // per-channel 16-bit volume
 
 private:
     bool     _isMonolithic = false;  // true when ES9823MPRO (chip ID 0x8C) is detected

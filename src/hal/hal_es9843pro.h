@@ -63,7 +63,6 @@ public:
 
     // ES9843PRO-specific extensions
     bool setFilterPreset(uint8_t preset);                      // 0-7 global filter shapes
-    bool setChannelVolume(uint8_t ch, uint8_t vol8);           // per-channel 8-bit volume
 
 private:
     // TDM deinterleaver — owns the ping-pong DMA split and both AudioInputSource structs

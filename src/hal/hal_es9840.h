@@ -58,7 +58,6 @@ public:
 
     // ES9840-specific extensions
     bool setFilterPreset(uint8_t preset);              // 0-7, applied to all 4 channels
-    bool setChannelVolume16(uint8_t ch, uint16_t vol); // per-channel 16-bit volume
 
 private:
     // TDM deinterleaver — owns the ping-pong DMA split and both AudioInputSource structs

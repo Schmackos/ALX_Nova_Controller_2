@@ -342,24 +342,6 @@ bool HalEs9842pro::setFilterPreset(uint8_t preset) {
     return ok;
 }
 
-bool HalEs9842pro::setChannelVolume16(uint8_t ch, uint16_t vol) {
-    if (!_initialized) return false;
-    // Channel volume register pairs: CH1=0x6D/0x6E, CH2=0x7E/0x7F, CH3=0x8F/0x90, CH4=0xA0/0xA1
-    const uint8_t volLsbRegs[4] = {
-        ES9842PRO_REG_CH1_VOLUME_LSB,
-        ES9842PRO_REG_CH2_VOLUME_LSB,
-        ES9842PRO_REG_CH3_VOLUME_LSB,
-        ES9842PRO_REG_CH4_VOLUME_LSB
-    };
-    if (ch >= 4) {
-        LOG_W("[HAL:ES9842PRO] setChannelVolume16: invalid channel %u (0-3 only)", ch);
-        return false;
-    }
-    bool ok = _writeReg16(volLsbRegs[ch], vol);
-    LOG_D("[HAL:ES9842PRO] Channel %u volume: 0x%04X", ch, vol);
-    return ok;
-}
-
 // ===== AudioInputSource — dual-source TDM accessor =====
 
 const AudioInputSource* HalEs9842pro::getInputSourceAt(int idx) const {

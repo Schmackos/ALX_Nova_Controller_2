@@ -313,20 +313,6 @@ bool HalEs9823pro::setFilterPreset(uint8_t preset) {
     return ok;
 }
 
-bool HalEs9823pro::setChannelVolume(uint8_t channel, uint16_t vol16) {
-    if (!_initialized) return false;
-    bool ok = false;
-    if (channel == 0 || channel == 1) {
-        uint8_t regLsb = (channel == 0) ? ES9823PRO_REG_CH1_VOLUME_LSB
-                                        : ES9823PRO_REG_CH2_VOLUME_LSB;
-        ok = _writeReg16(regLsb, vol16);
-        LOG_D("[HAL:ES9823PRO] Channel %u volume: 0x%04X", channel, vol16);
-    } else {
-        LOG_W("[HAL:ES9823PRO] setChannelVolume: invalid channel %u (0 or 1 only)", channel);
-    }
-    return ok;
-}
-
 // ===== AudioInputSource =====
 
 const AudioInputSource* HalEs9823pro::getInputSource() const {

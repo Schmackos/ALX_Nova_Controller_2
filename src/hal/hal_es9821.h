@@ -47,7 +47,6 @@ public:
 
     // ES9821-specific extensions
     bool setFilterPreset(uint8_t preset);                    // 0-7 filter shapes
-    bool setChannelVolume(uint8_t channel, uint16_t vol16);  // per-channel 16-bit volume
 
 private:
     AudioInputSource _inputSrc      = {};

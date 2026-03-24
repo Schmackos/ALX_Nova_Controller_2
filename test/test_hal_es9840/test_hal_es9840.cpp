@@ -180,12 +180,6 @@ public:
         _filterPreset = preset;
         return true;
     }
-
-    bool setChannelVolume16(uint8_t ch, uint16_t vol) {
-        if (ch >= 4) return false;
-        _chVol16[ch] = vol;
-        return true;
-    }
 };
 
 static HalEs9840Mock* adc;
@@ -423,53 +417,7 @@ void test_volume_all_channels_equal(void) {
 }
 
 // ==========================================================================
-// Section 6: Per-channel 16-bit volume
-// ==========================================================================
-
-void test_channel_volume_ch0_0db(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume16(0, 0x7FFF));
-    TEST_ASSERT_EQUAL_HEX16(0x7FFF, adc->_chVol16[0]);
-}
-
-void test_channel_volume_ch1_mute(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume16(1, 0x0000));
-    TEST_ASSERT_EQUAL_HEX16(0x0000, adc->_chVol16[1]);
-}
-
-void test_channel_volume_ch2_mid(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume16(2, 0x4000));
-    TEST_ASSERT_EQUAL_HEX16(0x4000, adc->_chVol16[2]);
-}
-
-void test_channel_volume_ch3_custom(void) {
-    adc->init();
-    TEST_ASSERT_TRUE(adc->setChannelVolume16(3, 0x2000));
-    TEST_ASSERT_EQUAL_HEX16(0x2000, adc->_chVol16[3]);
-}
-
-void test_channel_volume_invalid_channel(void) {
-    adc->init();
-    TEST_ASSERT_FALSE(adc->setChannelVolume16(4, 0x7FFF));
-    TEST_ASSERT_FALSE(adc->setChannelVolume16(255, 0x7FFF));
-}
-
-void test_channel_volume_independent(void) {
-    adc->init();
-    adc->setChannelVolume16(0, 0x7FFF);
-    adc->setChannelVolume16(1, 0x4000);
-    adc->setChannelVolume16(2, 0x2000);
-    adc->setChannelVolume16(3, 0x0000);
-    TEST_ASSERT_EQUAL_HEX16(0x7FFF, adc->_chVol16[0]);
-    TEST_ASSERT_EQUAL_HEX16(0x4000, adc->_chVol16[1]);
-    TEST_ASSERT_EQUAL_HEX16(0x2000, adc->_chVol16[2]);
-    TEST_ASSERT_EQUAL_HEX16(0x0000, adc->_chVol16[3]);
-}
-
-// ==========================================================================
-// Section 7: HPF tests
+// Section 6: HPF tests
 // ==========================================================================
 
 void test_hpf_enable(void) {
@@ -492,7 +440,7 @@ void test_hpf_toggle_round_trip(void) {
 }
 
 // ==========================================================================
-// Section 8: Sample rate tests
+// Section 7: Sample rate tests
 // ==========================================================================
 
 void test_sample_rate_44k1(void) {
@@ -530,7 +478,7 @@ void test_get_sample_rate(void) {
 }
 
 // ==========================================================================
-// Section 9: Filter preset tests
+// Section 8: Filter preset tests
 // ==========================================================================
 
 void test_filter_preset_valid(void) {
@@ -547,7 +495,7 @@ void test_filter_preset_invalid(void) {
 }
 
 // ==========================================================================
-// Section 10: Mute tests
+// Section 9: Mute tests
 // ==========================================================================
 
 void test_mute_on(void) {
@@ -571,7 +519,7 @@ void test_mute_off(void) {
 }
 
 // ==========================================================================
-// Section 11: Configure tests
+// Section 10: Configure tests
 // ==========================================================================
 
 void test_configure_valid(void) {
@@ -665,20 +613,12 @@ int main(int argc, char** argv) {
     RUN_TEST(test_volume_50_percent_midrange);
     RUN_TEST(test_volume_all_channels_equal);
 
-    // Section 6: Per-channel 16-bit volume
-    RUN_TEST(test_channel_volume_ch0_0db);
-    RUN_TEST(test_channel_volume_ch1_mute);
-    RUN_TEST(test_channel_volume_ch2_mid);
-    RUN_TEST(test_channel_volume_ch3_custom);
-    RUN_TEST(test_channel_volume_invalid_channel);
-    RUN_TEST(test_channel_volume_independent);
-
-    // Section 7: HPF
+    // Section 6: HPF
     RUN_TEST(test_hpf_enable);
     RUN_TEST(test_hpf_disable);
     RUN_TEST(test_hpf_toggle_round_trip);
 
-    // Section 8: Sample rate
+    // Section 7: Sample rate
     RUN_TEST(test_sample_rate_44k1);
     RUN_TEST(test_sample_rate_48k);
     RUN_TEST(test_sample_rate_96k);
@@ -687,15 +627,15 @@ int main(int argc, char** argv) {
     RUN_TEST(test_sample_rate_384k_rejected);
     RUN_TEST(test_get_sample_rate);
 
-    // Section 9: Filter preset
+    // Section 8: Filter preset
     RUN_TEST(test_filter_preset_valid);
     RUN_TEST(test_filter_preset_invalid);
 
-    // Section 10: Mute
+    // Section 9: Mute
     RUN_TEST(test_mute_on);
     RUN_TEST(test_mute_off);
 
-    // Section 11: Configure
+    // Section 10: Configure
     RUN_TEST(test_configure_valid);
     RUN_TEST(test_configure_44k1_24bit);
     RUN_TEST(test_configure_96k_24bit);
