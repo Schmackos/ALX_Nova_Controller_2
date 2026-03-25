@@ -10,7 +10,11 @@ Community-built modules can apply for "Works with ALX" certification. Certified 
 
 ## Connector Pinout
 
-The connector is a 14-pin keyed header. Pins 1–9 carry shared bus signals present on every slot; pins 10–14 are per-slot and routed to unique GPIOs on the carrier board.
+The connector is a **16-pin** keyed header (Revision 2+). Pins 1–9 carry shared bus signals present on every slot; pins 10–14 are per-slot and routed to unique GPIOs on the carrier board; pins 15–16 are the analog power rails added in Revision 2.
+
+:::note Revision 1 vs Revision 2 connectors
+Revision 1 carrier boards use a 14-pin connector — pins 15 and 16 are absent. The ±15V rails must be sourced externally on Revision 1 designs. All new carrier board designs should target the 16-pin Revision 2 pinout. See [Power Supply Design](./power-supply) for +15V and −15V rail specifications.
+:::
 
 ### Shared bus signals
 
@@ -39,6 +43,8 @@ Each connector position on the carrier board routes the following signals to dis
 | 12 | CHIP\_EN | Output | Device enable, active high; de-asserted during HAL deinit |
 | 13 | INT\_N | Input | Optional open-drain interrupt or status output from the module |
 | 14 | RESERVED | — | Reserved for future use; leave unconnected on mezzanine |
+| 15 | +15V | Power | +15V analog rail from carrier LT3045 regulator; for op-amp I/V stage mezzanines. See [Power Supply Design](./power-supply). |
+| 16 | −15V | Power | −15V analog rail from carrier LT3580 inverting converter; for op-amp I/V stage mezzanines. See [Power Supply Design](./power-supply). |
 
 :::info INT\_N is optional
 The HAL does not poll or wait on INT\_N during normal operation. It is intended for future event-driven health monitoring. Modules that do not implement an interrupt may leave pin 13 unconnected on both ends.
@@ -261,7 +267,7 @@ Use C0G/NP0 dielectric for the small-value capacitors on analog supplies. X5R is
 
 ### Mechanical
 
-The connector on the carrier is a 2.54 mm pitch, 14-pin, single-row, right-angle or vertical male header. The mezzanine mates with a matching female socket. Provide at minimum two M3 mounting hole positions aligned with the carrier board standoff pattern to prevent mechanical stress on the connector pins.
+The connector on the carrier is a 2.54 mm pitch, 16-pin (Revision 2+) or 14-pin (Revision 1), single-row, right-angle or vertical male header. The mezzanine mates with a matching female socket. Provide at minimum two M3 mounting hole positions aligned with the carrier board standoff pattern to prevent mechanical stress on the connector pins.
 
 :::warning Keying
 Pin 1 is the 5V power supply. Reversing the connector will apply 5V to the I2C and I2S signal lines, permanently damaging the ESP32-P4 GPIO inputs and the ADC. The connector must be mechanically keyed (polarized housing or pin-1 marker silk screen) to prevent incorrect insertion. All officially certified modules use a keyed Molex PicoBlade or equivalent connector housing.

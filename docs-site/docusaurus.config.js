@@ -39,7 +39,12 @@ const config = {
         hashed: true,
         language: ['en'],
         highlightSearchTermsOnTargetPage: true,
-        searchResultLimits: 8,
+        searchResultLimits: 15,
+        searchResultContextMaxLength: 80,
+        explicitSearchResultPath: true,
+        indexBlog: true,
+        indexPages: true,
+        docsRouteBasePath: '/docs',
       },
     ],
   ],
@@ -58,7 +63,12 @@ const config = {
           remarkPlugins: [remarkMath],
           rehypePlugins: [rehypeKatex],
         },
-        blog: false,
+        blog: {
+          showReadingTime: true,
+          blogTitle: 'ALX Nova Release Notes',
+          postsPerPage: 10,
+          feedOptions: { type: 'all' },
+        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -127,6 +137,28 @@ const config = {
             label: 'Developer Docs',
           },
           {
+            type: 'docSidebar',
+            sidebarId: 'enterpriseSidebar',
+            position: 'left',
+            label: 'Enterprise',
+          },
+          {
+            type: 'doc',
+            docId: 'developer/api/rest-main',
+            position: 'left',
+            label: 'API Reference',
+          },
+          {
+            to: '/blog',
+            label: 'Release Notes',
+            position: 'left',
+          },
+          {
+            to: '/showcase',
+            label: 'Showcase',
+            position: 'left',
+          },
+          {
             href: 'https://github.com/Schmackos/ALX_Nova_Controller_2',
             label: 'GitHub',
             position: 'right',
@@ -167,6 +199,23 @@ const config = {
               {
                 label: 'Build Setup',
                 to: '/docs/developer/build-setup',
+              },
+            ],
+          },
+          {
+            title: 'Enterprise',
+            items: [
+              {
+                label: 'OEM Integration',
+                to: '/docs/enterprise/oem-integration',
+              },
+              {
+                label: 'Production Deployment',
+                to: '/docs/enterprise/production-deployment',
+              },
+              {
+                label: 'Certification',
+                to: '/docs/enterprise/certification',
               },
             ],
           },

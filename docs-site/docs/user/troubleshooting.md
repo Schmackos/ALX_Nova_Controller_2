@@ -8,6 +8,41 @@ description: Common issues and solutions for the ALX Nova Controller 2.
 
 This page collects the most common problems reported by users, grouped by category. If your issue is not listed here, check the Debug Console in the web interface (filter by **Warning** or **Error**) for clues, then open an issue on GitHub.
 
+## Quick Diagnosis Flowcharts
+
+Use these flowcharts to find the most likely cause before reading the detailed sections below.
+
+### No Audio Output
+
+```mermaid
+flowchart TD
+  A[No audio output] --> B{DSP enabled?\nSettings → DSP tab}
+  B -->|No| C[Enable DSP in web UI]
+  B -->|Yes| D{HAL device shown\nin Devices tab?}
+  D -->|No| E[Run HAL rescan:\nPOST /api/hal/rescan]
+  D -->|Yes| F{Device status\n= AVAILABLE?}
+  F -->|No| G[Check health dashboard\nGET /api/health]
+  F -->|Yes| H{Matrix routing\nconfigured?}
+  H -->|No| I[Set input to output route\nin Matrix tab]
+  H -->|Yes| J[Check serial log\nfor DIAG_AUDIO_* errors]
+```
+
+### HAL Device Not Detected
+
+```mermaid
+flowchart TD
+  A[Device not detected] --> B{EEPROM\nprogrammed?}
+  B -->|No| C[Program EEPROM:\ntools/eeprom/ scripts]
+  B -->|Yes| D{Bus 0 device?}
+  D -->|Yes| E{WiFi active?}
+  E -->|Yes| F[Disable WiFi or use\nBus 1/2 expansion]
+  E -->|No| G[Run rescan:\nPOST /api/hal/rescan]
+  D -->|No| G
+  G --> H{Fault logged?\nGET /api/hal/faults}
+  H -->|Yes| I[Clear fault and retry:\nDELETE /api/hal/faults]
+  H -->|No| J[Check I2C address\nconflict in device DB]
+```
+
 ---
 
 ## WiFi Issues

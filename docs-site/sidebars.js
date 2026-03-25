@@ -49,6 +49,7 @@ const sidebars = {
         'developer/api/rest-pipeline',
         'developer/api/rest-eeprom',
         'developer/api/rest-health',
+        'developer/api/versioning-policy',
         'developer/websocket',
       ],
     },
@@ -93,6 +94,14 @@ const sidebars = {
       ],
     },
     'developer/contributing',
+  ],
+
+  enterpriseSidebar: [
+    'enterprise/overview',
+    'enterprise/oem-integration',
+    'enterprise/production-deployment',
+    'enterprise/certification',
+    'enterprise/support-tiers',
   ],
 };
 
