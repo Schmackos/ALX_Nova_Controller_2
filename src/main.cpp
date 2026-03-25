@@ -43,6 +43,7 @@
 #include "hal/hal_button.h"
 #include "hal/hal_signal_gen.h"
 #include "hal/hal_custom_device.h"
+#include "hal/hal_cirrus_dac_2ch.h"
 #include "drivers/es8311_regs.h"
 #include "pipeline_api.h"
 #endif
@@ -1314,6 +1315,42 @@ void loop() {
       audio_pipeline_check_format();
     }
   }
+
+#ifdef DAC_ENABLED
+  // DSD DAC mode switching — when a lane transitions to/from DoP DSD, switch all
+  // DSD-capable Cirrus Logic DAC sinks into/out of DSD mode.
+  // EVT_FORMAT_CHANGE is signalled by the pipeline when laneDsd[] changes.
+  {
+    static bool prevLaneDsd[AUDIO_PIPELINE_MAX_INPUTS] = {};
+    bool anyChange = false;
+    for (uint8_t lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+      if (prevLaneDsd[lane] != appState.audio.laneDsd[lane]) {
+        anyChange = true;
+        prevLaneDsd[lane] = appState.audio.laneDsd[lane];
+      }
+    }
+    if (anyChange) {
+      // Determine whether any lane is now in DSD mode
+      bool anyDsd = false;
+      for (uint8_t lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        if (appState.audio.laneDsd[lane]) { anyDsd = true; break; }
+      }
+      // Iterate all pipeline sinks; find DSD-capable Cirrus DACs and switch mode
+      int sinkCount = audio_pipeline_get_sink_count();
+      for (int s = 0; s < sinkCount; s++) {
+        const AudioOutputSink* sink = audio_pipeline_get_sink(s);
+        if (!sink || !sink->supportsDsd || sink->halSlot == 0xFF) continue;
+        HalDevice* dev = HalDeviceManager::instance().getDevice(sink->halSlot);
+        if (!dev) continue;
+        // Cast to HalCirrusDac2ch — only Cirrus 2ch DACs expose setDsdMode()
+        HalCirrusDac2ch* cirrus = dynamic_cast<HalCirrusDac2ch*>(dev);
+        if (cirrus) {
+          cirrus->setDsdMode(anyDsd);
+        }
+      }
+    }
+  }
+#endif
 
   // Rule 8: Sustained Clipping — clipRate >1% for >5 consecutive checks (25s)
   {

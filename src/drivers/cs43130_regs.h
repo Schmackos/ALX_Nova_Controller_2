@@ -133,4 +133,20 @@
 // Default functional mode: I2S slave, 32-bit word length, normal speed
 #define CS43130_IFACE_DEFAULT         (CS43130_FMT_I2S | CS43130_WL_32BIT)
 
+// ===== DSD Path Registers =====
+// CS43130 supports DSD64 only (up to 2.8MHz / DSD64).
+// DSD128 is NOT supported on CS43130 — only CS43198 and CS43131 support DSD128.
+// Register map mirrors CS43198/CS43131.
+#define CS43130_REG_DSD_PATH          0x0030  // DSD path control
+#define CS43130_REG_DSD_INT           0x0031  // DSD interface control
+
+// CS43130_REG_DSD_PATH bit fields
+// bit0 = DSD_EN (1=enable DSD path, 0=disable / return to PCM)
+#define CS43130_DSD_PATH_ENABLE       0x01    // Enable DSD path
+#define CS43130_DSD_PATH_DISABLE      0x00    // Disable DSD path (PCM mode)
+
+// CS43130_REG_DSD_INT bit fields
+// bits[1:0] = DSD_IFACE (0=standard DSD, 1=DoP, 2=reserved, 3=reserved)
+#define CS43130_DSD_INT_DOP           0x01    // DoP (DSD over PCM) interface mode
+
 #endif // CS43130_REGS_H

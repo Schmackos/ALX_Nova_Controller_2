@@ -117,6 +117,17 @@ struct CirrusDac2chDescriptor {
     uint8_t  nosEnableVal;       // Value to write when enabling NOS
     uint8_t  nosDisableVal;      // Value to write when disabling NOS
 
+    // DSD mode control (present on chips with HAL_CAP_DSD)
+    // 0xFFFF in regDsdPath means "no DSD support" (e.g. CS4399)
+    // For CS4398: regDsdPath = regModeCtl (CHSL bit), regDsdInt = 0xFFFF (no iface reg)
+    uint16_t regDsdPath;         // DSD path enable register (0xFFFF = no DSD)
+    uint8_t  dsdPathEnable;      // Value to enable DSD path
+    uint8_t  dsdPathDisable;     // Value to disable DSD path (return to PCM)
+    uint8_t  dsdPathMask;        // Mask for read-modify-write (0xFF for CS4398 single-bit)
+    uint16_t regDsdInt;          // DSD interface control register (0xFFFF = not applicable)
+    uint8_t  dsdIntDefault;      // Default DSD interface config (written on DSD enable)
+    uint8_t  dsdFuncMode;        // FUNC_MODE value for DSD (0xFF = not applicable)
+
     // Logging prefix (e.g. "[HAL:CS43198]")
     const char* logPrefix;
 };
@@ -152,10 +163,16 @@ public:
     bool setNosMode(bool enable);
     bool isNosMode() const;
 
+    // DSD mode switching — mute → write DSD regs → unmute sequence.
+    // Returns false immediately if chip has no DSD support (regDsdPath == 0xFFFF).
+    bool setDsdMode(bool enable);
+    bool isDsdMode() const;
+
 private:
     const CirrusDac2chDescriptor& _desc;
     bool _hpAmpEnabled = false;
     bool _nosEnabled   = false;
+    bool _dsdEnabled   = false;
 
     // Dispatch write/read based on descriptor regType
     bool    _writeReg(uint16_t reg, uint8_t val);

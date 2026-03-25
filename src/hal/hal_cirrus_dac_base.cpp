@@ -228,6 +228,8 @@ bool HalCirrusDacBase::buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
     out->write        = _cirrus_dac_write;
     out->isReady      = _cirrus_dac_ready_fn[sinkSlot];
     out->ctx          = this;
+    // Advertise DSD capability so the pipeline format check can route DoP lanes
+    out->supportsDsd  = (_descriptor.capabilities & HAL_CAP_DSD) != 0;
 
     // Register in static table for isReady/write callback lookup
     _cirrus_dac_slot_dev[sinkSlot] = this;

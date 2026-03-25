@@ -116,6 +116,11 @@
 
 // CS4398_REG_MODE_CTL (0x02) — DSD bit
 #define CS4398_DSD_BIT             0x40   // bit6: 1=DSD input, 0=PCM input
+// CS4398 DSD mode is controlled via a single MODE_CTL CHSL bit (no separate DSD path/int regs).
+// DSD enable:  set bit6 (CS4398_DSD_BIT) in REG_MODE_CTL
+// DSD disable: clear bit6 in REG_MODE_CTL
+#define CS4398_DSD_PATH_ENABLE     CS4398_DSD_BIT  // Alias for generic DSD enable
+#define CS4398_DSD_PATH_DISABLE    0x00             // Alias for generic DSD disable (clears CHSL)
 
 // CS4398_REG_MODE_CTL (0x02) — control port enable
 #define CS4398_CP_EN_BIT           0x80   // bit7: 1=control port enabled
