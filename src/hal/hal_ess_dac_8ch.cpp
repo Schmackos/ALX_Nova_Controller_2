@@ -192,7 +192,7 @@ const EssDac8chDescriptor kDescES9038PRO = {
     /* altChipId         */ 0xFF,
     /* altChipName       */ nullptr,
     /* altCompatible     */ nullptr,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates8ch,
     /* supportedRateCount*/ 6,
@@ -228,7 +228,7 @@ const EssDac8chDescriptor kDescES9028PRO = {
     /* altChipId         */ 0xFF,
     /* altChipName       */ nullptr,
     /* altCompatible     */ nullptr,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates8ch,
     /* supportedRateCount*/ 6,
@@ -264,7 +264,7 @@ const EssDac8chDescriptor kDescES9039PRO = {
     /* altChipId         */ ES9039MPRO_CHIP_ID,
     /* altChipName       */ "ES9039MPRO",
     /* altCompatible     */ "ess,es9039mpro",
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates8ch,
     /* supportedRateCount*/ 6,
@@ -300,7 +300,7 @@ const EssDac8chDescriptor kDescES9027PRO = {
     /* altChipId         */ 0xFF,
     /* altChipName       */ nullptr,
     /* altCompatible     */ nullptr,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates8ch,
     /* supportedRateCount*/ 6,
@@ -336,7 +336,7 @@ const EssDac8chDescriptor kDescES9081 = {
     /* altChipId         */ 0xFF,
     /* altChipName       */ nullptr,
     /* altCompatible     */ nullptr,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates8ch,
     /* supportedRateCount*/ 6,
@@ -372,7 +372,7 @@ const EssDac8chDescriptor kDescES9082 = {
     /* altChipId         */ 0xFF,
     /* altChipName       */ nullptr,
     /* altCompatible     */ nullptr,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates8ch,
     /* supportedRateCount*/ 6,
@@ -408,7 +408,7 @@ const EssDac8chDescriptor kDescES9017 = {
     /* altChipId         */ 0xFF,
     /* altChipName       */ nullptr,
     /* altCompatible     */ nullptr,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates8ch,
     /* supportedRateCount*/ 6,
@@ -634,6 +634,25 @@ bool HalEssDac8ch::healthCheck() {
 #else
     return _initialized;
 #endif
+}
+
+ClockStatus HalEssDac8ch::getClockStatus() {
+    ClockStatus cs = {};
+    if (!_initialized || _state != HAL_STATE_AVAILABLE) {
+        strncpy(cs.description, "not available", sizeof(cs.description) - 1);
+        return cs;
+    }
+#ifndef NATIVE_TEST
+    uint8_t status = _readReg(ESS_SABRE_REG_DPLL_LOCK);
+    cs.available = true;
+    cs.locked = (status & ESS_SABRE_DPLL_LOCKED_BIT) != 0;
+    strncpy(cs.description, cs.locked ? "DPLL locked" : "DPLL unlocked", sizeof(cs.description) - 1);
+#else
+    cs.available = true;
+    cs.locked = true;
+    strncpy(cs.description, "DPLL locked", sizeof(cs.description) - 1);
+#endif
+    return cs;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 #ifdef DAC_ENABLED
 
 #include "hal_builtin_devices.h"
+#include "hal_device_manager.h"
 #include "hal_driver_registry.h"
 #include "hal_types.h"
 #include "hal_device_db.h"  // HAL_DB_MAX_ENTRIES for static_assert
@@ -205,5 +206,31 @@ static_assert(HAL_BUILTIN_DRIVER_COUNT <= HAL_MAX_DRIVERS,
               "HAL_BUILTIN_DRIVER_COUNT exceeds HAL_MAX_DRIVERS — increase in hal_types.h");
 static_assert(HAL_BUILTIN_DRIVER_COUNT <= HAL_DB_MAX_ENTRIES,
               "HAL_BUILTIN_DRIVER_COUNT exceeds HAL_DB_MAX_ENTRIES — increase in hal_device_db.h");
+
+// ===== Dependency wiring =====
+// Called from main.cpp after all onboard devices are registered.
+// Uses compatible-string lookup so the slot indices are resolved at runtime.
+void hal_wire_builtin_dependencies() {
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+
+    // NS4150B mono amp depends on ES8311 codec — shares PA control GPIO.
+    // The amp must not be enabled before the codec is ready.
+    HalDevice* es8311  = mgr.findByCompatible(COMPAT_ES8311);
+    HalDevice* ns4150b = mgr.findByCompatible(COMPAT_NS4150B);
+    if (es8311 && ns4150b) {
+        ns4150b->addDependency(es8311->getSlot());
+        LOG_I("[HAL] Dep: NS4150B (slot %u) -> ES8311 (slot %u)",
+              ns4150b->getSlot(), es8311->getSlot());
+    }
+
+    // DSP bridge depends on the primary audio codec so it initialises after
+    // the codec is available and the I2S TX path is live.
+    HalDevice* dsp = mgr.findByCompatible("alx,dsp-pipeline");
+    if (dsp && es8311) {
+        dsp->addDependency(es8311->getSlot());
+        LOG_I("[HAL] Dep: DSP bridge (slot %u) -> ES8311 (slot %u)",
+              dsp->getSlot(), es8311->getSlot());
+    }
+}
 
 #endif // DAC_ENABLED

@@ -69,6 +69,27 @@ public:
     uint16_t getInitPriority() const { return _initPriority; }
     HalDiscovery getDiscovery() const { return _discovery; }
 
+    // ----- Clock quality diagnostics (optional, opt-in per driver) -----
+    // Drivers with HAL_CAP_APLL or HAL_CAP_DPLL override this method.
+    // Called from main-loop context only (health check, WS broadcast).
+    // Default returns not-available ClockStatus (not supported).
+    virtual ClockStatus getClockStatus() {
+        ClockStatus cs = {};
+        strncpy(cs.description, "N/A", sizeof(cs.description) - 1);
+        return cs;
+    }
+
+    // ----- Device dependency graph -----
+    // Bitmask of HAL slot indices this device depends on (slots 0-31).
+    // initAll() performs a topological sort using these masks before priority ordering.
+    void addDependency(uint8_t slot) {
+        if (slot < 32) _dependsOn |= (1UL << slot);
+    }
+    bool hasDependency(uint8_t slot) const {
+        return (slot < 32) && ((_dependsOn >> slot) & 1U);
+    }
+    uint32_t getDependencies() const { return _dependsOn; }
+
     // ----- Power management (optional, opt-in per driver) -----
     // Drivers that support HAL_CAP_POWER_MGMT override these methods.
     // Default implementations return false (unsupported).
@@ -124,12 +145,13 @@ protected:
     uint8_t             _slot;
     uint16_t            _initPriority;
     HalDiscovery        _discovery;
+    uint32_t            _dependsOn = 0;  // Bitmask of slots this device depends on
 
     friend class HalDeviceManager;
 
     HalDevice() : _ready(false), _state(HAL_STATE_UNKNOWN), _powerState(HAL_PM_ACTIVE),
                   _slot(0), _initPriority(HAL_PRIORITY_HARDWARE),
-                  _discovery(HAL_DISC_BUILTIN) {
+                  _discovery(HAL_DISC_BUILTIN), _dependsOn(0) {
         memset(&_descriptor, 0, sizeof(_descriptor));
         _lastError[0] = '\0';
     }

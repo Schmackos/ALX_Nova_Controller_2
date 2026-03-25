@@ -127,6 +127,10 @@ public:
     // Filter preset override
     bool setFilterPreset(uint8_t preset) override;
 
+    // Clock quality diagnostics — reads DPLL lock status from register ESS_SABRE_REG_DPLL_LOCK (0xE2).
+    // Returns available=true when device is AVAILABLE; locked reflects bit0 of the status register.
+    ClockStatus getClockStatus() override;
+
     // Generic chip-specific feature API (MQA / line driver / APLL)
     bool setFeatureEnabled(bool enable);
     bool isFeatureActive() const;

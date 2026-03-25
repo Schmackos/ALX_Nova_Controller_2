@@ -389,6 +389,9 @@ void setup() {
     _halSignalGen->probe();
     _halSignalGen->init();  // Reads gpioA config override, calls siggen_init(pin)
   }
+
+  // Wire known static inter-device dependencies (must be after all onboard devices registered)
+  hal_wire_builtin_dependencies();
 #endif
 
   // Load MQTT settings

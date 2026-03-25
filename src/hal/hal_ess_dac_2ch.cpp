@@ -202,7 +202,7 @@ const EssDac2chDescriptor kDescES9038Q2M = {
     /* compatible        */ "ess,es9038q2m",
     /* chipName          */ "ES9038Q2M",
     /* chipId            */ ES9038Q2M_CHIP_ID,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates6,
     /* supportedRateCount*/ 6,
@@ -237,7 +237,7 @@ const EssDac2chDescriptor kDescES9039Q2M = {
     /* compatible        */ "ess,es9039q2m",
     /* chipName          */ "ES9039Q2M",
     /* chipId            */ ES9039Q2M_CHIP_ID,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates6,
     /* supportedRateCount*/ 6,
@@ -272,7 +272,7 @@ const EssDac2chDescriptor kDescES9069Q = {
     /* compatible        */ "ess,es9069q",
     /* chipName          */ "ES9069Q",
     /* chipId            */ ES9069Q_CHIP_ID,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_MQA),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_MQA | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates6,
     /* supportedRateCount*/ 6,
@@ -307,7 +307,7 @@ const EssDac2chDescriptor kDescES9033Q = {
     /* compatible        */ "ess,es9033q",
     /* chipName          */ "ES9033Q",
     /* chipId            */ ES9033Q_CHIP_ID,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_LINE_DRIVER),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_LINE_DRIVER | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     /* supportedRates    */ kRates6,
     /* supportedRateCount*/ 6,
@@ -342,7 +342,7 @@ const EssDac2chDescriptor kDescES9020Dac = {
     /* compatible        */ "ess,es9020-dac",
     /* chipName          */ "ES9020",
     /* chipId            */ ES9020_CHIP_ID,
-    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_APLL),
+    /* capabilities      */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_APLL | HAL_CAP_DPLL),
     /* sampleRateMask    */ HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K,
     /* supportedRates    */ kRates4,
     /* supportedRateCount*/ 4,
@@ -544,6 +544,25 @@ bool HalEssDac2ch::healthCheck() {
 #else
     return _initialized;
 #endif
+}
+
+ClockStatus HalEssDac2ch::getClockStatus() {
+    ClockStatus cs = {};
+    if (!_initialized || _state != HAL_STATE_AVAILABLE) {
+        strncpy(cs.description, "not available", sizeof(cs.description) - 1);
+        return cs;
+    }
+#ifndef NATIVE_TEST
+    uint8_t status = _readReg(ESS_SABRE_REG_DPLL_LOCK);
+    cs.available = true;
+    cs.locked = (status & ESS_SABRE_DPLL_LOCKED_BIT) != 0;
+    strncpy(cs.description, cs.locked ? "DPLL locked" : "DPLL unlocked", sizeof(cs.description) - 1);
+#else
+    cs.available = true;
+    cs.locked = true;
+    strncpy(cs.description, "DPLL locked", sizeof(cs.description) - 1);
+#endif
+    return cs;
 }
 
 // ===========================================================================

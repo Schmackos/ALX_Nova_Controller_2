@@ -106,6 +106,9 @@ public:
     // Filter preset override
     bool setFilterPreset(uint8_t preset) override;
 
+    // Clock quality diagnostics — reads DPLL lock status from register ESS_SABRE_REG_DPLL_LOCK (0xE2).
+    ClockStatus getClockStatus() override;
+
     // Multi-sink: 4 stereo pairs from 8 channels
     int  getSinkCount() const override { return _sinksBuilt ? 4 : 0; }
     bool buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) override;

@@ -7,4 +7,9 @@
 // Register all builtin driver entries in the HAL registry
 void hal_register_builtins();
 
+// Wire known static dependencies between onboard devices.
+// Call after all onboard devices have been registered with the HalDeviceManager.
+// Sets _dependsOn bitmasks for REST/WS API and initAll() topological sort.
+void hal_wire_builtin_dependencies();
+
 #endif // DAC_ENABLED

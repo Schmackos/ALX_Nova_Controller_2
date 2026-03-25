@@ -1815,6 +1815,8 @@
         .hal-form-row input[type="range"] { flex: 1; }
         .hal-form-buttons { display: flex; gap: 8px; margin-top: 10px; }
         .hal-cap-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.6); margin:0 1px; }
+        .hal-clock-indicator { display:inline-flex; align-items:center; margin:0 2px; vertical-align:middle; }
+        .hal-dep-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; background:rgba(100,149,237,0.15); color:rgba(147,197,253,0.85); margin:0 1px; border:1px solid rgba(100,149,237,0.2); }
 
         /* HAL Device Enable Toggle */
         .hal-enable-toggle { display:inline-flex; align-items:center; cursor:pointer; margin-right:4px; vertical-align:middle; }
