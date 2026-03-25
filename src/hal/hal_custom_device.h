@@ -47,7 +47,7 @@ struct HalInitRegPair {
 class HalCustomDevice : public HalAudioDevice {
 public:
     HalCustomDevice(const char* compatible, const char* name,
-                    uint16_t caps, HalBusType busType, HalDeviceType devType = HAL_DEV_DAC);
+                    uint32_t caps, HalBusType busType, HalDeviceType devType = HAL_DEV_DAC);
     virtual ~HalCustomDevice() {}
 
     bool probe() override;

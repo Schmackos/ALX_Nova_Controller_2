@@ -415,7 +415,7 @@ The macro wraps the boilerplate of creating a `HalDriverEntry`, filling its fiel
 The `HalDriverEntry.compatible` field is the lookup key used during 3-tier discovery (I2C bus scan → EEPROM probe → manual config). It must match the string set in your constructor's `_descriptor.compatible` field exactly.
 
 :::caution Registry capacity
-`HAL_MAX_DRIVERS` is 32. All callers of `hal_registry_register()` check the return value and emit `LOG_W` on failure. If the registry is full, the registration is silently dropped and the device will not be discoverable. Check `HAL_MAX_DRIVERS` in `src/hal/hal_types.h` if you need to increase the limit.
+`HAL_MAX_DRIVERS` is 64. All callers of `hal_registry_register()` check the return value and emit `LOG_W` on failure. If the registry is full, the registration is silently dropped and the device will not be discoverable. Check `HAL_MAX_DRIVERS` in `src/hal/hal_types.h` if you need to increase the limit.
 :::
 
 ### Step 4 — Add an entry to the device database
@@ -600,7 +600,7 @@ All fields live in `HalDeviceDescriptor` (defined in `src/hal/hal_types.h`). Set
 | `bus.index` | `uint8_t` | Bus instance index (I2C: 0=ext, 1=onboard, 2=expansion). |
 | `i2cAddr` | `uint8_t` | 7-bit I2C address (0 = not applicable). |
 | `sampleRatesMask` | `uint32_t` | Bitmask of supported rates. See `HAL_RATE_*` constants. |
-| `capabilities` | `uint16_t` | Bitmask of `HAL_CAP_*` flags (see below). |
+| `capabilities` | `uint32_t` | Bitmask of `HAL_CAP_*` flags (see below). |
 | `instanceId` | `uint8_t` | Auto-assigned by device manager. Do not set in constructor. |
 | `maxInstances` | `uint8_t` | Maximum concurrent instances of this compatible string (0 = type default). |
 
@@ -636,7 +636,7 @@ All fields live in `HalDeviceDescriptor` (defined in `src/hal/hal_types.h`). Set
 | `HAL_CAP_DSD` | 11 | DSD native playback |
 
 :::note
-The `capabilities` field is `uint16_t` (widened from the original `uint8_t` to accommodate bits 8-11). Defined in `src/hal/hal_types.h`.
+The `capabilities` field is `uint32_t` (widened from `uint16_t` to provide room for future capability bits 16-31). Defined in `src/hal/hal_types.h`.
 :::
 
 The pipeline bridge uses `HAL_CAP_DAC_PATH` and `HAL_CAP_ADC_PATH` to decide whether to register the device as an output sink or an input source when it transitions to AVAILABLE. Getting these flags wrong means the device will not appear in the audio routing matrix.

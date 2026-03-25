@@ -1074,7 +1074,7 @@ void hal_load_auto_devices() {
         }
 
         HalDevice* dev = entry->factory();
-        int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
+        int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL, true);
         if (slot < 0) {
             delete dev;
             LOG_W("[HAL:DB]No free slot for '%s' — skip", compatible);

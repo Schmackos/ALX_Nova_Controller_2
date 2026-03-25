@@ -9,7 +9,7 @@
 #define HAL_MAX_DEVICES  32
 #define HAL_MAX_PINS     56
 #define HAL_GPIO_MAX     54   // ESP32-P4 highest valid GPIO (0-54)
-#define HAL_MAX_DRIVERS  48
+#define HAL_MAX_DRIVERS  64
 
 // ===== Device Types =====
 enum HalDeviceType : uint8_t {
@@ -86,7 +86,7 @@ enum HalPowerState : uint8_t {
 #define HAL_CAP_PGA_CONTROL  (1 << 5)   // ADC gain knob
 #define HAL_CAP_HPF_CONTROL  (1 << 6)   // ADC HPF toggle
 #define HAL_CAP_CODEC        (1 << 7)   // both ADC + DAC paths
-// Bits 8-11: extended flags (require uint16_t capabilities field)
+// Bits 8-15: extended flags (uint32_t capabilities field)
 #define HAL_CAP_MQA          (1 << 8)   // MQA decoder support
 #define HAL_CAP_LINE_DRIVER  (1 << 9)   // Line driver outputs
 #define HAL_CAP_APLL         (1 << 10)  // Asynchronous PLL
@@ -133,7 +133,7 @@ struct HalDeviceDescriptor {
     uint8_t       i2cAddr;           // Primary I2C address (0 = none)
     uint8_t       channelCount;      // 1-8 audio channels
     uint32_t      sampleRatesMask;   // Bit per rate: b0=8k, b1=16k, b2=44.1k, b3=48k, b4=96k
-    uint16_t      capabilities;      // HAL_CAP_* flags (bits 0-7 legacy, bits 8-15 extended)
+    uint32_t      capabilities;      // HAL_CAP_* flags (bits 0-7 legacy, bits 8-15 extended)
     uint8_t       instanceId;        // Auto-assigned per compatible string (0-based)
     uint8_t       maxInstances;      // Max concurrent instances (0 = use default by type)
 };
@@ -273,7 +273,7 @@ inline void hal_init_descriptor(HalDeviceDescriptor& d,
     const char* compatible, const char* name, const char* manufacturer,
     HalDeviceType type, uint8_t channels, uint8_t i2cAddr,
     HalBusType busType, uint8_t busIndex,
-    uint32_t ratesMask, uint16_t caps)
+    uint32_t ratesMask, uint32_t caps)
 {
     memset(&d, 0, sizeof(d));
     hal_safe_strcpy(d.compatible, sizeof(d.compatible), compatible);
@@ -287,3 +287,4 @@ inline void hal_init_descriptor(HalDeviceDescriptor& d,
     d.sampleRatesMask = ratesMask;
     d.capabilities    = caps;
 }
+static_assert(sizeof(HalDeviceDescriptor::capabilities) >= 4, "capabilities must be at least uint32_t");

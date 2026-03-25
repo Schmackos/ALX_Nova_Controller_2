@@ -161,7 +161,7 @@ void test_i2c_addresses() {
 // ===========================================================================
 
 void test_cs43198_capabilities() {
-    uint16_t caps = kDescCS43198.capabilities;
+    uint32_t caps = kDescCS43198.capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(caps & HAL_CAP_MUTE);
@@ -171,7 +171,7 @@ void test_cs43198_capabilities() {
 }
 
 void test_cs43131_capabilities() {
-    uint16_t caps = kDescCS43131.capabilities;
+    uint32_t caps = kDescCS43131.capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(caps & HAL_CAP_MUTE);
@@ -181,7 +181,7 @@ void test_cs43131_capabilities() {
 }
 
 void test_cs4398_capabilities() {
-    uint16_t caps = kDescCS4398.capabilities;
+    uint32_t caps = kDescCS4398.capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(caps & HAL_CAP_MUTE);
@@ -191,7 +191,7 @@ void test_cs4398_capabilities() {
 }
 
 void test_cs4399_capabilities() {
-    uint16_t caps = kDescCS4399.capabilities;
+    uint32_t caps = kDescCS4399.capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(caps & HAL_CAP_MUTE);
@@ -201,7 +201,7 @@ void test_cs4399_capabilities() {
 }
 
 void test_cs43130_capabilities() {
-    uint16_t caps = kDescCS43130.capabilities;
+    uint32_t caps = kDescCS43130.capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(caps & HAL_CAP_MUTE);

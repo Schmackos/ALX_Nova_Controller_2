@@ -68,7 +68,7 @@ struct EssDac8chDesc {
     uint8_t      altChipId;         // 0xFF = no alternate
     const char*  altChipName;       // nullptr = no alternate
     const char*  altCompatible;     // nullptr = no alternate
-    uint16_t     capabilities;
+    uint32_t     capabilities;
     uint32_t     sampleRateMask;
 
     // Register addresses
@@ -246,7 +246,7 @@ static const EssDac8chRegWrite kDeinitSeq_ES9017[] = {
 // ----- Descriptor table instances -----
 static const EssDac8chDesc kDesc_ES9038PRO = {
     "ess,es9038pro", "ES9038PRO", ES9038PRO_CHIP_ID, 0xFF, nullptr, nullptr,
-    (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
     HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     ESS8CH_REG_SYS_CONFIG, ESS8CH_REG_INPUT_CFG, ESS8CH_REG_FILTER_MUTE,
     ESS8CH_REG_MASTER_MODE, ESS8CH_REG_DPLL_CFG, ESS8CH_REG_SOFT_START,
@@ -260,7 +260,7 @@ static const EssDac8chDesc kDesc_ES9038PRO = {
 
 static const EssDac8chDesc kDesc_ES9028PRO = {
     "ess,es9028pro", "ES9028PRO", ES9028PRO_CHIP_ID, 0xFF, nullptr, nullptr,
-    (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
     HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     ESS8CH_REG_SYS_CONFIG, ESS8CH_REG_INPUT_CFG, ESS8CH_REG_FILTER_MUTE,
     ESS8CH_REG_MASTER_MODE, ESS8CH_REG_DPLL_CFG, ESS8CH_REG_SOFT_START,
@@ -275,7 +275,7 @@ static const EssDac8chDesc kDesc_ES9028PRO = {
 static const EssDac8chDesc kDesc_ES9039PRO = {
     "ess,es9039pro", "ES9039PRO", ES9039PRO_CHIP_ID, ES9039MPRO_CHIP_ID,
     "ES9039MPRO", "ess,es9039mpro",
-    (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
     HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     ESS8CH_REG_SYS_CONFIG, ESS8CH_REG_INPUT_CFG, ESS8CH_REG_FILTER_MUTE,
     ESS8CH_REG_MASTER_MODE, ESS8CH_REG_DPLL_CFG, ESS8CH_REG_SOFT_START,
@@ -289,7 +289,7 @@ static const EssDac8chDesc kDesc_ES9039PRO = {
 
 static const EssDac8chDesc kDesc_ES9027PRO = {
     "ess,es9027pro", "ES9027PRO", ES9027PRO_CHIP_ID, 0xFF, nullptr, nullptr,
-    (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
     HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     ESS8CH_REG_SYS_CONFIG, ESS8CH_REG_INPUT_CFG, ESS8CH_REG_FILTER_MUTE,
     ESS8CH_REG_MASTER_MODE, ESS8CH_REG_DPLL_CFG, ESS8CH_REG_SOFT_START,
@@ -303,7 +303,7 @@ static const EssDac8chDesc kDesc_ES9027PRO = {
 
 static const EssDac8chDesc kDesc_ES9081 = {
     "ess,es9081", "ES9081", ES9081_CHIP_ID, 0xFF, nullptr, nullptr,
-    (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
     HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     ESS8CH_REG_SYS_CONFIG, ESS8CH_REG_INPUT_CFG, ESS8CH_REG_FILTER_MUTE,
     ESS8CH_REG_MASTER_MODE, ESS8CH_REG_DPLL_CFG, ESS8CH_REG_SOFT_START,
@@ -317,7 +317,7 @@ static const EssDac8chDesc kDesc_ES9081 = {
 
 static const EssDac8chDesc kDesc_ES9082 = {
     "ess,es9082", "ES9082", ES9082_CHIP_ID, 0xFF, nullptr, nullptr,
-    (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
     HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     ESS8CH_REG_SYS_CONFIG, ESS8CH_REG_INPUT_CFG, ESS8CH_REG_FILTER_MUTE,
     ESS8CH_REG_MASTER_MODE, ESS8CH_REG_DPLL_CFG, ESS8CH_REG_SOFT_START,
@@ -331,7 +331,7 @@ static const EssDac8chDesc kDesc_ES9082 = {
 
 static const EssDac8chDesc kDesc_ES9017 = {
     "ess,es9017", "ES9017", ES9017_CHIP_ID, 0xFF, nullptr, nullptr,
-    (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
+    (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS),
     HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K,
     ESS8CH_REG_SYS_CONFIG, ESS8CH_REG_INPUT_CFG, ESS8CH_REG_FILTER_MUTE,
     ESS8CH_REG_MASTER_MODE, ESS8CH_REG_DPLL_CFG, ESS8CH_REG_SOFT_START,
@@ -431,7 +431,7 @@ void test_desc_es9017_identity(void) {
 
 void test_caps_all_chips_have_dac_volume_mute_filters(void) {
     for (int i = 0; i < kDescCount; i++) {
-        uint16_t c = kAllDescs[i]->capabilities;
+        uint32_t c = kAllDescs[i]->capabilities;
         TEST_ASSERT_TRUE_MESSAGE(c & HAL_CAP_DAC_PATH,   kAllDescs[i]->chipName);
         TEST_ASSERT_TRUE_MESSAGE(c & HAL_CAP_HW_VOLUME,  kAllDescs[i]->chipName);
         TEST_ASSERT_TRUE_MESSAGE(c & HAL_CAP_MUTE,       kAllDescs[i]->chipName);

@@ -127,7 +127,7 @@ void test_desc_all_i2c_addr_0x40(void) {
 // ==========================================================================
 
 void test_caps_es9822pro(void) {
-    uint16_t c = kDescES9822PRO.capabilities;
+    uint32_t c = kDescES9822PRO.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);
@@ -136,7 +136,7 @@ void test_caps_es9822pro(void) {
 }
 
 void test_caps_es9826(void) {
-    uint16_t c = kDescES9826.capabilities;
+    uint32_t c = kDescES9826.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);
@@ -146,7 +146,7 @@ void test_caps_es9826(void) {
 }
 
 void test_caps_es9823pro(void) {
-    uint16_t c = kDescES9823PRO.capabilities;
+    uint32_t c = kDescES9823PRO.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);
@@ -155,7 +155,7 @@ void test_caps_es9823pro(void) {
 }
 
 void test_caps_es9821(void) {
-    uint16_t c = kDescES9821.capabilities;
+    uint32_t c = kDescES9821.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     // ES9821 has no PGA
@@ -165,7 +165,7 @@ void test_caps_es9821(void) {
 }
 
 void test_caps_es9820(void) {
-    uint16_t c = kDescES9820.capabilities;
+    uint32_t c = kDescES9820.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);

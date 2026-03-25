@@ -22,7 +22,8 @@ public:
     static HalDeviceManager& instance();
 
     // Register a device. Returns slot index (0..HAL_MAX_DEVICES-1) or -1 on failure.
-    int registerDevice(HalDevice* device, HalDiscovery discovery);
+    // takeOwnership=true: manager will call deinit()+delete on removeDevice/reset.
+    int registerDevice(HalDevice* device, HalDiscovery discovery, bool takeOwnership = false);
 
     // Remove a device by slot. Returns true if found and removed.
     bool removeDevice(uint8_t slot);
@@ -77,6 +78,7 @@ private:
     void _resetRetryState(uint8_t slot);
 
     HalDevice*      _devices[HAL_MAX_DEVICES];
+    bool            _ownsDevice[HAL_MAX_DEVICES];
     HalDeviceConfig _configs[HAL_MAX_DEVICES];
     HalPinAlloc     _pins[HAL_MAX_PINS];
     HalRetryState   _retryState[HAL_MAX_DEVICES];

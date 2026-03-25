@@ -135,7 +135,7 @@ static uint32_t _custom_adc_get_sample_rate(void) {
 // ===== HalCustomDevice =====
 
 HalCustomDevice::HalCustomDevice(const char* compatible, const char* name,
-                                  uint16_t caps, HalBusType busType, HalDeviceType devType) {
+                                  uint32_t caps, HalBusType busType, HalDeviceType devType) {
     hal_safe_strcpy(_descriptor.compatible, sizeof(_descriptor.compatible), compatible);
     hal_safe_strcpy(_descriptor.name, sizeof(_descriptor.name), name);
     _descriptor.type         = devType;
@@ -436,7 +436,6 @@ void hal_load_custom_devices() {
     for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
         HalDevice* dev = mgr.getDevice(i);
         if (dev && dev->getDiscovery() == HAL_DISC_MANUAL) {
-            dev->deinit();
             mgr.removeDevice(i);
         }
     }
@@ -486,7 +485,7 @@ void hal_load_custom_devices() {
             // default: HAL_DEV_DAC
 
             // Determine capabilities from JSON array
-            uint16_t caps = 0;
+            uint32_t caps = 0;
             JsonArray capArr = doc["capabilities"].as<JsonArray>();
             for (const char* cap : capArr) {
                 if (strcmp(cap, "volume_control") == 0) caps |= HAL_CAP_HW_VOLUME;
@@ -525,7 +524,7 @@ void hal_load_custom_devices() {
                 }
             }
 
-            int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
+            int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL, true);
             if (slot < 0) {
                 LOG_E("[HAL:Custom]", "No free slots for device: %s", compatible);
                 delete dev;

@@ -702,9 +702,9 @@ void test_db_max_returns_correct_value() {
 }
 
 void test_registry_max_returns_correct_value() {
-    // hal_registry_max() should return HAL_MAX_DRIVERS (48)
+    // hal_registry_max() should return HAL_MAX_DRIVERS (64)
     TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_max());
-    TEST_ASSERT_EQUAL(48, hal_registry_max());
+    TEST_ASSERT_EQUAL(64, hal_registry_max());
 }
 
 void test_db_overflow_at_new_limit() {

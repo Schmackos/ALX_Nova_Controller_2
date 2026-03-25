@@ -56,7 +56,7 @@ struct EssDac2chDescriptor {
     const char* compatible;
     const char* chipName;
     uint8_t     chipId;            // Expected value at reg 0xE1 (ESS_SABRE_REG_CHIP_ID)
-    uint16_t    capabilities;      // HAL_CAP_* flags
+    uint32_t    capabilities;      // HAL_CAP_* flags
     uint32_t    sampleRateMask;    // HAL_RATE_* flags
 
     // Supported sample rates for _validateSampleRate()

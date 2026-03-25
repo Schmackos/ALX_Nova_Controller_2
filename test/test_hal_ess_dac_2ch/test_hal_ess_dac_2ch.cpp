@@ -76,7 +76,7 @@ struct EssDac2chDesc {
     const char*    chipName;
     uint8_t        chipId;
     uint8_t        i2cAddr;
-    uint16_t       capabilities;
+    uint32_t       capabilities;
     uint32_t       sampleRatesMask;
     uint8_t        filterCount;
 
@@ -311,7 +311,7 @@ void test_desc_all_i2c_addr_0x48(void) {
 // ==========================================================================
 
 void test_caps_es9038q2m(void) {
-    uint16_t c = kDesc_ES9038Q2M.capabilities;
+    uint32_t c = kDesc_ES9038Q2M.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_MUTE);
@@ -324,7 +324,7 @@ void test_caps_es9038q2m(void) {
 }
 
 void test_caps_es9039q2m(void) {
-    uint16_t c = kDesc_ES9039Q2M.capabilities;
+    uint32_t c = kDesc_ES9039Q2M.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_MUTE);
@@ -335,7 +335,7 @@ void test_caps_es9039q2m(void) {
 }
 
 void test_caps_es9069q(void) {
-    uint16_t c = kDesc_ES9069Q.capabilities;
+    uint32_t c = kDesc_ES9069Q.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_MUTE);
@@ -346,7 +346,7 @@ void test_caps_es9069q(void) {
 }
 
 void test_caps_es9033q(void) {
-    uint16_t c = kDesc_ES9033Q.capabilities;
+    uint32_t c = kDesc_ES9033Q.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_MUTE);
@@ -357,7 +357,7 @@ void test_caps_es9033q(void) {
 }
 
 void test_caps_es9020(void) {
-    uint16_t c = kDesc_ES9020.capabilities;
+    uint32_t c = kDesc_ES9020.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_MUTE);
@@ -1065,7 +1065,7 @@ void test_all_descs_have_ess_manufacturer_addr(void) {
 void test_all_descs_have_common_dac_caps(void) {
     // All must have DAC_PATH, HW_VOLUME, MUTE, FILTERS
     for (int i = 0; i < kDescCount; i++) {
-        uint16_t c = kAllDescs[i]->capabilities;
+        uint32_t c = kAllDescs[i]->capabilities;
         TEST_ASSERT_TRUE(c & HAL_CAP_DAC_PATH);
         TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
         TEST_ASSERT_TRUE(c & HAL_CAP_MUTE);

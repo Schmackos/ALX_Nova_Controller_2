@@ -68,7 +68,7 @@ struct EssAdc2chDescriptor {
     const char* altCompatible;   // nullptr = no alt
     const char* altChipName;     // nullptr = no alt
 
-    uint16_t    capabilities;    // HAL_CAP_* flags
+    uint32_t    capabilities;    // HAL_CAP_* flags
     uint32_t    sampleRateMask;  // HAL_RATE_* flags
 
     // Supported sample rates (for _validateSampleRate)
