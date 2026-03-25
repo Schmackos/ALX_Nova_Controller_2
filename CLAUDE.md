@@ -180,3 +180,5 @@ feat: / fix: / docs: / refactor: / test: / chore:
 ## Documentation Site (Docusaurus v3)
 
 `docs-site/` — deployed to GitHub Pages. Design token pipeline: `src/design_tokens.h` → `tools/extract_tokens.js` → CSS for web UI + docs site. MDX: escape `\{variable\}` outside code blocks. Internal docs: `docs-internal/`.
+
+Site structure: 3 sidebars (`userSidebar`, `devSidebar`, `enterpriseSidebar`). Blog enabled at `/blog` (release notes). Showcase page at `/showcase`. Local search via `@easyops-cn/docusaurus-search-local` (15 results, blog+pages indexed). Enterprise section: `docs/enterprise/` (overview, oem-integration, production-deployment, certification, support-tiers).
