@@ -5973,6 +5973,8 @@ body.night-mode {
                 handleAudioChannelMap(data);
             } else if (data.type === 'diagEvent') {
                 handleDiagEvent(data);
+            } else if (data.type === 'protocolVersion') {
+                console.log('[WS] Protocol version: ' + data.version);
             }
         }
 
@@ -8507,6 +8509,7 @@ body.night-mode {
         var HAL_CAP_APLL        = 1 << 10;
         var HAL_CAP_DSD         = 1 << 11;
         var HAL_CAP_HP_AMP      = 1 << 12;
+        var HAL_CAP_POWER_MGMT  = 1 << 13;
 
         var halDevices = [];
         var halScanning = false;
@@ -8597,6 +8600,14 @@ body.night-mode {
             return ['Builtin', 'EEPROM', 'GPIO ID', 'Manual', 'Online'][disc] || 'Unknown';
         }
 
+        function halGetPowerStateInfo(ps) {
+            switch (ps) {
+                case 1: return { cls: 'amber', label: 'Standby' };
+                case 2: return { cls: 'grey',  label: 'Off' };
+                default: return { cls: 'green', label: 'Active' };
+            }
+        }
+
         function buildHalDeviceCard(d) {
             var si = halGetStateInfo(d.state);
             var ti = halGetTypeInfo(d.type);
@@ -8648,6 +8659,12 @@ body.night-mode {
                 if (d.capabilities & HAL_CAP_APLL)        h += '<span class="hal-cap-badge">APLL</span>';
                 if (d.capabilities & HAL_CAP_DSD)         h += '<span class="hal-cap-badge">DSD</span>';
                 if (d.capabilities & HAL_CAP_HP_AMP)      h += '<span class="hal-cap-badge">HP Amp</span>';
+            if (d.capabilities & HAL_CAP_POWER_MGMT)  h += '<span class="hal-cap-badge">PM</span>';
+            }
+            // Power state badge (only for PM-capable devices not in active state)
+            if ((d.capabilities & HAL_CAP_POWER_MGMT) && d.powerState !== undefined && d.powerState !== 0) {
+                var pmBadge = halGetPowerStateInfo(d.powerState);
+                h += '<span class="badge badge-' + pmBadge.cls + '" title="Power state">' + pmBadge.label + '</span>';
             }
             h += '</div>';
 
@@ -8706,6 +8723,23 @@ body.night-mode {
                     if (d.sampleRates & 64) rates.push('384k');
                     if (d.sampleRates & 128) rates.push('768k');
                     h += '<div class="hal-detail-row"><span>Sample Rates:</span><span>' + rates.join(', ') + '</span></div>';
+                }
+
+                // Power management control (only for PM-capable devices)
+                if (d.capabilities & HAL_CAP_POWER_MGMT) {
+                    var curPs = d.powerState !== undefined ? d.powerState : 0;
+                    var psi = halGetPowerStateInfo(curPs);
+                    h += '<div class="hal-detail-row"><span>Power State:</span>';
+                    h += '<span><span class="badge badge-' + psi.cls + '">' + psi.label + '</span></span></div>';
+                    h += '<div class="hal-detail-row"><span>Power Control:</span>';
+                    h += '<span>';
+                    h += '<select id="halPmSelect-' + d.slot + '" style="margin-right:6px;">';
+                    h += '<option value="active"' + (curPs === 0 ? ' selected' : '') + '>Active</option>';
+                    h += '<option value="standby"' + (curPs === 1 ? ' selected' : '') + '>Standby</option>';
+                    h += '<option value="off"' + (curPs === 2 ? ' selected' : '') + '>Off</option>';
+                    h += '</select>';
+                    h += '<button class="btn btn-sm" data-action="hal-set-power" data-slot="' + d.slot + '">Apply</button>';
+                    h += '</span></div>';
                 }
 
                 // Edit form
@@ -9106,6 +9140,27 @@ body.night-mode {
             .then(function(data) {
                 showToast(data.status === 'ok' ? 'Device re-initialized' : 'Reinit failed', data.status !== 'ok');
                 loadHalDeviceList();
+            })
+            .catch(function(err) { showToast('Error: ' + err, true); });
+        }
+
+        function halSetPowerState(slot) {
+            var sel = document.getElementById('halPmSelect-' + slot);
+            if (!sel) return;
+            var state = sel.value;
+            apiFetch('/api/hal/devices/power', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot: slot, state: state })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'ok') {
+                    showToast('Power state set to ' + state);
+                    loadHalDeviceList();
+                } else {
+                    showToast('Power state change failed: ' + (data.error || ''), true);
+                }
             })
             .catch(function(err) { showToast('Error: ' + err, true); });
         }
@@ -9752,6 +9807,8 @@ body.night-mode {
                     halCancelEdit();
                 } else if (action === 'hal-toggle-tips') {
                     halToggleErrorTips(parseInt(el.dataset.slot));
+                } else if (action === 'hal-set-power') {
+                    halSetPowerState(parseInt(el.dataset.slot));
                 } else if (action === 'hal-cc-select-addr') {
                     halCcSelectAddr(parseInt(el.dataset.addr), parseInt(el.dataset.bus), el);
                 } else if (action === 'hal-cc-remove-reg') {
