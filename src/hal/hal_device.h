@@ -72,8 +72,12 @@ public:
     // ----- Clock quality diagnostics (optional, opt-in per driver) -----
     // Drivers with HAL_CAP_APLL or HAL_CAP_DPLL override this method.
     // Called from main-loop context only (health check, WS broadcast).
-    // Default returns {false, false, "N/A"} (not supported).
-    virtual ClockStatus getClockStatus() { return {false, false, "N/A"}; }
+    // Default returns not-available ClockStatus (not supported).
+    virtual ClockStatus getClockStatus() {
+        ClockStatus cs = {};
+        strncpy(cs.description, "N/A", sizeof(cs.description) - 1);
+        return cs;
+    }
 
     // ----- Device dependency graph -----
     // Bitmask of HAL slot indices this device depends on (slots 0-31).

@@ -2273,6 +2273,8 @@ body.night-mode {
         .hal-form-row input[type="range"] { flex: 1; }
         .hal-form-buttons { display: flex; gap: 8px; margin-top: 10px; }
         .hal-cap-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.6); margin:0 1px; }
+        .hal-clock-indicator { display:inline-flex; align-items:center; margin:0 2px; vertical-align:middle; }
+        .hal-dep-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; background:rgba(100,149,237,0.15); color:rgba(147,197,253,0.85); margin:0 1px; border:1px solid rgba(100,149,237,0.2); }
 
         /* HAL Device Enable Toggle */
         .hal-enable-toggle { display:inline-flex; align-items:center; cursor:pointer; margin-right:4px; vertical-align:middle; }
@@ -8515,6 +8517,8 @@ body.night-mode {
         var HAL_CAP_DSD         = 1 << 11;
         var HAL_CAP_HP_AMP      = 1 << 12;
         var HAL_CAP_POWER_MGMT  = 1 << 13;
+        var HAL_CAP_ASRC        = 1 << 14;
+        var HAL_CAP_DPLL        = 1 << 15;
 
         var halDevices = [];
         var halScanning = false;
@@ -8665,11 +8669,33 @@ body.night-mode {
                 if (d.capabilities & HAL_CAP_DSD)         h += '<span class="hal-cap-badge">DSD</span>';
                 if (d.capabilities & HAL_CAP_HP_AMP)      h += '<span class="hal-cap-badge">HP Amp</span>';
                 if (d.capabilities & HAL_CAP_POWER_MGMT)  h += '<span class="hal-cap-badge">PM</span>';
+                if (d.capabilities & HAL_CAP_DPLL)        h += '<span class="hal-cap-badge">DPLL</span>';
             }
             // Power state badge (only for PM-capable devices not in active state)
             if ((d.capabilities & HAL_CAP_POWER_MGMT) && d.powerState !== undefined && d.powerState !== 0) {
                 var pmBadge = halGetPowerStateInfo(d.powerState);
                 h += '<span class="badge badge-' + pmBadge.cls + '" title="Power state">' + pmBadge.label + '</span>';
+            }
+            // Clock lock indicator (DPLL/APLL devices)
+            if (d.clockStatus && d.clockStatus.available) {
+                var clkLocked = d.clockStatus.locked;
+                var clkTitle = d.clockStatus.desc || (clkLocked ? 'Clock locked' : 'Clock unlocked');
+                var clkColor = clkLocked ? '#4caf50' : '#f44336';
+                // MDI lock/lock-open icon
+                var clkPath = clkLocked
+                    ? 'M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z'
+                    : 'M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6C4.89,22 4,21.1 4,20V10A2,2 0 0,1 6,8H15V6A3,3 0 0,0 9,3C7.55,3 6.27,3.72 5.5,4.81L4,3.31C5.14,1.9 6.97,1 9,1A5,5 0 0,1 14,6V8H18M12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17Z';
+                h += '<span class="hal-clock-indicator" title="' + escapeHtml(clkTitle) + '" style="color:' + clkColor + '">';
+                h += '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="' + clkPath + '"/></svg>';
+                h += '</span>';
+            }
+            // Dependency badges
+            if (d.dependsOn && d.dependsOn.length > 0) {
+                var depNames = d.dependsOn.map(function(slot) {
+                    var dep = halDevices.find(function(x) { return x.slot === slot; });
+                    return dep ? (dep.userLabel || dep.name || ('Slot ' + slot)) : ('Slot ' + slot);
+                });
+                h += '<span class="hal-dep-badge" title="Depends on: ' + escapeHtml(depNames.join(', ')) + '">Dep: ' + escapeHtml(depNames.join(', ')) + '</span>';
             }
             h += '</div>';
 

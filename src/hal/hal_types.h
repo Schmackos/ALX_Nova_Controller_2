@@ -99,9 +99,9 @@ enum HalPowerState : uint8_t {
 // ===== Clock Status =====
 // Returned by HalDevice::getClockStatus() for devices with HAL_CAP_APLL or HAL_CAP_DPLL.
 struct ClockStatus {
-    bool        available;    // true if this device has a readable clock lock status
-    bool        locked;       // true if the PLL/DPLL is currently locked
-    const char* description;  // Human-readable description, e.g. "DPLL locked" or "N/A"
+    bool available;         // true if this device has a readable clock lock status
+    bool locked;            // true if the PLL/DPLL is currently locked
+    char description[32];   // Human-readable description, e.g. "DPLL locked" or "N/A"
 };
 
 // ===== Bus Reference =====

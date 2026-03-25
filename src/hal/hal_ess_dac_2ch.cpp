@@ -547,16 +547,22 @@ bool HalEssDac2ch::healthCheck() {
 }
 
 ClockStatus HalEssDac2ch::getClockStatus() {
+    ClockStatus cs = {};
     if (!_initialized || _state != HAL_STATE_AVAILABLE) {
-        return {false, false, "not available"};
+        strncpy(cs.description, "not available", sizeof(cs.description) - 1);
+        return cs;
     }
 #ifndef NATIVE_TEST
     uint8_t status = _readReg(ESS_SABRE_REG_DPLL_LOCK);
-    bool locked = (status & ESS_SABRE_DPLL_LOCKED_BIT) != 0;
-    return {true, locked, locked ? "DPLL locked" : "DPLL unlocked"};
+    cs.available = true;
+    cs.locked = (status & ESS_SABRE_DPLL_LOCKED_BIT) != 0;
+    strncpy(cs.description, cs.locked ? "DPLL locked" : "DPLL unlocked", sizeof(cs.description) - 1);
 #else
-    return {true, true, "DPLL locked"};
+    cs.available = true;
+    cs.locked = true;
+    strncpy(cs.description, "DPLL locked", sizeof(cs.description) - 1);
 #endif
+    return cs;
 }
 
 // ===========================================================================
