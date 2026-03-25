@@ -60,7 +60,7 @@ static const DsdDescStub kDsdCapable = {
     /* dsdPathMask   */ 0x01,
     /* regDsdInt     */ 0x0031,
     /* dsdIntDefault */ 0x01,  // DoP mode
-    /* capabilities  */ (uint16_t)(HAL_CAP_DAC_PATH | HAL_CAP_DSD),
+    /* capabilities  */ (uint32_t)(HAL_CAP_DAC_PATH | HAL_CAP_DSD),
 };
 
 static const DsdDescStub kNoDsd = {
@@ -70,7 +70,7 @@ static const DsdDescStub kNoDsd = {
     /* dsdPathMask   */ 0xFF,
     /* regDsdInt     */ NO_FEATURE,
     /* dsdIntDefault */ 0x00,
-    /* capabilities  */ (uint16_t)(HAL_CAP_DAC_PATH),
+    /* capabilities  */ (uint32_t)(HAL_CAP_DAC_PATH),
 };
 
 // Mock DAC that uses DsdDescStub to replicate setDsdMode logic
