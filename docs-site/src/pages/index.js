@@ -105,7 +105,7 @@ function IconWifi() {
 
 function IconFactory() {
   return (
-    <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor" aria-hidden="true">
       {/* mdi-factory */}
       <path d="M10 2H14V3H19V5H5V3H10V2M5 6H19L18 20H6L5 6M8 8V18H10V8H8M14 8V18H16V8H14Z"/>
     </svg>
