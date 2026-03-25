@@ -24,8 +24,10 @@
 
 ### ASRC Fixed-Frame Pipeline Mismatch
 
+**Status: RESOLVED (2026-03-25)** — Lane buffers resized to ASRC_OUTPUT_FRAMES_MAX, ASRC return value captured, downsampled tails zero-filled.
+
 - **Severity:** High
-- **Issue:** The ASRC engine produces a variable number of output frames (e.g., 256 input at 44.1kHz produces 279 output frames at 48kHz), but the pipeline operates on a fixed `FRAMES` (256) count downstream. For upsampling, extra samples are processed; for downsampling, the buffer tail retains stale audio data that leaks through DSP and matrix stages.
+- **Issue:** The ASRC engine produces a variable number of output frames (e.g., 256 input at 44.1kHz produces 279 output frames at 48kHz), but the pipeline operates on a fixed `FRAMES` (256) count downstream. For upsampling, extra samples are processed; for downsampling, the buffer tail retains stale audio data that leaks through DSP and matrix stages. Additionally, lane buffers were allocated at FRAMES (256) not ASRC_OUTPUT_FRAMES_MAX (280), causing heap overflow on upsampling.
 - **Files:**
   - `src/audio_pipeline.cpp` (line 415: explicit `TODO (v2)` comment)
   - `src/asrc.h` (line 99: `ASRC_OUTPUT_FRAMES_MAX 280`)
@@ -289,7 +291,7 @@
 
 3. **[High] ~~Increase HAL_MAX_DRIVERS to 64~~** -- **RESOLVED (2026-03-25).** Increased HAL_MAX_DRIVERS and HAL_DB_MAX_ENTRIES to 64 (44/64 used).
 
-4. **[Medium] Fix ASRC frame count propagation** -- Stale buffer data on downsampled lanes is an audio quality concern. Propagate `asrc_process_lane()` return value through DSP and matrix. Estimated effort: 4-6 hours, needs careful testing.
+4. **[High] ~~Fix ASRC frame count propagation~~** -- **RESOLVED (2026-03-25).** Lane buffers resized from FRAMES to ASRC_OUTPUT_FRAMES_MAX (fixes heap overflow on upsampling). ASRC return value captured per-lane. Downsampled buffer tails zero-filled (fixes stale data leaking through DSP/matrix). 6 new ASRC frame count tests.
 
 5. **[Medium] Implement Content-Security-Policy header** -- Add CSP to `http_add_security_headers()`. Requires `unsafe-inline` for script/style due to monolithic HTML. Estimated effort: 30 minutes.
 
@@ -305,4 +307,4 @@
 
 ---
 
-*Concerns audit: 2026-03-25 -- 3 critical/high issues, 6 medium, 4 low. Previous resolved items omitted -- see git history for 2026-03-24 CONCERNS.md.*
+*Concerns audit: 2026-03-25 -- 2 critical/high issues (1 resolved this session), 6 medium, 4 low. Previous resolved items omitted -- see git history for 2026-03-24 CONCERNS.md.*
