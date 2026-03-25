@@ -94,15 +94,7 @@ enum HalPowerState : uint8_t {
 #define HAL_CAP_HP_AMP       (1 << 12)  // Integrated headphone amplifier
 #define HAL_CAP_POWER_MGMT   (1 << 13)  // Device supports power management (standby/off)
 #define HAL_CAP_ASRC         (1 << 14)  // Asynchronous Sample Rate Conversion (hardware ASRC mezzanine)
-#define HAL_CAP_DPLL         (1 << 15)  // Digital PLL with readable lock status (ESS SABRE family)
-
-// ===== Clock Status =====
-// Returned by HalDevice::getClockStatus() for devices with HAL_CAP_APLL or HAL_CAP_DPLL.
-struct ClockStatus {
-    bool available;         // true if this device has a readable clock lock status
-    bool locked;            // true if the PLL/DPLL is currently locked
-    char description[32];   // Human-readable description, e.g. "DPLL locked" or "N/A"
-};
+// Bit 15 reserved for future use
 
 // ===== Bus Reference =====
 struct HalBusRef {
