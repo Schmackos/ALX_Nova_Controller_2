@@ -56,6 +56,13 @@ enum HalBusType : uint8_t {
     HAL_BUS_INTERNAL = 5,   // On-chip peripheral (e.g. temp sensor)
 };
 
+// ===== Power Management States =====
+enum HalPowerState : uint8_t {
+    HAL_PM_ACTIVE  = 0,  // Device fully powered, processing audio
+    HAL_PM_STANDBY = 1,  // Low-power state, quick wake (~10ms)
+    HAL_PM_OFF     = 2,  // Powered down, requires full init to wake
+};
+
 // ===== I2C Bus Indices =====
 #define HAL_I2C_BUS_EXT      0   // GPIO48 SDA / GPIO54 SCL — external (SDIO conflict risk)
 #define HAL_I2C_BUS_ONBOARD  1   // GPIO7 SDA / GPIO8 SCL — ES8311 dedicated
@@ -85,7 +92,8 @@ enum HalBusType : uint8_t {
 #define HAL_CAP_APLL         (1 << 10)  // Asynchronous PLL
 #define HAL_CAP_DSD          (1 << 11)  // DSD native playback
 #define HAL_CAP_HP_AMP       (1 << 12)  // Integrated headphone amplifier
-// Bits 13-15 reserved for future use
+#define HAL_CAP_POWER_MGMT   (1 << 13)  // Device supports power management (standby/off)
+// Bit 14-15 reserved for future use
 
 // ===== Bus Reference =====
 struct HalBusRef {
