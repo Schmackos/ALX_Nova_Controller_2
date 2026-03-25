@@ -46,7 +46,6 @@ Current Experimental endpoints:
 
 - `POST /api/v1/hal/devices/power` — HAL power management (introduced in PR #83, stabilising)
 - `GET /api/v1/pipeline/timing` — granular pipeline timing breakdown (introduced in PR #82)
-- `POST /api/v1/asrc/config` — ASRC engine configuration (introduced in PR #85, tracking feature)
 
 ---
 

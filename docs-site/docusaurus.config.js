@@ -68,7 +68,6 @@ const config = {
           blogTitle: 'ALX Nova Release Notes',
           postsPerPage: 10,
           feedOptions: { type: 'all' },
-          onInlineAuthors: 'ignore',
         },
         theme: {
           customCss: './src/css/custom.css',

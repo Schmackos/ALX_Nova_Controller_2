@@ -1,0 +1,73 @@
+/* ---------------------------------------------------------------------------
+ * Showcase page
+ * ------------------------------------------------------------------------- */
+
+.hero {
+  background: linear-gradient(160deg, #0d0d0d 0%, #1a1a1a 60%, #1f1208 100%);
+  padding: 4rem 2rem 3rem;
+  text-align: center;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.heroTitle {
+  color: #ffffff;
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+
+.heroTitleAccent {
+  color: #FF9800;
+}
+
+.heroDescription {
+  color: #b0b0b0;
+  font-size: 1.05rem;
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.heroButton {
+  display: inline-block;
+  padding: 0.65rem 1.5rem;
+  background: #FF9800;
+  color: #000000;
+  font-weight: 700;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.heroButton:hover {
+  background: #e68900;
+  color: #000000;
+  text-decoration: none;
+}
+
+.projectAuthor {
+  font-size: 0.8rem;
+  color: #666666;
+  margin: 0;
+}
+
+.tagList {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.tag {
+  font-size: 0.75rem;
+  background: rgba(255, 152, 0, 0.1);
+  color: #FF9800;
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 4px;
+  padding: 0.1rem 0.5rem;
+}
+
+.emptyNote {
+  text-align: center;
+  color: #666666;
+  font-size: 0.9rem;
+  margin-top: 2rem;
+}

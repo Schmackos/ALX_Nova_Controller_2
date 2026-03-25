@@ -77,5 +77,5 @@ For products that require a private fork, custom HAL drivers not intended for th
 | Audio pipeline | 8 input lanes → 32×32 routing matrix → 16 output sinks, float32 |
 | API surface | REST (port 80) + WebSocket (port 81), dual-path `/api/` and `/api/v1/` |
 | OTA | SHA-256 verified, dual-partition automatic rollback |
-| HAL device slots | 32 total (14 onboard at boot, up to 18 expansion) |
+| HAL device slots | 32 total (14 onboard at boot, up to 2 expansion populated simultaneously) |
 | I2S ports | 3 fully configurable (STD/TDM, TX/RX, any pins) |

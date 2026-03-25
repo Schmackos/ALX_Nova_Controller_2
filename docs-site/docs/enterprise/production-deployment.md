@@ -43,7 +43,7 @@ PYTHONIOENCODING=utf-8 esptool.py \
   --flash_mode qio \
   0x0    build/bootloader/bootloader.bin \
   0x8000 build/partition_table/partition-table.bin \
-  0x10000 build/.pio/build/esp32-p4/firmware.bin
+  0x10000 .pio/build/esp32-p4/firmware.bin
 ```
 
 Pre-built binaries are available as GitHub Release assets. Download them as part of your production tooling setup, or host them on an internal artifact server.
