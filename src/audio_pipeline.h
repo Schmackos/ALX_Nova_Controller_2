@@ -118,6 +118,13 @@ void audio_pipeline_load_matrix();
 // Returns true if any mismatch is currently active.
 bool audio_pipeline_check_format();
 
+// ASRC lane configuration — call from main-loop context when a rate mismatch is detected.
+// Sets the input/output sample rate ratio for a specific lane's ASRC engine.
+// srcRate == dstRate deactivates ASRC for that lane (passthrough, zero overhead).
+// srcRate == 0 deactivates ASRC for all lanes (e.g., on source removal).
+// Also updates appState.audio.laneSrcActive[] for WS broadcast.
+void audio_pipeline_set_lane_src(int lane, uint32_t srcRate, uint32_t dstRate);
+
 // Cross-core audio pause/resume protocol.
 // Callers that teardown/reinstall I2S drivers MUST use these instead of
 // directly setting appState.audio.paused.

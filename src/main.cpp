@@ -1312,7 +1312,30 @@ void loop() {
     static unsigned long lastFormatCheck = 0;
     if (millis() - lastFormatCheck >= 5000) {
       lastFormatCheck = millis();
-      audio_pipeline_check_format();
+      bool mismatch = audio_pipeline_check_format();
+
+      // ASRC lane configuration — when a rate mismatch is detected, arm the SRC
+      // engine for each affected lane. When resolved, deactivate all lanes.
+      static uint32_t prevLaneSampleRates[AUDIO_PIPELINE_MAX_INPUTS] = {};
+      bool ratesChanged = false;
+      for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        if (prevLaneSampleRates[lane] != appState.audio.laneSampleRates[lane]) {
+          ratesChanged = true;
+          prevLaneSampleRates[lane] = appState.audio.laneSampleRates[lane];
+        }
+      }
+      if (ratesChanged || mismatch != appState.audio.rateMismatch) {
+        uint32_t sinkRate = appState.audio.sampleRate;  // Pipeline sink rate (48kHz nominal)
+        for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+          uint32_t srcRate = appState.audio.laneSampleRates[lane];
+          if (srcRate == 0 || srcRate == sinkRate || appState.audio.laneDsd[lane]) {
+            // No ASRC needed: unknown rate, rate matches, or DSD lane
+            audio_pipeline_set_lane_src(lane, sinkRate, sinkRate);  // passthrough
+          } else {
+            audio_pipeline_set_lane_src(lane, srcRate, sinkRate);
+          }
+        }
+      }
     }
   }
 
