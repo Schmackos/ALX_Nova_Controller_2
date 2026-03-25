@@ -1132,10 +1132,10 @@ bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
         slot_sink_store_write_fn(slot, realWrite);  // Step 3: make live (RELEASE barrier)
     }
 #endif
-    // Update _sinkCount to reflect highest occupied slot + 1
+    // Update _sinkCount to reflect highest occupied slot + 1 (use atomic read for consistency)
     _sinkCount = 0;
     for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
-        if (_sinks[i].write) _sinkCount = i + 1;
+        if (slot_sink_write_fn(i)) _sinkCount = i + 1;
     }
 #ifndef NATIVE_TEST
     AppState::getInstance().markChannelMapDirty();
@@ -1170,7 +1170,7 @@ float audio_pipeline_get_sink_volume(uint8_t slot) {
 
 void audio_pipeline_remove_sink(int slot) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS) return;
-    if (!_sinks[slot].write) return;  // Already empty
+    if (!slot_sink_write_fn(slot)) return;  // Already empty — atomic read
     const char *name = _sinks[slot].name;
     // Step 1: atomically null the sentinel — audio task stops dispatching immediately.
     slot_sink_store_write_fn(slot, nullptr);
@@ -1181,10 +1181,10 @@ void audio_pipeline_remove_sink(int slot) {
     _sinks[slot].vuL = -90.0f;
     _sinks[slot].vuR = -90.0f;
     _sinks[slot].halSlot = 0xFF;
-    // Update _sinkCount
+    // Update _sinkCount (use atomic read for consistency with sentinel pattern)
     _sinkCount = 0;
     for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
-        if (_sinks[i].write) _sinkCount = i + 1;
+        if (slot_sink_write_fn(i)) _sinkCount = i + 1;
     }
 #ifndef NATIVE_TEST
     AppState::getInstance().markChannelMapDirty();

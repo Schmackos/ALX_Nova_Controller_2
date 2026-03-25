@@ -496,9 +496,9 @@ void registerHalApiEndpoints(WebServer& server) {
         if (ok) {
             dev->_powerState = newPm;
             appState.markHalDeviceDirty();
-            LOG_I("[HAL:API]", "Power state for slot %d set to %s", slot, stateStr);
+            LOG_I("[HAL:API] Power state for slot %d set to %s", slot, stateStr);
         } else {
-            LOG_W("[HAL:API]", "Power state transition to %s failed for slot %d", stateStr, slot);
+            LOG_W("[HAL:API] Power state transition to %s failed for slot %d", stateStr, slot);
         }
 
         JsonDocument resp;

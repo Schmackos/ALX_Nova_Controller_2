@@ -165,7 +165,7 @@
                 if (d.capabilities & HAL_CAP_APLL)        h += '<span class="hal-cap-badge">APLL</span>';
                 if (d.capabilities & HAL_CAP_DSD)         h += '<span class="hal-cap-badge">DSD</span>';
                 if (d.capabilities & HAL_CAP_HP_AMP)      h += '<span class="hal-cap-badge">HP Amp</span>';
-            if (d.capabilities & HAL_CAP_POWER_MGMT)  h += '<span class="hal-cap-badge">PM</span>';
+                if (d.capabilities & HAL_CAP_POWER_MGMT)  h += '<span class="hal-cap-badge">PM</span>';
             }
             // Power state badge (only for PM-capable devices not in active state)
             if ((d.capabilities & HAL_CAP_POWER_MGMT) && d.powerState !== undefined && d.powerState !== 0) {
