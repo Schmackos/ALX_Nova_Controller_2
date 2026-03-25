@@ -1,6 +1,7 @@
 #ifdef DSP_ENABLED
 
 #include "output_dsp.h"
+#include "dsp_coefficients.h"
 #include "dsp_biquad_gen.h"
 #include "dsps_biquad.h"
 #include "dsps_mulc.h"
@@ -89,72 +90,6 @@ static DspStageType output_dsp_type_from_name(const char *name) {
 }
 
 // ===== Coefficient computation helpers =====
-
-static void output_dsp_compute_biquad_coeffs(DspBiquadParams &p, DspStageType type, uint32_t sampleRate) {
-    if (sampleRate == 0) return;
-    float normFreq = p.frequency / (float)sampleRate;
-    if (normFreq <= 0.0f || normFreq >= 0.5f) return;
-
-    int rc = 0;
-
-    switch (type) {
-        case DSP_BIQUAD_LPF:        rc = dsp_gen_lpf_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_HPF:        rc = dsp_gen_hpf_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_BPF:        rc = dsp_gen_bpf_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_NOTCH:      rc = dsp_gen_notch_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_PEQ:        rc = dsp_gen_peaking_eq_f32(p.coeffs, normFreq, p.gain, p.Q); break;
-        case DSP_BIQUAD_LOW_SHELF:  rc = dsp_gen_low_shelf_f32(p.coeffs, normFreq, p.gain, p.Q); break;
-        case DSP_BIQUAD_HIGH_SHELF: rc = dsp_gen_high_shelf_f32(p.coeffs, normFreq, p.gain, p.Q); break;
-        case DSP_BIQUAD_ALLPASS:    rc = dsp_gen_allpass_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_ALLPASS_360:rc = dsp_gen_allpass360_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_ALLPASS_180:rc = dsp_gen_allpass180_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_BPF_0DB:    rc = dsp_gen_bpf0db_f32(p.coeffs, normFreq, p.Q); break;
-        case DSP_BIQUAD_LPF_1ST:    rc = dsp_gen_lpf1_f32(p.coeffs, normFreq); break;
-        case DSP_BIQUAD_HPF_1ST:    rc = dsp_gen_hpf1_f32(p.coeffs, normFreq); break;
-        case DSP_BIQUAD_LINKWITZ: {
-            float normF0 = p.frequency / (float)sampleRate;
-            float normFp = p.gain / (float)sampleRate;  // gain field stores Fp Hz for Linkwitz
-            if (normF0 > 0.0f && normF0 < 0.5f && normFp > 0.0f && normFp < 0.5f)
-                rc = dsp_gen_linkwitz_f32(p.coeffs, normF0, p.Q, normFp, p.Q2);
-            break;
-        }
-        default:
-            // Custom or unknown — leave coefficients as-is
-            break;
-    }
-
-    // Post-computation safety guards: generator failure, NaN/Inf, or unstable filter
-    bool invalid = (rc != 0);
-    if (!invalid) {
-        for (int i = 0; i < 5; i++) {
-            if (isnan(p.coeffs[i]) || isinf(p.coeffs[i])) {
-                invalid = true;
-                break;
-            }
-        }
-    }
-    if (!invalid) {
-        // IIR stability: |a2| >= 1.0 means poles on or outside the unit circle.
-        // This is a necessary condition — |a1|+|a2| is NOT sufficient as valid
-        // filters (HPF, allpass) routinely have |a1|+|a2| > 2.
-        if (fabsf(p.coeffs[4]) >= 1.0f) {
-            invalid = true;
-        }
-    }
-    if (invalid) {
-#ifndef NATIVE_TEST
-        diag_emit(DIAG_DSP_COEFF_INVALID, DIAG_SEV_WARN, 0, nullptr,
-                  "output_dsp_compute_biquad_coeffs: invalid coefficients, resetting to passthrough");
-#endif
-        LOG_W("[OutputDSP] Invalid biquad coefficients detected — resetting to passthrough");
-        // Reset to passthrough (unity gain, no filtering)
-        p.coeffs[0] = 1.0f;
-        p.coeffs[1] = 0.0f;
-        p.coeffs[2] = 0.0f;
-        p.coeffs[3] = 0.0f;
-        p.coeffs[4] = 0.0f;
-    }
-}
 
 static void output_dsp_compute_gain_linear(DspGainParams &g) {
     g.gainLinear = dsp_db_to_linear(g.gainDb);
@@ -581,7 +516,7 @@ int output_dsp_add_stage(int channel, DspStageType type, int position) {
 
     // Compute coefficients for new stage
     if (dsp_is_biquad_type(type)) {
-        output_dsp_compute_biquad_coeffs(ch.stages[pos].biquad, type, cfg->sampleRate);
+        dsp_compute_biquad_coeffs(ch.stages[pos].biquad, type, cfg->sampleRate);
     } else if (type == DSP_GAIN) {
         output_dsp_compute_gain_linear(ch.stages[pos].gain);
     } else if (type == DSP_COMPRESSOR) {
@@ -895,7 +830,7 @@ void output_dsp_load_channel(int ch) {
                     }
                 } else {
                     // Recompute coefficients from parameters
-                    output_dsp_compute_biquad_coeffs(s.biquad, type, cfg->sampleRate);
+                    dsp_compute_biquad_coeffs(s.biquad, type, cfg->sampleRate);
                 }
             } else if (type == DSP_LIMITER) {
                 s.limiter.thresholdDb = params["thresholdDb"] | 0.0f;
