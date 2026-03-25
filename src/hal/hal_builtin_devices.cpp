@@ -1,6 +1,7 @@
 #ifdef DAC_ENABLED
 
 #include "hal_builtin_devices.h"
+#include "hal_device_manager.h"
 #include "hal_driver_registry.h"
 #include "hal_types.h"
 #include "hal_device_db.h"  // HAL_DB_MAX_ENTRIES for static_assert
