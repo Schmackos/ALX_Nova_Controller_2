@@ -1,6 +1,6 @@
 """Extended DSP pipeline tests.
 
-Tests DSP stage CRUD, crossover/bass management, import/export,
+Tests DSP stage CRUD, crossover, import/export,
 preset management, and PEQ presets on live hardware.
 All mutating tests restore original state.
 """
@@ -171,13 +171,13 @@ class TestDspStageCrud:
 
 
 # ===========================================================================
-# Crossover / Bass Management
+# Crossover
 # ===========================================================================
 
 @pytest.mark.audio
 @pytest.mark.dsp
 class TestDspCrossover:
-    """Verify crossover and bass management endpoints."""
+    """Verify crossover endpoints."""
 
     def test_apply_lr4_crossover(self, api):
         """POST /api/dsp/crossover applies LR4 crossover."""
@@ -200,17 +200,6 @@ class TestDspCrossover:
         assert resp.status_code in (200, 400)
         _cleanup_test_stages(api, 0)
 
-    def test_bass_management(self, api):
-        """POST /api/dsp/bassmanagement configures bass routing."""
-        resp = api.post("/api/dsp/bassmanagement", json={
-            "frequency": 80,
-            "mainChannels": [0, 1],
-            "subChannel": 2,
-        })
-        assert resp.status_code in (200, 400)
-        _cleanup_test_stages(api, 0)
-        _cleanup_test_stages(api, 1)
-        _cleanup_test_stages(api, 2)
 
 
 # ===========================================================================

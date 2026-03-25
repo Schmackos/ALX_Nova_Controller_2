@@ -1302,32 +1302,6 @@ void test_crossover_lr4_sum_flat(void) {
     }
 }
 
-// ===== Bass Management Test =====
-
-void test_bass_management_setup(void) {
-    dsp_init();
-    int mains[] = {1, 2};
-    int result = dsp_setup_bass_management(0, mains, 2, 80.0f);
-    TEST_ASSERT_EQUAL_INT(0, result);
-
-    DspState *cfg = dsp_get_inactive_config();
-    // Sub channel (0) should have PEQ bands + 2 LPF stages (LR4)
-    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
-
-    // Main channels (1, 2) should each have PEQ bands + 2 HPF stages (LR4)
-    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[1].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[DSP_PEQ_BANDS].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[DSP_PEQ_BANDS + 1].type);
-
-    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[2].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[2].stages[DSP_PEQ_BANDS].type);
-
-    // Channel 3 should only have PEQ bands (untouched)
-    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS, cfg->channels[3].stageCount);
-}
-
 // ===== Expanded Crossover Tests =====
 
 void test_crossover_bw4_q_values(void) {
@@ -2131,113 +2105,6 @@ void test_bessel_crossover_rollback_on_full(void) {
     TEST_ASSERT_EQUAL(-1, idx);
 }
 
-// ===== Speaker Protection Tests =====
-
-void test_speaker_prot_thermal_ramp(void) {
-    DspState *cfg = dsp_get_inactive_config();
-    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
-    TEST_ASSERT_TRUE(idx >= 0);
-    dsp_swap_config();
-
-    cfg = dsp_get_active_config();
-    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
-    float initialTemp = sp.currentTempC;
-
-    // Process sustained loud signal
-    float buf[256];
-    for (int iter = 0; iter < 20; iter++) {
-        for (int i = 0; i < 256; i++) buf[i] = 0.8f;
-        dsp_speaker_prot_process(sp, buf, 256, 48000);
-    }
-    TEST_ASSERT_TRUE(sp.currentTempC > initialTemp); // Temp should rise
-}
-
-void test_speaker_prot_cool_down(void) {
-    DspState *cfg = dsp_get_inactive_config();
-    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
-    TEST_ASSERT_TRUE(idx >= 0);
-    // Use fast thermal time constant so heating/cooling is pronounced in test
-    cfg->channels[0].stages[idx].speakerProt.thermalTauMs = 100.0f;
-    dsp_swap_config();
-
-    cfg = dsp_get_active_config();
-    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
-
-    // Heat it up with loud signal
-    float buf[256];
-    for (int iter = 0; iter < 100; iter++) {
-        for (int i = 0; i < 256; i++) buf[i] = 0.9f;
-        dsp_speaker_prot_process(sp, buf, 256, 48000);
-    }
-    float hotTemp = sp.currentTempC;
-    TEST_ASSERT_TRUE(hotTemp > 26.0f); // Ensure meaningful heating occurred
-
-    // Now process silence — should cool down
-    for (int iter = 0; iter < 100; iter++) {
-        for (int i = 0; i < 256; i++) buf[i] = 0.0f;
-        dsp_speaker_prot_process(sp, buf, 256, 48000);
-    }
-    TEST_ASSERT_TRUE(sp.currentTempC < hotTemp);
-}
-
-void test_speaker_prot_gain_reduction_at_limit(void) {
-    DspState *cfg = dsp_get_inactive_config();
-    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
-    TEST_ASSERT_TRUE(idx >= 0);
-    DspStage &s = cfg->channels[0].stages[idx];
-    s.speakerProt.maxTempC = 50.0f; // Low threshold for fast triggering
-    s.speakerProt.thermalTauMs = 10.0f; // Fast thermal response
-    dsp_swap_config();
-
-    cfg = dsp_get_active_config();
-    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
-
-    float buf[256];
-    for (int iter = 0; iter < 100; iter++) {
-        for (int i = 0; i < 256; i++) buf[i] = 0.95f;
-        dsp_speaker_prot_process(sp, buf, 256, 48000);
-    }
-    TEST_ASSERT_TRUE(sp.gainReduction < 0.0f); // GR should be applied
-}
-
-void test_speaker_prot_excursion_limit(void) {
-    DspState *cfg = dsp_get_inactive_config();
-    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
-    TEST_ASSERT_TRUE(idx >= 0);
-    DspStage &s = cfg->channels[0].stages[idx];
-    s.speakerProt.excursionLimitMm = 0.1f; // Very low limit
-    s.speakerProt.driverDiameterMm = 10.0f; // Small driver = small area = higher excursion estimate
-    dsp_swap_config();
-
-    cfg = dsp_get_active_config();
-    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
-
-    float buf[256];
-    for (int i = 0; i < 256; i++) buf[i] = 0.9f;
-    dsp_speaker_prot_process(sp, buf, 256, 48000);
-
-    // With very low excursion limit, GR should kick in for high amplitude
-    TEST_ASSERT_TRUE(sp.gainReduction < 0.0f);
-}
-
-void test_speaker_prot_metering_populated(void) {
-    DspState *cfg = dsp_get_inactive_config();
-    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
-    TEST_ASSERT_TRUE(idx >= 0);
-    dsp_swap_config();
-
-    cfg = dsp_get_active_config();
-    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
-
-    float buf[256];
-    for (int i = 0; i < 256; i++) buf[i] = 0.5f;
-    dsp_speaker_prot_process(sp, buf, 256, 48000);
-
-    // After processing, runtime fields should be non-zero/meaningful
-    TEST_ASSERT_TRUE(sp.currentTempC >= 25.0f);
-    TEST_ASSERT_TRUE(sp.envelope >= 0.0f);
-}
-
 // ===== Stereo Width Tests =====
 
 void test_stereo_width_mono_collapse(void) {
@@ -2707,7 +2574,6 @@ void test_stage_type_name_all_types(void) {
     TEST_ASSERT_EQUAL_STRING("CONVOLUTION", stage_type_name(DSP_CONVOLUTION));
     TEST_ASSERT_EQUAL_STRING("NOISE_GATE", stage_type_name(DSP_NOISE_GATE));
     TEST_ASSERT_EQUAL_STRING("TONE_CTRL", stage_type_name(DSP_TONE_CTRL));
-    TEST_ASSERT_EQUAL_STRING("SPEAKER_PROT", stage_type_name(DSP_SPEAKER_PROT));
     TEST_ASSERT_EQUAL_STRING("STEREO_WIDTH", stage_type_name(DSP_STEREO_WIDTH));
     TEST_ASSERT_EQUAL_STRING("LOUDNESS", stage_type_name(DSP_LOUDNESS));
     TEST_ASSERT_EQUAL_STRING("BASS_ENHANCE", stage_type_name(DSP_BASS_ENHANCE));
@@ -3272,9 +3138,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_crossover_butterworth_hpf_all_orders);
     RUN_TEST(test_crossover_lr_rollback_on_partial_failure);
 
-    // Bass management
-    RUN_TEST(test_bass_management_setup);
-
     // Linkwitz Transform
     RUN_TEST(test_linkwitz_coefficients_valid);
     RUN_TEST(test_linkwitz_identity_passthrough);
@@ -3319,13 +3182,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_bessel_crossover_insert_order4);
     RUN_TEST(test_bessel_crossover_summation_flat);
     RUN_TEST(test_bessel_crossover_rollback_on_full);
-
-    // Speaker Protection
-    RUN_TEST(test_speaker_prot_thermal_ramp);
-    RUN_TEST(test_speaker_prot_cool_down);
-    RUN_TEST(test_speaker_prot_gain_reduction_at_limit);
-    RUN_TEST(test_speaker_prot_excursion_limit);
-    RUN_TEST(test_speaker_prot_metering_populated);
 
     // Stereo Width
     RUN_TEST(test_stereo_width_mono_collapse);
