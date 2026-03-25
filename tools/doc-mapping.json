@@ -111,6 +111,8 @@
     "src/hal/hal_dsp_bridge.cpp": ["developer/dsp-system"],
     "src/audio_pipeline.h": ["developer/audio-pipeline"],
     "src/audio_pipeline.cpp": ["developer/audio-pipeline"],
+    "src/asrc.h": ["developer/audio-pipeline"],
+    "src/asrc.cpp": ["developer/audio-pipeline"],
     "src/audio_input_source.h": ["developer/audio-pipeline"],
     "src/audio_output_sink.h": ["developer/audio-pipeline"],
     "src/dsp_pipeline.h": ["developer/dsp-system"],
