@@ -20,7 +20,7 @@ extern bool requireAuth();
 
 void registerDiagApiEndpoints() {
   // GET /api/diagnostics — full diagnostics export (delegates to settings_manager)
-  server.on("/api/diagnostics", HTTP_GET, []() {
+  server_on_versioned("/api/diagnostics", HTTP_GET, []() {
     if (!requireAuth()) return;
     if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
         server_send(429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
@@ -30,7 +30,7 @@ void registerDiagApiEndpoints() {
   });
 
   // GET /api/diagnostics/journal — diagnostic journal entries
-  server.on("/api/diagnostics/journal", HTTP_GET, []() {
+  server_on_versioned("/api/diagnostics/journal", HTTP_GET, []() {
     if (!requireAuth()) return;
     JsonDocument doc;
     doc["type"] = "diagJournal";
@@ -63,14 +63,14 @@ void registerDiagApiEndpoints() {
   });
 
   // DELETE /api/diagnostics/journal — clear journal
-  server.on("/api/diagnostics/journal", HTTP_DELETE, []() {
+  server_on_versioned("/api/diagnostics/journal", HTTP_DELETE, []() {
     if (!requireAuth()) return;
     diag_journal_clear();
     server_send(200, "application/json", "{\"success\":true}");
   });
 
   // GET /api/diag/snapshot — compact diagnostic snapshot for AI debugging
-  server.on("/api/diag/snapshot", HTTP_GET, []() {
+  server_on_versioned("/api/diag/snapshot", HTTP_GET, []() {
     if (!requireAuth()) return;
     JsonDocument doc;
     doc["type"] = "diagSnapshot";

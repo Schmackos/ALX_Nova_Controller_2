@@ -44,4 +44,23 @@ router.get('/inputnames', (req, res) => {
   res.json({ success: true, names: ['ADC1 L','ADC1 R','ADC2 L','ADC2 R','SigGen L','SigGen R','USB L','USB R'], numAdcsDetected: 2 });
 });
 
+// GET /health — system health summary (mirrors health_check_api.cpp)
+router.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    overall: 'pass',
+    checks: {
+      system: 'pass',
+      i2c: 'pass',
+      hal: 'pass',
+      i2s: 'pass',
+      network: 'pass',
+      mqtt: 'pass',
+      tasks: 'pass',
+      storage: 'pass',
+      audio: 'pass',
+    },
+  });
+});
+
 module.exports = router;

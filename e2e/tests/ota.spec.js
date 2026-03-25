@@ -27,7 +27,7 @@ test('current firmware version is displayed and check-for-updates button calls t
 
   // Intercept the check request
   let checkedCalled = false;
-  await page.route('/api/checkupdate', async (route) => {
+  await page.route('/api/v1/checkupdate', async (route) => {
     checkedCalled = true;
     await route.fulfill({
       status: 200,

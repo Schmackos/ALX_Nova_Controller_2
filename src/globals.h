@@ -59,4 +59,20 @@ extern const char *firmwareVer;
 extern const char *githubRepoOwner;
 extern const char *githubRepoName;
 
+// ===== API Version Helper =====
+// Registers a handler on both /api/<path> AND /api/v1/<path> for backward compatibility.
+// The /api/ path is retained for existing clients; /api/v1/ is the new canonical path.
+// path must begin with "/api/" (e.g. "/api/settings").
+#ifndef NATIVE_TEST
+#include <functional>
+template<typename THandler>
+inline void server_on_versioned(const char* path, HTTPMethod method, THandler handler) {
+    server.on(path, method, handler);
+    // Build /api/v1/ path: skip the first 4 chars ("/api") and prepend "/api/v1"
+    String v1path = "/api/v1";
+    v1path += (path + 4);  // path+4 skips "/api" → appends "/settings", "/hal/devices", etc.
+    server.on(v1path.c_str(), method, handler);
+}
+#endif
+
 #endif // GLOBALS_H

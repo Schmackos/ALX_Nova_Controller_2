@@ -47,7 +47,7 @@ test.describe('@hal @smoke HAL Fault Counters', () => {
 
   test('GET /api/hal/devices response includes faultCount per device', async ({ connectedPage: page }) => {
     // Intercept the REST API response
-    await page.route('/api/hal/devices', async (route) => {
+    await page.route('/api/v1/hal/devices', async (route) => {
       // Return a mock response that includes faultCount
       const response = {
         devices: HAL_FIXTURE.devices.map(d => ({
@@ -62,9 +62,9 @@ test.describe('@hal @smoke HAL Fault Counters', () => {
       });
     });
 
-    // Fetch via the page context
+    // Fetch via the page context using versioned path (matches intercepted route)
     const result = await page.evaluate(async () => {
-      const resp = await fetch('/api/hal/devices');
+      const resp = await fetch('/api/v1/hal/devices');
       return resp.json();
     });
 

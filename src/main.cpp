@@ -474,11 +474,11 @@ void setup() {
     }
     httpServingPage = false;
   });
-  server.on("/api/auth/login", HTTP_POST, handleLogin);
-  server.on("/api/auth/logout", HTTP_POST, handleLogout);
-  server.on("/api/auth/status", HTTP_GET, handleAuthStatus);
-  server.on("/api/auth/change", HTTP_POST, handlePasswordChange);
-  server.on("/api/ws-token", HTTP_GET, []() {
+  server_on_versioned("/api/auth/login", HTTP_POST, handleLogin);
+  server_on_versioned("/api/auth/logout", HTTP_POST, handleLogout);
+  server_on_versioned("/api/auth/status", HTTP_GET, handleAuthStatus);
+  server_on_versioned("/api/auth/change", HTTP_POST, handlePasswordChange);
+  server_on_versioned("/api/ws-token", HTTP_GET, []() {
     if (!requireAuth()) return;
     handleGetWsToken();
   });
@@ -496,152 +496,139 @@ void setup() {
     httpServingPage = false;
   });
 
-  server.on("/api/ethstatus", HTTP_GET, []() {
+  server_on_versioned("/api/ethstatus", HTTP_GET, []() {
     if (!requireAuth()) return;
     handleEthStatus();
   });
-  server.on("/api/ethconfig", HTTP_POST, []() {
+  server_on_versioned("/api/ethconfig", HTTP_POST, []() {
     if (!requireAuth()) return;
     handleEthConfig();
   });
-  server.on("/api/ethconfig/confirm", HTTP_POST, []() {
+  server_on_versioned("/api/ethconfig/confirm", HTTP_POST, []() {
     if (!requireAuth()) return;
     handleEthConfigConfirm();
   });
-  server.on("/api/wificonfig", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/wificonfig", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleWiFiConfig();
   });
-  server.on("/api/wifisave", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/wifisave", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleWiFiSave();
   });
-  server.on("/api/wifiscan", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/wifiscan", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleWiFiScan();
   });
-  server.on("/api/wifilist", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/wifilist", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleWiFiList();
   });
-  server.on("/api/wifiremove", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/wifiremove", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleWiFiRemove();
   });
-  server.on("/api/apconfig", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/apconfig", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleAPConfigUpdate();
   });
-  server.on("/api/toggleap", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/toggleap", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleAPToggle();
   });
-  server.on("/api/wifistatus", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/wifistatus", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleWiFiStatus();
   });
-  server.on("/api/checkupdate", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/checkupdate", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleCheckUpdate();
   });
-  server.on("/api/startupdate", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/startupdate", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleStartUpdate();
   });
-  server.on("/api/updatestatus", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/updatestatus", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleUpdateStatus();
   });
-  server.on("/api/releasenotes", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/releasenotes", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleGetReleaseNotes();
   });
-  server.on("/api/releases", HTTP_GET, []() {
+  server_on_versioned("/api/releases", HTTP_GET, []() {
     if (!requireAuth()) return;
     handleGetReleaseList();
   });
-  server.on("/api/installrelease", HTTP_POST, []() {
+  server_on_versioned("/api/installrelease", HTTP_POST, []() {
     if (!requireAuth()) return;
     handleInstallRelease();
   });
-  server.on("/api/settings", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/settings", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleSettingsGet();
   });
-  server.on("/api/settings", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/settings", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleSettingsUpdate();
   });
-  server.on("/api/settings/export", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/settings/export", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleSettingsExport();
   });
-  server.on("/api/settings/import", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/settings/import", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleSettingsImport();
   });
   // Diagnostic endpoints registered in diag_api.cpp
-  server.on("/api/factoryreset", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/factoryreset", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleFactoryReset();
   });
-  server.on("/api/reboot", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/reboot", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleReboot();
   });
-  server.on("/api/smartsensing", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/smartsensing", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleSmartSensingGet();
   });
-  server.on("/api/smartsensing", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/smartsensing", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleSmartSensingUpdate();
   });
-  server.on("/api/mqtt", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/mqtt", HTTP_GET, []() {
+    if (!requireAuth()) return;
     handleMqttGet();
   });
-  server.on("/api/mqtt", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
+  server_on_versioned("/api/mqtt", HTTP_POST, []() {
+    if (!requireAuth()) return;
     handleMqttUpdate();
   });
+  // Note: /api/firmware/upload uses a two-handler overload — manually aliased
   server.on(
       "/api/firmware/upload", HTTP_POST,
       []() {
-        if (!requireAuth())
-          return;
+        if (!requireAuth()) return;
         handleFirmwareUploadComplete();
       },
       []() {
-        if (!requireAuth())
-          return;
+        if (!requireAuth()) return;
+        handleFirmwareUploadChunk();
+      });
+  server.on(
+      "/api/v1/firmware/upload", HTTP_POST,
+      []() {
+        if (!requireAuth()) return;
+        handleFirmwareUploadComplete();
+      },
+      []() {
+        if (!requireAuth()) return;
         handleFirmwareUploadChunk();
       });
   // Signal generator endpoints registered in siggen_api.cpp
   // Audio Pipeline Matrix API
-  server.on("/api/pipeline/matrix", HTTP_GET, []() {
+  server_on_versioned("/api/pipeline/matrix", HTTP_GET, []() {
     if (!requireAuth())
       return;
     JsonDocument doc;
@@ -659,7 +646,7 @@ void setup() {
     serializeJson(doc, json);
     server.send(200, "application/json", json);
   });
-  server.on("/api/pipeline/matrix", HTTP_PUT, []() {
+  server_on_versioned("/api/pipeline/matrix", HTTP_PUT, []() {
     if (!requireAuth())
       return;
     if (!server.hasArg("plain")) {
@@ -709,7 +696,7 @@ void setup() {
     server.send(200, "application/json", "{\"success\":true}");
   });
   // Input Names API
-  server.on("/api/inputnames", HTTP_GET, []() {
+  server_on_versioned("/api/inputnames", HTTP_GET, []() {
     if (!requireAuth())
       return;
     JsonDocument doc;
@@ -723,7 +710,7 @@ void setup() {
     serializeJson(doc, json);
     server.send(200, "application/json", json);
   });
-  server.on("/api/inputnames", HTTP_POST, []() {
+  server_on_versioned("/api/inputnames", HTTP_POST, []() {
     if (!requireAuth())
       return;
     if (!server.hasArg("plain")) {
@@ -746,6 +733,39 @@ void setup() {
       saveInputNames();
     }
     server.send(200, "application/json", "{\"success\":true}");
+  });
+
+  // Pipeline format status — new v1 endpoint (also available on /api/v1/ prefix)
+  // Returns per-lane sample rates, mismatch flag, DSD detection, and sink format info.
+  server_on_versioned("/api/pipeline/status", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    doc["success"] = true;
+    doc["rateMismatch"] = appState.audio.rateMismatch;
+    JsonArray laneRates = doc["laneSampleRates"].to<JsonArray>();
+    JsonArray laneDsd = doc["laneDsd"].to<JsonArray>();
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+      laneRates.add(appState.audio.laneSampleRates[lane]);
+      laneDsd.add(appState.audio.laneDsd[lane]);
+    }
+    // Sink format summary
+    JsonArray sinks = doc["sinks"].to<JsonArray>();
+    int sinkCount = audio_pipeline_get_sink_count();
+    for (int s = 0; s < sinkCount; s++) {
+      const AudioOutputSink* sink = audio_pipeline_get_sink(s);
+      if (!sink) continue;
+      JsonObject obj = sinks.add<JsonObject>();
+      obj["index"] = s;
+      obj["name"] = sink->name ? sink->name : "";
+      obj["sampleRate"] = sink->sampleRate;
+      obj["sampleRatesMask"] = sink->sampleRatesMask;
+      obj["bitDepth"] = sink->bitDepth;
+      obj["maxBitDepth"] = sink->maxBitDepth;
+      obj["supportsDsd"] = sink->supportsDsd;
+    }
+    String json;
+    serializeJson(doc, json);
+    server_send(200, "application/json", json);
   });
 
   // Note: Certificate API routes removed - now using Mozilla certificate bundle
@@ -1283,6 +1303,15 @@ void loop() {
     if (millis() - lastAudioHealthBridge >= 5000) {
       lastAudioHealthBridge = millis();
       hal_audio_health_check();
+    }
+  }
+
+  // Format negotiation check (every 5s) — detects source/sink sample rate mismatches
+  {
+    static unsigned long lastFormatCheck = 0;
+    if (millis() - lastFormatCheck >= 5000) {
+      lastFormatCheck = millis();
+      audio_pipeline_check_format();
     }
   }
 

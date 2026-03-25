@@ -93,7 +93,8 @@ enum HalPowerState : uint8_t {
 #define HAL_CAP_DSD          (1 << 11)  // DSD native playback
 #define HAL_CAP_HP_AMP       (1 << 12)  // Integrated headphone amplifier
 #define HAL_CAP_POWER_MGMT   (1 << 13)  // Device supports power management (standby/off)
-// Bit 14-15 reserved for future use
+#define HAL_CAP_ASRC         (1 << 14)  // Asynchronous Sample Rate Conversion (hardware ASRC mezzanine)
+// Bit 15 reserved for future use
 
 // ===== Bus Reference =====
 struct HalBusRef {

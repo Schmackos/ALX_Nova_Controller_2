@@ -18,7 +18,7 @@ static const unsigned long MATRIX_SAVE_DELAY_MS = 2000;
 
 void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     // GET /api/pipeline/matrix — returns 8x8 gain array + input/output names
-    server.on("/api/pipeline/matrix", HTTP_GET, []() {
+    server_on_versioned("/api/pipeline/matrix", HTTP_GET, []() {
         JsonDocument doc;
 
         // Matrix gains
@@ -52,7 +52,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     });
 
     // POST /api/pipeline/matrix/cell — set a single cell: {out, in, gainDb}
-    server.on("/api/pipeline/matrix/cell", HTTP_POST, []() {
+    server_on_versioned("/api/pipeline/matrix/cell", HTTP_POST, []() {
         if (!server.hasArg("plain")) {
             server_send(400, "application/json", "{\"error\":\"no body\"}");
             return;
@@ -92,7 +92,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     });
 
     // GET /api/pipeline/sinks — registered output sinks with VU/ready state
-    server.on("/api/pipeline/sinks", HTTP_GET, []() {
+    server_on_versioned("/api/pipeline/sinks", HTTP_GET, []() {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
 
@@ -117,7 +117,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     });
 
     // GET /api/output/dsp?ch=N — get output DSP channel config
-    server.on("/api/output/dsp", HTTP_GET, []() {
+    server_on_versioned("/api/output/dsp", HTTP_GET, []() {
         int ch = server.hasArg("ch") ? server.arg("ch").toInt() : -1;
         if (ch < 0 || ch >= OUTPUT_DSP_MAX_CHANNELS) {
             server_send(400, "application/json", "{\"error\":\"invalid channel\"}");
@@ -171,7 +171,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     });
 
     // POST /api/output/dsp/stage — add stage: {ch, type, position?}
-    server.on("/api/output/dsp/stage", HTTP_POST, []() {
+    server_on_versioned("/api/output/dsp/stage", HTTP_POST, []() {
         if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }
@@ -220,7 +220,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     });
 
     // DELETE /api/output/dsp/stage — remove stage: {ch, index}
-    server.on("/api/output/dsp/stage", HTTP_DELETE, []() {
+    server_on_versioned("/api/output/dsp/stage", HTTP_DELETE, []() {
         if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }
@@ -246,7 +246,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     });
 
     // PUT /api/output/dsp — set channel config: {ch, bypass, stages:[...]}
-    server.on("/api/output/dsp", HTTP_PUT, []() {
+    server_on_versioned("/api/output/dsp", HTTP_PUT, []() {
         if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }
@@ -281,7 +281,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
     });
 
     // POST /api/output/dsp/crossover — setup crossover: {subCh, mainCh, freqHz, order}
-    server.on("/api/output/dsp/crossover", HTTP_POST, []() {
+    server_on_versioned("/api/output/dsp/crossover", HTTP_POST, []() {
         if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }

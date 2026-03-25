@@ -25,7 +25,7 @@ test.describe('@audio @api Audio Matrix Routing', () => {
   });
 
   test('matrix cell click sends API call', async ({ connectedPage: page }) => {
-    const apiCapture = captureApiCall(page, '**/api/pipeline/matrix/cell', 'POST');
+    const apiCapture = captureApiCall(page, '**/api/v1/pipeline/matrix/cell', 'POST');
     await apiCapture.ready;
 
     // Click cell at out=2, in=0
@@ -43,7 +43,7 @@ test.describe('@audio @api Audio Matrix Routing', () => {
 
   test('1:1 preset button sends correct matrix API calls', async ({ connectedPage: page }) => {
     let apiCalls = [];
-    await page.route('**/api/pipeline/matrix/cell', async (route, request) => {
+    await page.route('**/api/v1/pipeline/matrix/cell', async (route, request) => {
       let body = null;
       try { body = request.postDataJSON(); } catch { body = request.postData(); }
       apiCalls.push(body);
@@ -64,7 +64,7 @@ test.describe('@audio @api Audio Matrix Routing', () => {
 
   test('clear preset sends correct matrix API calls', async ({ connectedPage: page }) => {
     let apiCallCount = 0;
-    await page.route('**/api/pipeline/matrix/cell', async (route) => {
+    await page.route('**/api/v1/pipeline/matrix/cell', async (route) => {
       apiCallCount++;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', gainLinear: 0 }) });
     });
@@ -78,7 +78,7 @@ test.describe('@audio @api Audio Matrix Routing', () => {
   });
 
   test('matrix save sends POST request', async ({ connectedPage: page }) => {
-    const apiCapture = captureApiCall(page, '**/api/pipeline/matrix/save', 'POST');
+    const apiCapture = captureApiCall(page, '**/api/v1/pipeline/matrix/save', 'POST');
     await apiCapture.ready;
 
     await page.locator('.matrix-presets button').filter({ hasText: 'Save' }).click();
@@ -88,11 +88,11 @@ test.describe('@audio @api Audio Matrix Routing', () => {
   test('matrix load sends POST request', async ({ connectedPage: page }) => {
     // Intercept both the load POST and the subsequent GET for matrix data
     let loadCalled = false;
-    await page.route('**/api/pipeline/matrix/load', async (route) => {
+    await page.route('**/api/v1/pipeline/matrix/load', async (route) => {
       loadCalled = true;
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' });
     });
-    await page.route('**/api/pipeline/matrix', async (route, request) => {
+    await page.route('**/api/v1/pipeline/matrix', async (route, request) => {
       if (request.method() === 'GET') {
         await route.fulfill({
           status: 200,

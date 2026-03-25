@@ -111,6 +111,13 @@ float audio_pipeline_get_sink_volume(uint8_t slot);
 void audio_pipeline_save_matrix();
 void audio_pipeline_load_matrix();
 
+// Format negotiation — call from main-loop context (not audio task).
+// Reads each active source's getSampleRate(), compares against registered
+// sink sampleRates, and updates appState.audio.rateMismatch + laneSampleRates.
+// Emits DIAG_AUDIO_RATE_MISMATCH once on first detection; clears on resolution.
+// Returns true if any mismatch is currently active.
+bool audio_pipeline_check_format();
+
 // Cross-core audio pause/resume protocol.
 // Callers that teardown/reinstall I2S drivers MUST use these instead of
 // directly setting appState.audio.paused.

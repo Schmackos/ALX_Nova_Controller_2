@@ -60,6 +60,8 @@ enum DiagErrorCode : uint16_t {
     DIAG_AUDIO_DC_OFFSET_HIGH           = 0x200C,  // DC offset > 5% sustained
     DIAG_AUDIO_PIPELINE_STALL           = 0x200D,  // NO_DATA with HAL AVAILABLE
     DIAG_AUDIO_DMA_ALLOC_FAIL           = 0x200E,  // DMA buffer allocation failed (internal SRAM)
+    DIAG_AUDIO_RATE_MISMATCH            = 0x200F,  // Source/sink sample rate mismatch detected
+    DIAG_AUDIO_DSD_DETECTED             = 0x2010,  // DoP DSD content detected on pipeline lane
 
     // ===== 0x30xx: DSP =====
     DIAG_DSP_SWAP_FAIL                  = 0x3001,  // Config swap mutex timeout

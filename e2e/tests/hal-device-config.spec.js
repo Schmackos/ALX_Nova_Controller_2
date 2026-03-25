@@ -80,7 +80,7 @@ test.describe('@hal @api HAL Device Config', () => {
     const card = await openEditForm(page, 'ES9822PRO');
 
     let putPayload = null;
-    await page.route('/api/hal/devices', async (route) => {
+    await page.route('/api/v1/hal/devices', async (route) => {
       if (route.request().method() === 'PUT') {
         putPayload = JSON.parse(route.request().postData());
         await route.fulfill({

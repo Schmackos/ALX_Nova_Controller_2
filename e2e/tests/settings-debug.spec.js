@@ -62,7 +62,7 @@ test.describe('@settings @ws Settings Debug', () => {
     let postBody = null;
 
     await test.step('Set up route intercept', async () => {
-      await page.route('**/api/settings', async (route) => {
+      await page.route('**/api/v1/settings', async (route) => {
         if (route.request().method() === 'POST') {
           settingsPosted = true;
           postBody = JSON.parse(route.request().postData());
@@ -96,7 +96,7 @@ test.describe('@settings @ws Settings Debug', () => {
     let postBody = null;
 
     await test.step('Set up route intercept', async () => {
-      await page.route('**/api/settings', async (route) => {
+      await page.route('**/api/v1/settings', async (route) => {
         if (route.request().method() === 'POST') {
           settingsPosted = true;
           postBody = JSON.parse(route.request().postData());

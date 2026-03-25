@@ -81,8 +81,16 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
 }
 
 void registerHalApiEndpoints(WebServer& server) {
+    // Helper: register handler on both /api/<path> and /api/v1/<path>
+    auto server_on_v = [&server](const char* path, HTTPMethod method, WebServer::THandlerFunction handler) {
+        server.on(path, method, handler);
+        String v1path = "/api/v1";
+        v1path += (path + 4);  // skip "/api", prepend "/api/v1"
+        server.on(v1path.c_str(), method, handler);
+    };
+
     // GET /api/hal/devices — list all registered devices
-    server.on("/api/hal/devices", HTTP_GET, [&server]() {
+    server_on_v("/api/hal/devices", HTTP_GET, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
@@ -103,7 +111,7 @@ void registerHalApiEndpoints(WebServer& server) {
     // task on Core 0 so the web server remains responsive throughout.
     // Poll GET /api/hal/devices or watch the "halDeviceState" WebSocket
     // broadcast (scanning=false) to know when the scan is complete.
-    server.on("/api/hal/scan", HTTP_POST, [&server]() {
+    server_on_v("/api/hal/scan", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
         if (appState._halScanInProgress) {
             server_send(409, "application/json", "{\"error\":\"Scan already in progress\"}");
@@ -156,7 +164,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // GET /api/hal/db — list device database entries
-    server.on("/api/hal/db", HTTP_GET, [&server]() {
+    server_on_v("/api/hal/db", HTTP_GET, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
@@ -179,7 +187,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // GET /api/hal/db/presets — list available device presets
-    server.on("/api/hal/db/presets", HTTP_GET, [&server]() {
+    server_on_v("/api/hal/db/presets", HTTP_GET, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
@@ -199,7 +207,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // POST /api/hal/devices — manually register a device by compatible string
-    server.on("/api/hal/devices", HTTP_POST, [&server]() {
+    server_on_v("/api/hal/devices", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
@@ -266,7 +274,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // PUT /api/hal/devices — update device config
-    server.on("/api/hal/devices", HTTP_PUT, [&server]() {
+    server_on_v("/api/hal/devices", HTTP_PUT, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
@@ -351,7 +359,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // DELETE /api/hal/devices — remove a device
-    server.on("/api/hal/devices", HTTP_DELETE, [&server]() {
+    server_on_v("/api/hal/devices", HTTP_DELETE, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
@@ -395,7 +403,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // POST /api/hal/devices/reinit — re-initialize a device
-    server.on("/api/hal/devices/reinit", HTTP_POST, [&server]() {
+    server_on_v("/api/hal/devices/reinit", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
@@ -445,7 +453,7 @@ void registerHalApiEndpoints(WebServer& server) {
     // POST /api/hal/devices/power — set power management state for a device
     // Body: {"slot": N, "state": "active"|"standby"|"off"}
     // Returns 422 if the device does not advertise HAL_CAP_POWER_MGMT.
-    server.on("/api/hal/devices/power", HTTP_POST, [&server]() {
+    server_on_v("/api/hal/devices/power", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
@@ -512,7 +520,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // GET /api/hal/settings — auto-discovery toggle
-    server.on("/api/hal/settings", HTTP_GET, [&server]() {
+    server_on_v("/api/hal/settings", HTTP_GET, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         doc["halAutoDiscovery"] = appState.halAutoDiscovery;
@@ -522,7 +530,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // PUT /api/hal/settings — save auto-discovery toggle
-    server.on("/api/hal/settings", HTTP_PUT, [&server]() {
+    server_on_v("/api/hal/settings", HTTP_PUT, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain")) == DeserializationError::Ok) {
@@ -535,7 +543,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // GET /api/hal/devices/custom — list custom device schemas stored in LittleFS
-    server.on("/api/hal/devices/custom", HTTP_GET, [&server]() {
+    server_on_v("/api/hal/devices/custom", HTTP_GET, [&server]() {
         if (!requireAuth()) return;
         JsonDocument doc;
         JsonArray arr = doc["schemas"].to<JsonArray>();
@@ -559,7 +567,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // POST /api/hal/devices/custom — upload a JSON device schema
-    server.on("/api/hal/devices/custom", HTTP_POST, [&server]() {
+    server_on_v("/api/hal/devices/custom", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
         String bodyBuf = server.arg("plain");
 
@@ -596,7 +604,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // DELETE /api/hal/devices/custom — remove a schema by name query param (?name=<compatible>)
-    server.on("/api/hal/devices/custom", HTTP_DELETE, [&server]() {
+    server_on_v("/api/hal/devices/custom", HTTP_DELETE, [&server]() {
         if (!requireAuth()) return;
         if (!server.hasArg("name")) {
             server_send(400, "application/json", "{\"error\":\"Missing name parameter\"}");
@@ -622,7 +630,7 @@ void registerHalApiEndpoints(WebServer& server) {
     //                    capabilities[], initSequence[] (up to 32 {reg, val} pairs).
     // Auto-generates compatible: "custom," + slugified(name).
     // Returns 201 with slot, name, state.
-    server.on("/api/hal/devices/custom/create", HTTP_POST, [&server]() {
+    server_on_v("/api/hal/devices/custom/create", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
         JsonDocument body;
         DeserializationError err = deserializeJson(body, server.arg("plain"));
@@ -781,7 +789,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // POST /api/hal/devices/faults/clear — reset all persistent fault counters (field service)
-    server.on("/api/hal/devices/faults/clear", HTTP_POST, [&server]() {
+    server_on_v("/api/hal/devices/faults/clear", HTTP_POST, [&server]() {
         if (!requireAuth()) return;
         HalDeviceManager::instance().clearFaultCounters();
         LOG_I("[HAL:API] Fault counters cleared by field service request");
@@ -789,7 +797,7 @@ void registerHalApiEndpoints(WebServer& server) {
     });
 
     // GET /api/hal/scan/unmatched — return unmatched I2C addresses from last scan
-    server.on("/api/hal/scan/unmatched", HTTP_GET, [&server]() {
+    server_on_v("/api/hal/scan/unmatched", HTTP_GET, [&server]() {
         if (!requireAuth()) return;
         HalUnmatchedAddr buf[HAL_UNMATCHED_MAX];
         int n = hal_get_unmatched_addresses(buf, HAL_UNMATCHED_MAX);
