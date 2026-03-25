@@ -39,6 +39,7 @@
 #include "diag_journal.h"
 #include "app_events.h"
 #include "psram_alloc.h"
+#include "asrc.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "output_dsp.h"
@@ -390,6 +391,31 @@ static void pipeline_to_float() {
     }
 }
 
+// Resample per-lane float buffers via ASRC when the source rate differs from
+// the pipeline's operating rate (48kHz). DSD lanes are skipped automatically.
+// Must be called after pipeline_to_float() and before pipeline_run_dsp()
+// so DSP biquad coefficients (computed for 48kHz) are applied to 48kHz data.
+static void pipeline_resample_inputs() {
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        if (!_laneL[lane] || !_laneR[lane]) continue;
+        // DSD lanes must not be SRC'd — polyphase filter would corrupt the DoP bitstream
+        if (_sources[lane].isDsd) {
+            asrc_bypass(lane);
+            continue;
+        }
+        if (!asrc_is_active(lane)) continue;
+        // ASRC processes FRAMES input samples and writes up to ASRC_OUTPUT_FRAMES_MAX output.
+        // Buffers are sized ASRC_OUTPUT_FRAMES_MAX in audio_pipeline_init().
+        (void)asrc_process_lane(lane, _laneL[lane], _laneR[lane], FRAMES);
+        // Output frame count may differ from FRAMES, but the pipeline currently
+        // operates on fixed FRAMES. When srcRate < dstRate (upsampling), more frames
+        // are produced; the extra samples are valid and will be processed by DSP/matrix.
+        // When srcRate > dstRate (downsampling), fewer frames are produced; the tail
+        // of the buffer retains old data but the pipeline will only use what was written.
+        // TODO (v2): propagate variable frame count through the pipeline for strict correctness.
+    }
+}
+
 static void pipeline_run_dsp() {
 #ifdef DSP_ENABLED
     // Float-native DSP — no int32 bridge needed (saves ~2KB + 4 conversion loops)
@@ -674,6 +700,7 @@ static void audio_pipeline_task_fn(void * /*param*/) {
         uint32_t _tInputEnd      = micros();
 
         pipeline_to_float();
+        pipeline_resample_inputs();
 
         // --- Timing: per-input DSP ---
         uint32_t _tInputDspStart = micros();
@@ -793,6 +820,7 @@ void audio_pipeline_init() {
 #ifdef DAC_ENABLED
     dac_boot_prepare();
 #endif
+    asrc_init();
 
     // Allocate float working buffers
 #ifdef NATIVE_TEST
@@ -1383,4 +1411,28 @@ bool audio_pipeline_check_format() {
     }
 
     return mismatch;
+}
+
+// ---------------------------------------------------------------------------
+// audio_pipeline_set_lane_src()
+// ---------------------------------------------------------------------------
+
+void audio_pipeline_set_lane_src(int lane, uint32_t srcRate, uint32_t dstRate) {
+    if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return;
+
+    if (srcRate == 0) {
+        // Deactivate ASRC for all lanes (e.g., on source removal)
+        for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
+            asrc_set_ratio(i, 0, 0);
+            appState.audio.laneSrcActive[i] = false;
+        }
+        return;
+    }
+
+    asrc_set_ratio(lane, srcRate, dstRate);
+    bool active = asrc_is_active(lane);
+    appState.audio.laneSrcActive[lane] = active;
+
+    LOG_I("[Audio] ASRC lane %d: %luHz->%luHz active=%d",
+          lane, (unsigned long)srcRate, (unsigned long)dstRate, (int)active);
 }

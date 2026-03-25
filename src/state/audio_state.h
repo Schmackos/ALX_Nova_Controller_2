@@ -92,6 +92,7 @@ struct AudioState {
   bool     rateMismatch = false;                          // True when input/output sample rates differ
   uint32_t laneSampleRates[AUDIO_PIPELINE_MAX_INPUTS] = {}; // Per-lane sample rate (Hz, 0=unknown)
   bool     laneDsd[AUDIO_PIPELINE_MAX_INPUTS] = {};      // Per-lane DoP DSD detection flag
+  bool     laneSrcActive[AUDIO_PIPELINE_MAX_INPUTS] = {}; // True when ASRC is active for this lane
 };
 
 #endif // STATE_AUDIO_STATE_H

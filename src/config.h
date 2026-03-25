@@ -256,6 +256,17 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define AUDIO_PIPELINE_MATRIX_SIZE 32  // 32x32 routing matrix (16 sinks × 2ch = 32 output channels)
 #define AUDIO_OUT_MAX_SINKS AUDIO_PIPELINE_MAX_OUTPUTS
 
+// ===== ASRC (Asynchronous Sample Rate Converter) Configuration =====
+// Polyphase FIR: ASRC_MAX_PHASES branches × ASRC_MAX_TAPS taps per branch.
+// Coefficient table size: ASRC_MAX_PHASES * ASRC_MAX_TAPS * 4 bytes = 20KB (in PSRAM).
+// Per-lane history buffers: ASRC_MAX_TAPS * sizeof(float) * 2 channels = 256 bytes each.
+#ifndef ASRC_MAX_TAPS
+#define ASRC_MAX_TAPS   32    // FIR taps per polyphase branch
+#endif
+#ifndef ASRC_MAX_PHASES
+#define ASRC_MAX_PHASES 160   // Polyphase branches (determines SRC quality / ratio precision)
+#endif
+
 // ===== ES8311 Onboard Codec (P4 only) =====
 // Waveshare ESP32-P4-WiFi6-DEV-Kit has ES8311 DAC + NS4150B speaker amp
 // I2S pins are internal to PCB (not on 40-pin header)

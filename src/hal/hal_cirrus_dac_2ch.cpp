@@ -37,6 +37,11 @@
 #define CS43198_REG_VOL_A             0x001E
 #define CS43198_REG_VOL_B             0x001F
 #define CS43198_REG_CLOCK_CTL         0x000C
+#define CS43198_REG_DSD_PATH          0x0030
+#define CS43198_REG_DSD_INT           0x0031
+#define CS43198_DSD_PATH_ENABLE       0x01
+#define CS43198_DSD_PATH_DISABLE      0x00
+#define CS43198_DSD_INT_DOP           0x01
 #define CS43198_PDN_BIT               0x01
 #define CS43198_FMT_I2S               0x00
 #define CS43198_WL_32BIT              0x00
@@ -65,6 +70,11 @@
 #define CS43131_REG_VOL_B             0x001F
 #define CS43131_REG_CLOCK_CTL         0x000C
 #define CS43131_REG_HP_CTL            0x0032
+#define CS43131_REG_DSD_PATH          0x0030
+#define CS43131_REG_DSD_INT           0x0031
+#define CS43131_DSD_PATH_ENABLE       0x01
+#define CS43131_DSD_PATH_DISABLE      0x00
+#define CS43131_DSD_INT_DOP           0x01
 #define CS43131_HP_AMP_ENABLE         0x01
 #define CS43131_HP_AMP_DISABLE        0x00
 #define CS43131_PDN_BIT               0x01
@@ -103,6 +113,10 @@
 #define CS4398_PDN_BIT                0x80
 #define CS4398_FM_MASK                0x30
 #define CS4398_FM_SINGLE              0x00
+// CS4398 DSD: CHSL bit6 in REG_MODE_CTL enables DSD input path
+#define CS4398_DSD_BIT                0x40
+#define CS4398_DSD_PATH_ENABLE        CS4398_DSD_BIT
+#define CS4398_DSD_PATH_DISABLE       0x00
 #define CS4398_FM_DOUBLE              0x10
 #define CS4398_FM_QUAD                0x20
 #define CS4398_CP_EN_BIT              0x80
@@ -143,7 +157,7 @@
 #define CS4399_FILTER_COUNT           5
 #define CS4399_IFACE_DEFAULT          (CS4399_FMT_I2S | CS4399_WL_32BIT)
 
-// ----- CS43130 (chip ID 0x96, 16-bit paged, + HP amp + NOS mode) -----
+// ----- CS43130 (chip ID 0x96, 16-bit paged, + HP amp + NOS mode, DSD64 only) -----
 #define CS43130_I2C_ADDR              0x48
 #define CS43130_CHIP_ID               0x96
 #define CS43130_CHIP_ID_MASK          0xFF
@@ -158,6 +172,11 @@
 #define CS43130_NOS_ENABLE            0x01
 #define CS43130_NOS_DISABLE           0x00
 #define CS43130_REG_HP_CTL            0x0032
+#define CS43130_REG_DSD_PATH          0x0030
+#define CS43130_REG_DSD_INT           0x0031
+#define CS43130_DSD_PATH_ENABLE       0x01
+#define CS43130_DSD_PATH_DISABLE      0x00
+#define CS43130_DSD_INT_DOP           0x01
 #define CS43130_HP_AMP_ENABLE         0x01
 #define CS43130_HP_AMP_DISABLE        0x00
 #define CS43130_PDN_BIT               0x01
@@ -311,6 +330,13 @@ const CirrusDac2chDescriptor kDescCS43198 = {
     /* regNos             */ REG_NO_FEATURE_16,
     /* nosEnableVal       */ 0x00,
     /* nosDisableVal      */ 0x00,
+    /* regDsdPath         */ CS43198_REG_DSD_PATH,
+    /* dsdPathEnable      */ CS43198_DSD_PATH_ENABLE,
+    /* dsdPathDisable     */ CS43198_DSD_PATH_DISABLE,
+    /* dsdPathMask        */ 0x01,
+    /* regDsdInt          */ CS43198_REG_DSD_INT,
+    /* dsdIntDefault      */ CS43198_DSD_INT_DOP,
+    /* dsdFuncMode        */ 0xFF,
     /* logPrefix          */ "[HAL:CS43198]",
 };
 
@@ -363,6 +389,13 @@ const CirrusDac2chDescriptor kDescCS43131 = {
     /* regNos             */ REG_NO_FEATURE_16,
     /* nosEnableVal       */ 0x00,
     /* nosDisableVal      */ 0x00,
+    /* regDsdPath         */ CS43131_REG_DSD_PATH,
+    /* dsdPathEnable      */ CS43131_DSD_PATH_ENABLE,
+    /* dsdPathDisable     */ CS43131_DSD_PATH_DISABLE,
+    /* dsdPathMask        */ 0x01,
+    /* regDsdInt          */ CS43131_REG_DSD_INT,
+    /* dsdIntDefault      */ CS43131_DSD_INT_DOP,
+    /* dsdFuncMode        */ 0xFF,
     /* logPrefix          */ "[HAL:CS43131]",
 };
 
@@ -415,6 +448,13 @@ const CirrusDac2chDescriptor kDescCS4398 = {
     /* regNos             */ REG_NO_FEATURE_16,
     /* nosEnableVal       */ 0x00,
     /* nosDisableVal      */ 0x00,
+    /* regDsdPath         */ CS4398_REG_MODE_CTL,   // DSD via CHSL bit6 in MODE_CTL
+    /* dsdPathEnable      */ CS4398_DSD_PATH_ENABLE,
+    /* dsdPathDisable     */ CS4398_DSD_PATH_DISABLE,
+    /* dsdPathMask        */ CS4398_DSD_BIT,        // Read-modify-write only the CHSL bit
+    /* regDsdInt          */ REG_NO_FEATURE_16,     // CS4398 has no separate DSD interface reg
+    /* dsdIntDefault      */ 0x00,
+    /* dsdFuncMode        */ 0xFF,
     /* logPrefix          */ "[HAL:CS4398]",
 };
 
@@ -467,6 +507,13 @@ const CirrusDac2chDescriptor kDescCS4399 = {
     /* regNos             */ CS4399_REG_NOS_CTL,
     /* nosEnableVal       */ CS4399_NOS_ENABLE,
     /* nosDisableVal      */ CS4399_NOS_DISABLE,
+    /* regDsdPath         */ REG_NO_FEATURE_16,     // CS4399 has no DSD support
+    /* dsdPathEnable      */ 0x00,
+    /* dsdPathDisable     */ 0x00,
+    /* dsdPathMask        */ 0xFF,
+    /* regDsdInt          */ REG_NO_FEATURE_16,
+    /* dsdIntDefault      */ 0x00,
+    /* dsdFuncMode        */ 0xFF,
     /* logPrefix          */ "[HAL:CS4399]",
 };
 
@@ -519,6 +566,13 @@ const CirrusDac2chDescriptor kDescCS43130 = {
     /* regNos             */ CS43130_REG_NOS_CTL,
     /* nosEnableVal       */ CS43130_NOS_ENABLE,
     /* nosDisableVal      */ CS43130_NOS_DISABLE,
+    /* regDsdPath         */ CS43130_REG_DSD_PATH,  // CS43130: DSD64 only
+    /* dsdPathEnable      */ CS43130_DSD_PATH_ENABLE,
+    /* dsdPathDisable     */ CS43130_DSD_PATH_DISABLE,
+    /* dsdPathMask        */ 0x01,
+    /* regDsdInt          */ CS43130_REG_DSD_INT,
+    /* dsdIntDefault      */ CS43130_DSD_INT_DOP,
+    /* dsdFuncMode        */ 0xFF,
     /* logPrefix          */ "[HAL:CS43130]",
 };
 
@@ -882,6 +936,76 @@ bool HalCirrusDac2ch::setNosMode(bool enable) {
 
 bool HalCirrusDac2ch::isNosMode() const {
     return _nosEnabled;
+}
+
+// ===========================================================================
+// DSD mode switching
+// ===========================================================================
+// Sequence: mute → 5ms settle → write DSD registers → 10ms settle → unmute.
+// For CS4398: DSD is a single bit in MODE_CTL (read-modify-write).
+// For paged chips (CS43198, CS43131, CS43130): write DSD_PATH and DSD_INT.
+// regDsdPath == 0xFFFF means no DSD support (CS4399) — returns false.
+
+bool HalCirrusDac2ch::setDsdMode(bool enable) {
+    if (_desc.regDsdPath == REG_NO_FEATURE_16) return false;
+    if (!_initialized) return false;
+    if (_dsdEnabled == enable) return true;  // No change
+
+    // Step 1: Mute to avoid click during mode switch
+    setMute(true);
+
+#ifndef NATIVE_TEST
+    delay(5);
+#endif
+
+    bool ok;
+    if (_desc.regType == REG_8BIT) {
+        // CS4398: single CHSL bit in MODE_CTL — read-modify-write
+        uint8_t modeCtl = _readReg(_desc.regDsdPath);
+        if (enable) {
+            modeCtl = (uint8_t)((modeCtl & (uint8_t)~_desc.dsdPathMask) | _desc.dsdPathEnable);
+        } else {
+            modeCtl = (uint8_t)(modeCtl & (uint8_t)~_desc.dsdPathMask);
+        }
+        ok = _writeReg(_desc.regDsdPath, modeCtl);
+    } else {
+        // Paged chips (CS43198, CS43131, CS43130): dedicated DSD_PATH and DSD_INT registers
+        if (enable) {
+            // Write DSD interface config before enabling DSD path
+            if (_desc.regDsdInt != REG_NO_FEATURE_16) {
+                _writeReg(_desc.regDsdInt, _desc.dsdIntDefault);
+            }
+            ok = _writeReg(_desc.regDsdPath, _desc.dsdPathEnable);
+        } else {
+            ok = _writeReg(_desc.regDsdPath, _desc.dsdPathDisable);
+            if (_desc.regDsdInt != REG_NO_FEATURE_16) {
+                _writeReg(_desc.regDsdInt, 0x00);
+            }
+        }
+    }
+
+    if (!ok) {
+        setMute(false);
+        return false;
+    }
+
+    _dsdEnabled = enable;
+
+#ifndef NATIVE_TEST
+    delay(10);
+#endif
+
+    // Step 3: Unmute (restore previous mute state only if we weren't already muted)
+    if (!_muted) {
+        setMute(false);
+    }
+
+    LOG_I("%s DSD mode: %s", _desc.logPrefix, enable ? "enabled (DoP)" : "disabled (PCM)");
+    return true;
+}
+
+bool HalCirrusDac2ch::isDsdMode() const {
+    return _dsdEnabled;
 }
 
 #endif // DAC_ENABLED
