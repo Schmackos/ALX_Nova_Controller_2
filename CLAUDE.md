@@ -49,18 +49,22 @@ DAC device state (enabled, volume, mute, filterMode) lives in `HalDeviceConfig` 
 ### Module Map
 **Audio** (`src/`): `audio_pipeline.h/.cpp` (8-lane→DSP→32x32 matrix→DSP→16-slot sink, float32; includes DoP DSD detection, format negotiation via `audio_pipeline_check_format()`), `i2s_audio.h/.cpp` (3 I2S ports, unified `I2sPortState _port[3]`), `i2s_port_api.cpp` (REST), `output_dsp.h/.cpp` (per-output mono DSP), `dsp_pipeline.h/.cpp` (4ch biquad/FIR/limiter/gain/delay/compressor), `signal_generator.h/.cpp`, `thd_measurement.h/.cpp`, `dsp_convolution.h/.cpp`
 
-**HAL** (`src/hal/`): `hal_device_manager.h/.cpp` (32-slot singleton, pin tracking, NVS fault persistence), `hal_pipeline_bridge.h/.cpp` (sink/source registration), `hal_discovery.h/.cpp` (I2C scan→EEPROM→manual, async rescan), `hal_device_db.h/.cpp`, `hal_api.h/.cpp` (16 REST endpoints), `hal_custom_device.h/.cpp` (tier 1-3 user devices), `hal_i2c_bus.h/.cpp` (3 buses, per-bus mutex), `hal_eeprom_api.h/.cpp`, `hal_settings.h/.cpp`
+**HAL** (`src/hal/`): `hal_device_manager.h/.cpp` (32-slot singleton, pin tracking, NVS fault persistence), `hal_pipeline_bridge.h/.cpp` (sink/source registration), `hal_discovery.h/.cpp` (I2C scan→EEPROM→manual, async rescan), `hal_device_db.h/.cpp`, `hal_api.h/.cpp` (16 REST endpoints), `hal_custom_device.h/.cpp` (tier 1-3 user devices), `hal_i2c_bus.h/.cpp` (3 buses, per-bus mutex), `hal_eeprom_api.h/.cpp`, `hal_settings.h/.cpp`, `hal_builtin_devices.h/.cpp` (wires static device dependencies at boot via `hal_wire_builtin_dependencies()`)
 
 **Network**: `wifi_manager.cpp` (multi-network, AP mode), `mqtt_handler.cpp` + `mqtt_publish.cpp` + `mqtt_ha_discovery.cpp` (TLS, HA auto-discovery), `mqtt_task.cpp` (Core 0, 20Hz), `ota_updater.cpp` (SHA256 verified)
 
 **Web UI**: `web_pages.cpp`/`web_pages_gz.cpp` (**auto-generated — edit `web_src/` then run `node tools/build_web_assets.js`**). WebSocket: `websocket_command.cpp`, `websocket_broadcast.cpp`, `websocket_auth.cpp` (port 81, token auth, 16 clients max). REST API versioning: all endpoints available at both `/api/<path>` and `/api/v1/<path>`. Frontend `apiFetch()` in `01-core.js` auto-rewrites `/api/` → `/api/v1/` (except `/api/__test__/`). E2E tests use `**/api/v1/...` route patterns.
 
-**Other**: `settings_manager.cpp` (JSON + NVS), `auth_handler.cpp` (PBKDF2-SHA256, rate limiting), `http_security.h` (`server_send()` wrapper, `sanitize_filename()`), `health_check.h/.cpp` (9 categories), `psram_alloc.h/.cpp` (PSRAM-first with SRAM fallback, 64KB cap), `smart_sensing.cpp`, `button_handler.cpp`, `buzzer_handler.cpp`, `debug_serial.h` (LOG_D/I/W/E macros)
+**Other**: `settings_manager.cpp` (JSON + NVS), `auth_handler.cpp` (PBKDF2-SHA256, rate limiting), `http_security.h` (`server_send()` wrapper, `sanitize_filename()`), `health_check.h/.cpp` (10 categories, including `clock` health), `psram_alloc.h/.cpp` (PSRAM-first with SRAM fallback, 64KB cap), `smart_sensing.cpp`, `button_handler.cpp`, `buzzer_handler.cpp`, `debug_serial.h` (LOG_D/I/W/E macros)
 
 **GUI**: LVGL v9.4 + LovyanGFX on ST7735S 128x160. Core 0 via `gui_task`. Guarded by `-D GUI_ENABLED`. Screens in `src/gui/screens/`.
 
 ### HAL Framework
-Device lifecycle: UNKNOWN → DETECTED → CONFIGURING → AVAILABLE ⇄ UNAVAILABLE → ERROR / REMOVED / DISABLED. Cross-core atomic accessors: `setReady(bool)`/`isReady()` with `__ATOMIC_RELEASE`/`__ATOMIC_ACQUIRE`. **All drivers must use `setReady()` — never raw `_ready =`**. Config validation via `hal_validate_config()`. Capability flags: `uint16_t` (15 bits defined: 0-14). Key caps: `HAL_CAP_DSD` (11), `HAL_CAP_HP_AMP` (12), `HAL_CAP_POWER_MGMT` (13), `HAL_CAP_ASRC` (14, placeholder for hardware ASRC mezzanine). `HAL_REGISTER()` macro for driver registration. Detailed docs: `docs-site/docs/developer/hal/`.
+Device lifecycle: UNKNOWN → DETECTED → CONFIGURING → AVAILABLE ⇄ UNAVAILABLE → ERROR / REMOVED / DISABLED. Cross-core atomic accessors: `setReady(bool)`/`isReady()` with `__ATOMIC_RELEASE`/`__ATOMIC_ACQUIRE`. **All drivers must use `setReady()` — never raw `_ready =`**. Config validation via `hal_validate_config()`. Capability flags: `uint16_t` (all 16 bits now used: 0-15). Key caps: `HAL_CAP_DSD` (11), `HAL_CAP_HP_AMP` (12), `HAL_CAP_POWER_MGMT` (13), `HAL_CAP_ASRC` (14, placeholder for hardware ASRC mezzanine), `HAL_CAP_DPLL` (15, device has onboard DPLL/clock recovery). **uint16_t capability flags are now full — next capability requires widening to uint32_t.** `HAL_REGISTER()` macro for driver registration. Detailed docs: `docs-site/docs/developer/hal/`.
+
+**Clock quality diagnostics**: `HalDevice` exposes a virtual `getClockStatus()` method returning a `ClockStatus` struct with fields: `locked` (bool), `source` (string), `description` (char[]). Drivers with `HAL_CAP_DPLL` implement this to report PLL lock state and clock source. Used by the `clock` health category to surface clock quality issues.
+
+**Device dependency graph**: Each device carries a `uint32_t _dependsOn` bitfield (one bit per HAL slot). Dependencies are declared via `addDependency(slot)` and queried via `hasDependency(slot)` / `getDependencies()`. `HalDeviceManager::initAll()` performs a topological sort (Kahn's BFS) so devices initialize after their dependencies. Static boot-time dependencies are wired in `hal_wire_builtin_dependencies()` (`hal_builtin_devices.cpp`).
 
 26 expansion devices (9 ESS ADC + 12 ESS DAC + 5 Cirrus DAC) via 4 generic driver patterns: Pattern A (`hal_ess_adc_2ch`), Pattern B (`hal_ess_adc_4ch`), Pattern C (`hal_ess_dac_2ch`, `hal_cirrus_dac_2ch`), Pattern D (`hal_ess_dac_8ch`). 14 onboard devices at boot.
 
@@ -92,6 +96,7 @@ Defined in `platformio.ini` with fallback defaults in `src/config.h`. Key pins: 
 - Mocks in `test/test_mocks/` (Arduino, WiFi, MQTT, NVS)
 - Compiles with `-D UNIT_TEST -D NATIVE_TEST` (`test_build_src = no`)
 - Each test module in its own directory
+- 3701 tests across 125 modules (includes `test_clock_diagnostics`, `test_device_deps`)
 
 ### E2E Tests (Playwright)
 Mock Express server + `routeWebSocket()` interception. Infrastructure: `e2e/helpers/` (fixtures, WS assertions, selectors), `e2e/pages/` (19 POMs), `e2e/fixtures/` (WS + API), `e2e/mock-server/` (Express + WS state). Tags: `@smoke`, `@ws`, `@api`, `@hal`, `@audio`, `@settings`, `@error`.
