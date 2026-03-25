@@ -49,6 +49,7 @@ const sidebars = {
         'developer/api/rest-pipeline',
         'developer/api/rest-eeprom',
         'developer/api/rest-health',
+        'developer/api/versioning-policy',
         'developer/websocket',
       ],
     },

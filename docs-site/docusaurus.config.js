@@ -155,6 +155,11 @@ const config = {
             position: 'left',
           },
           {
+            to: '/showcase',
+            label: 'Showcase',
+            position: 'left',
+          },
+          {
             href: 'https://github.com/Schmackos/ALX_Nova_Controller_2',
             label: 'GitHub',
             position: 'right',
