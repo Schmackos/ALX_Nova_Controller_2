@@ -98,6 +98,10 @@ static const int FRAMES      = I2S_DMA_BUF_LEN;    // 256 stereo frames per DMA 
 static const int RAW_SAMPLES = FRAMES * 2;          // 512 int32_t per buffer (L+R interleaved)
 static const float MAX_24BIT_F = 8388607.0f;        // 2^23 - 1
 
+// Lane float buffers must be large enough for ASRC maximum output (upsampling expands frames)
+static_assert(ASRC_OUTPUT_FRAMES_MAX >= I2S_DMA_BUF_LEN,
+    "Lane buffers must accommodate ASRC maximum output");
+
 // ===== DMA Buffers — MUST be in internal SRAM (DMA cannot access PSRAM) =====
 // Lazily allocated on first audio_pipeline_set_source() / audio_pipeline_set_sink() call
 // (ESP32 path only — native test keeps static 2D arrays below).
@@ -124,8 +128,8 @@ static float *_gatePrevR[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static float *_swapHoldCh[AUDIO_PIPELINE_MATRIX_SIZE] = {};
 
 #ifdef NATIVE_TEST
-static float _laneL_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
-static float _laneR_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
+static float _laneL_buf[AUDIO_PIPELINE_MAX_INPUTS][ASRC_OUTPUT_FRAMES_MAX];
+static float _laneR_buf[AUDIO_PIPELINE_MAX_INPUTS][ASRC_OUTPUT_FRAMES_MAX];
 static float _outCh_buf[AUDIO_PIPELINE_MATRIX_SIZE][I2S_DMA_BUF_LEN];
 static float _gatePrevL_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
 static float _gatePrevR_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
@@ -135,6 +139,9 @@ static float _swapHoldCh_buf[AUDIO_PIPELINE_MATRIX_SIZE][I2S_DMA_BUF_LEN];
 // ===== Routing Matrix =====
 // gain[out_ch][in_ch]: 8 output channels × 8 input channels, linear gain
 static float _matrixGain[AUDIO_PIPELINE_MATRIX_SIZE][AUDIO_PIPELINE_MATRIX_SIZE] = {};
+
+// ===== Per-Lane ASRC Output Frame Count =====
+static int _laneFrames[AUDIO_PIPELINE_MAX_INPUTS]; // Actual frame count after ASRC (≤ ASRC_OUTPUT_FRAMES_MAX)
 
 // ===== Runtime Bypass Flags =====
 static bool _inputBypass[AUDIO_PIPELINE_MAX_INPUTS] = {};
@@ -397,6 +404,7 @@ static void pipeline_to_float() {
 // so DSP biquad coefficients (computed for 48kHz) are applied to 48kHz data.
 static void pipeline_resample_inputs() {
     for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        _laneFrames[lane] = FRAMES;  // Default for non-ASRC and passthrough lanes
         if (!_laneL[lane] || !_laneR[lane]) continue;
         // DSD lanes must not be SRC'd — polyphase filter would corrupt the DoP bitstream
         if (_sources[lane].isDsd) {
@@ -404,15 +412,23 @@ static void pipeline_resample_inputs() {
             continue;
         }
         if (!asrc_is_active(lane)) continue;
+
         // ASRC processes FRAMES input samples and writes up to ASRC_OUTPUT_FRAMES_MAX output.
-        // Buffers are sized ASRC_OUTPUT_FRAMES_MAX in audio_pipeline_init().
-        (void)asrc_process_lane(lane, _laneL[lane], _laneR[lane], FRAMES);
-        // Output frame count may differ from FRAMES, but the pipeline currently
-        // operates on fixed FRAMES. When srcRate < dstRate (upsampling), more frames
-        // are produced; the extra samples are valid and will be processed by DSP/matrix.
-        // When srcRate > dstRate (downsampling), fewer frames are produced; the tail
-        // of the buffer retains old data but the pipeline will only use what was written.
-        // TODO (v2): propagate variable frame count through the pipeline for strict correctness.
+        // Lane buffers are sized ASRC_OUTPUT_FRAMES_MAX to accommodate upsampled expansion.
+        int outFrames = asrc_process_lane(lane, _laneL[lane], _laneR[lane], FRAMES);
+        _laneFrames[lane] = outFrames;
+
+        // Zero-fill buffer tail for downsampled lanes to prevent stale (unresampled)
+        // input data from leaking through DSP and matrix stages. When srcRate > dstRate
+        // (e.g. 96kHz→48kHz), ASRC produces fewer frames than FRAMES; without zero-fill,
+        // positions [outFrames..FRAMES-1] retain raw input-rate floats from pipeline_to_float().
+        if (outFrames < FRAMES) {
+            memset(&_laneL[lane][outFrames], 0, (size_t)(FRAMES - outFrames) * sizeof(float));
+            memset(&_laneR[lane][outFrames], 0, (size_t)(FRAMES - outFrames) * sizeof(float));
+        }
+        // When upsampling (outFrames > FRAMES), extra samples beyond FRAMES are valid but
+        // unused by downstream stages (DSP/matrix operate on fixed FRAMES). The ASRC phase
+        // accumulator is persistent, so no audio drift occurs from this truncation.
     }
 }
 
@@ -846,8 +862,8 @@ void audio_pipeline_init() {
 #else
     {
         for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-            _laneL[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_lanes");
-            _laneR[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_lanes");
+            _laneL[i] = (float *)psram_alloc(ASRC_OUTPUT_FRAMES_MAX, sizeof(float), "pipe_lanes");
+            _laneR[i] = (float *)psram_alloc(ASRC_OUTPUT_FRAMES_MAX, sizeof(float), "pipe_lanes");
         }
     }
     {

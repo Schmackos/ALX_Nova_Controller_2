@@ -273,6 +273,86 @@ void test_output_frames_max_constant() {
     TEST_ASSERT_LESS_OR_EQUAL_INT(ASRC_OUTPUT_FRAMES_MAX, maxUpOut);
 }
 
+void test_process_88200_to_48000_output_count() {
+    // 256 frames @ 88200 → 48000: L/M = 80/147
+    // Expected output = ceil(256 * 80 / 147) = 140
+    asrc_set_ratio(0, 88200, 48000);
+    fill_silence(256);
+    int out = asrc_process_lane(0, s_laneL, s_laneR, 256);
+    // Allow ±2 frames for phase boundary effects
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(138, out);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(142, out);
+}
+
+void test_process_176400_to_48000_output_count() {
+    // 256 frames @ 176400 → 48000: L/M = 40/147
+    // Expected output = ceil(256 * 40 / 147) = 70
+    asrc_set_ratio(0, 176400, 48000);
+    fill_silence(256);
+    int out = asrc_process_lane(0, s_laneL, s_laneR, 256);
+    // Allow ±2 frames for phase boundary effects
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(68, out);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(72, out);
+}
+
+void test_process_192000_to_48000_output_count() {
+    // 256 frames @ 192000 → 48000: L/M = 1/4
+    // Expected output = ceil(256 * 1 / 4) = 64
+    asrc_set_ratio(0, 192000, 48000);
+    fill_silence(256);
+    int out = asrc_process_lane(0, s_laneL, s_laneR, 256);
+    // Allow ±2 frames for phase boundary effects
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(62, out);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(66, out);
+}
+
+void test_process_48000_to_44100_output_count() {
+    // 256 frames @ 48000 → 44100: L/M = 147/160
+    // Expected output = ceil(256 * 147 / 160) = 236
+    asrc_set_ratio(0, 48000, 44100);
+    fill_silence(256);
+    int out = asrc_process_lane(0, s_laneL, s_laneR, 256);
+    // Allow ±2 frames for phase boundary effects
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(234, out);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(238, out);
+}
+
+void test_downsampled_tail_is_stale() {
+    // 96000→48000 produces ~128 output frames from 256 input frames.
+    // Positions beyond the output count still contain original DC data,
+    // proving the pipeline zero-fill fix is necessary.
+    asrc_set_ratio(0, 96000, 48000);
+    fill_dc(ASRC_OUTPUT_FRAMES_MAX, 0.5f);  // Fill ENTIRE buffer with DC
+    int out = asrc_process_lane(0, s_laneL, s_laneR, 256);
+    // Sanity: output count should be around 128
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(126, out);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(130, out);
+    // Tail beyond output count should still have non-zero stale data
+    TEST_ASSERT_TRUE(out < ASRC_OUTPUT_FRAMES_MAX);
+    bool foundNonZero = false;
+    for (int i = out; i < ASRC_OUTPUT_FRAMES_MAX && !foundNonZero; i++) {
+        if (fabsf(s_laneL[i]) > 1e-9f) foundNonZero = true;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(foundNonZero,
+        "Expected stale non-zero data beyond output count");
+}
+
+void test_upsampled_output_within_buffer() {
+    // All upsampling ratios must produce output <= ASRC_OUTPUT_FRAMES_MAX
+    // 44100→48000 (upsample)
+    asrc_set_ratio(0, 44100, 48000);
+    fill_silence(256);
+    int out = asrc_process_lane(0, s_laneL, s_laneR, 256);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(ASRC_OUTPUT_FRAMES_MAX, out);
+
+    // 48000→44100 (downsample, but verify anyway)
+    asrc_bypass(0);
+    asrc_set_ratio(0, 48000, 44100);
+    fill_silence(256);
+    out = asrc_process_lane(0, s_laneL, s_laneR, 256);
+    TEST_ASSERT_LESS_OR_EQUAL_INT(ASRC_OUTPUT_FRAMES_MAX, out);
+}
+
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -302,6 +382,12 @@ int main(int /*argc*/, char** /*argv*/) {
     RUN_TEST(test_multiple_lanes_independent);
     RUN_TEST(test_48k_to_44100_activates);
     RUN_TEST(test_output_frames_max_constant);
+    RUN_TEST(test_process_88200_to_48000_output_count);
+    RUN_TEST(test_process_176400_to_48000_output_count);
+    RUN_TEST(test_process_192000_to_48000_output_count);
+    RUN_TEST(test_process_48000_to_44100_output_count);
+    RUN_TEST(test_downsampled_tail_is_stale);
+    RUN_TEST(test_upsampled_output_within_buffer);
 
     return UNITY_END();
 }
