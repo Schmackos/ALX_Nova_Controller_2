@@ -1365,10 +1365,12 @@ void loop() {
         if (!sink || !sink->supportsDsd || sink->halSlot == 0xFF) continue;
         HalDevice* dev = HalDeviceManager::instance().getDevice(sink->halSlot);
         if (!dev) continue;
-        // Cast to HalCirrusDac2ch — only Cirrus 2ch DACs expose setDsdMode()
-        HalCirrusDac2ch* cirrus = dynamic_cast<HalCirrusDac2ch*>(dev);
-        if (cirrus) {
-          cirrus->setDsdMode(anyDsd);
+        // Only Cirrus 2ch DACs expose setDsdMode() — use capability + compatible
+        // string check instead of dynamic_cast (RTTI disabled with -fno-rtti)
+        const auto& desc = dev->getDescriptor();
+        if ((desc.capabilities & HAL_CAP_DSD) &&
+            strncmp(desc.compatible, "cirrus,", 7) == 0) {
+          static_cast<HalCirrusDac2ch*>(dev)->setDsdMode(anyDsd);
         }
       }
     }
