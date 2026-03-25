@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkalx_nova_docs=globalThis.webpackChunkalx_nova_docs||[]).push([[1903],{1912(o){o.exports=JSON.parse('{"blogBasePath":"/ALX_Nova_Controller_2/blog","blogTitle":"ALX Nova Release Notes","authorsListPath":"/ALX_Nova_Controller_2/blog/authors"}')}}]);

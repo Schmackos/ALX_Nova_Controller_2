@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkalx_nova_docs=globalThis.webpackChunkalx_nova_docs||[]).push([[1235],{88552(a){a.exports=JSON.parse('{"name":"docusaurus-plugin-content-pages","id":"default"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkalx_nova_docs=globalThis.webpackChunkalx_nova_docs||[]).push([[225],{225(a,c,e){e.d(c,{createArchitectureServices:()=>s.S});var s=e(77713);e(808)}}]);

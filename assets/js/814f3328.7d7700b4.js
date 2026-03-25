@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkalx_nova_docs=globalThis.webpackChunkalx_nova_docs||[]).push([[7472],{55513(e){e.exports=JSON.parse('{"title":"Recent posts","items":[{"title":"Phase 1+2 Hardening: Atomic Pipeline, HAL Power Management, API Versioning","permalink":"/ALX_Nova_Controller_2/blog/phase3-hardening","unlisted":false,"date":"2026-03-25T00:00:00.000Z"}]}')}}]);

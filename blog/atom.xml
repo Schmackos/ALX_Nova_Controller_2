@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://schmackos.github.io/ALX_Nova_Controller_2/blog</id>
+    <title>ALX Nova Documentation Blog</title>
+    <updated>2026-03-25T00:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://schmackos.github.io/ALX_Nova_Controller_2/blog"/>
+    <subtitle>ALX Nova Documentation Blog</subtitle>
+    <icon>https://schmackos.github.io/ALX_Nova_Controller_2/img/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Phase 1+2 Hardening: Atomic Pipeline, HAL Power Management, API Versioning]]></title>
+        <id>https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening</id>
+        <link href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening"/>
+        <updated>2026-03-25T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[ALX Nova PRs #80–83 land the Phase 1+2 hardening work — four releases that collectively close the most significant reliability and correctness gaps identified in the foundation analysis. Here is what changed and what it means for devices in the field.]]></summary>
+        <content type="html"><![CDATA[<p>ALX Nova PRs #80–83 land the Phase 1+2 hardening work — four releases that collectively close the most significant reliability and correctness gaps identified in the foundation analysis. Here is what changed and what it means for devices in the field.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-changed">What Changed<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#what-changed" class="hash-link" aria-label="Direct link to What Changed" title="Direct link to What Changed" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="pr-80--websocket-protocol-version--json-envelope-helper">PR #80 — WebSocket Protocol Version + JSON Envelope Helper<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#pr-80--websocket-protocol-version--json-envelope-helper" class="hash-link" aria-label="Direct link to PR #80 — WebSocket Protocol Version + JSON Envelope Helper" title="Direct link to PR #80 — WebSocket Protocol Version + JSON Envelope Helper" translate="no">​</a></h3>
+<p>Every initial WebSocket broadcast now includes a <code>protocolVersion</code> field. Clients that depend on specific broadcast shapes can check this field and warn the user if the firmware is newer or older than expected.</p>
+<p>A new <code>json_response()</code> helper standardises the REST response envelope. All new endpoints use <code>{"ok": true, "data": {...}}</code> for success and <code>{"ok": false, "error": "..."}</code> for failure, giving API consumers a consistent shape to pattern-match against.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="pr-81--hal-fault-persistence-nvs">PR #81 — HAL Fault Persistence (NVS)<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#pr-81--hal-fault-persistence-nvs" class="hash-link" aria-label="Direct link to PR #81 — HAL Fault Persistence (NVS)" title="Direct link to PR #81 — HAL Fault Persistence (NVS)" translate="no">​</a></h3>
+<p>HAL device faults are now persisted to NVS and survive reboots. If a device enters the Error state and the device is not physically present when the firmware restarts, the fault record is preserved and surfaced via <code>GET /api/hal/faults</code>. This makes diagnosis of intermittent hardware failures dramatically easier — the fault is no longer lost the moment the device reboots.</p>
+<p>Faults can be cleared explicitly via <code>DELETE /api/hal/faults/:slot</code> or <code>DELETE /api/hal/faults</code> (all faults).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="pr-82--pipeline-latency-measurement">PR #82 — Pipeline Latency Measurement<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#pr-82--pipeline-latency-measurement" class="hash-link" aria-label="Direct link to PR #82 — Pipeline Latency Measurement" title="Direct link to PR #82 — Pipeline Latency Measurement" translate="no">​</a></h3>
+<p>The audio pipeline now measures and reports end-to-end latency in microseconds. <code>GET /api/pipeline/status</code> includes a <code>timing</code> object with <code>totalE2eUs</code>, <code>dspUs</code>, and <code>matrixUs</code> fields. This gives a concrete, measurable baseline for DSP optimisation work and makes it straightforward to verify that a new DSP stage does not push latency past acceptable bounds.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="pr-83--lock-free-atomic-sinksource-operations--hal-power-management">PR #83 — Lock-Free Atomic Sink/Source Operations + HAL Power Management<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#pr-83--lock-free-atomic-sinksource-operations--hal-power-management" class="hash-link" aria-label="Direct link to PR #83 — Lock-Free Atomic Sink/Source Operations + HAL Power Management" title="Direct link to PR #83 — Lock-Free Atomic Sink/Source Operations + HAL Power Management" translate="no">​</a></h3>
+<p><strong>Atomic pipeline operations:</strong> The previous implementation used <code>vTaskSuspendAll()</code> to protect sink and source list mutations. This has been replaced with an <code>__ATOMIC_RELEASE</code> / <code>__ATOMIC_ACQUIRE</code> sentinel pattern — sink and source pointer swaps are now lock-free. <code>ScopedSchedulerSuspend</code> is removed. The audio task on Core 1 is no longer blocked during HAL init/deinit operations.</p>
+<p><strong>HAL power management:</strong> Devices that report <code>HAL_CAP_POWER_MGMT</code> (capability bit 13) now participate in a three-state power model: <code>ACTIVE</code>, <code>STANDBY</code>, and <code>OFF</code>. Power state is controllable via <code>POST /api/hal/devices/power</code> and reflected in the WebSocket broadcast and web UI device cards. The <code>HalPowerState</code> enum is defined in <code>src/hal/hal_types.h</code>.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="upgrade-instructions">Upgrade Instructions<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#upgrade-instructions" class="hash-link" aria-label="Direct link to Upgrade Instructions" title="Direct link to Upgrade Instructions" translate="no">​</a></h2>
+<p>Update via the web dashboard: <strong>Settings &gt; OTA &gt; Check for Updates</strong>. The update applies automatically and reboots the device. No configuration changes are required after the update.</p>
+<p>If you prefer manual flashing, download the <code>.bin</code> from the <a href="https://github.com/Schmackos/ALX_Nova_Controller_2/releases" target="_blank" rel="noopener noreferrer" class="">GitHub Releases page</a> and upload it via the Manual Upload area in the OTA panel.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="breaking-changes">Breaking Changes<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#breaking-changes" class="hash-link" aria-label="Direct link to Breaking Changes" title="Direct link to Breaking Changes" translate="no">​</a></h2>
+<p>None. All REST and WebSocket API changes in this release are additive — new fields are added, no existing fields are removed or renamed. Existing clients will continue to work without modification.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-is-next">What Is Next<a href="https://schmackos.github.io/ALX_Nova_Controller_2/blog/phase3-hardening#what-is-next" class="hash-link" aria-label="Direct link to What Is Next" title="Direct link to What Is Next" translate="no">​</a></h2>
+<p>The roadmap for Phase 3 includes:</p>
+<ul>
+<li class=""><strong>Hardware ASRC</strong> — polyphase sample rate conversion engine for cross-domain mixing (tracking in <code>feature/phase2-asrc-dsd</code>)</li>
+<li class=""><strong>DSD passthrough</strong> — native DSD/DoP routing through the matrix to DACs that report <code>HAL_CAP_DSD</code></li>
+<li class=""><strong>ES module build</strong> — migrating <code>web_src/</code> to proper ES modules with a bundler step</li>
+<li class=""><strong>Loadable plugins</strong> — HAL driver loading from LittleFS at runtime, without a firmware reflash</li>
+</ul>
+<p>Follow progress on <a href="https://github.com/Schmackos/ALX_Nova_Controller_2" target="_blank" rel="noopener noreferrer" class="">GitHub</a>.</p>]]></content>
+        <author>
+            <name>Schmackos</name>
+            <uri>https://github.com/Schmackos</uri>
+        </author>
+        <category label="release" term="release"/>
+        <category label="hal" term="hal"/>
+        <category label="audio-pipeline" term="audio-pipeline"/>
+    </entry>
+</feed>

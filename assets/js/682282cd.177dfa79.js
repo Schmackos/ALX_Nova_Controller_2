@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkalx_nova_docs=globalThis.webpackChunkalx_nova_docs||[]).push([[2074],{7163(a){a.exports=JSON.parse('{"metadata":{"permalink":"/ALX_Nova_Controller_2/blog","page":1,"postsPerPage":10,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"ALX Nova Release Notes"}}')}}]);

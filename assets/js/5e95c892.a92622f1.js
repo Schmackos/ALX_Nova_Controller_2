@@ -1,1 +1,0 @@
-"use strict";(globalThis.webpackChunkalx_nova_docs=globalThis.webpackChunkalx_nova_docs||[]).push([[9647],{7121(a,s,e){e.r(s),e.d(s,{default:()=>d});e(6540);var r=e(4164),c=e(7559),l=e(5500),o=e(2831),n=e(4810),u=e(4848);function d(a){return(0,u.jsx)(l.e3,{className:(0,r.A)(c.G.wrapper.docsPages),children:(0,u.jsx)(n.A,{children:(0,o.v)(a.route.routes)})})}}}]);

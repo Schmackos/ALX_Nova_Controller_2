@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkalx_nova_docs=globalThis.webpackChunkalx_nova_docs||[]).push([[7946],{48716(a){a.exports=JSON.parse('{"authors":[{"name":"Schmackos","url":"https://github.com/Schmackos","imageURL":"https://github.com/Schmackos.png","key":"schmackos","page":null,"count":1}]}')}}]);
