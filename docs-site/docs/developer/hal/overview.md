@@ -223,7 +223,7 @@ mgr.setStateChangeCallback(hal_pipeline_state_change);
 
 ## Driver Registry
 
-`HalDriverRegistry` (`src/hal/hal_driver_registry.h`) maps compatible strings to factory functions. It holds up to `HAL_MAX_DRIVERS` (32) entries.
+`HalDriverRegistry` (`src/hal/hal_driver_registry.h`) maps compatible strings to factory functions. It holds up to `HAL_MAX_DRIVERS` (64) entries.
 
 ```cpp
 struct HalDriverEntry {
@@ -338,8 +338,8 @@ The HAL subsystem emits diagnostic events to the journal via `diag_emit()`. The 
 | Code | Name | Severity | Trigger |
 |---|---|---|---|
 | 0x100E | `DIAG_HAL_TOGGLE_OVERFLOW` | WARN | Toggle queue full (capacity 8); request dropped |
-| 0x100F | `DIAG_HAL_REGISTRY_FULL` | WARN | Driver registry at capacity (`HAL_MAX_DRIVERS = 32`) |
-| 0x1010 | `DIAG_HAL_DB_FULL` | WARN | Device DB at capacity (`HAL_DB_MAX_ENTRIES = 32`) |
+| 0x100F | `DIAG_HAL_REGISTRY_FULL` | WARN | Driver registry at capacity (`HAL_MAX_DRIVERS = 64`) |
+| 0x1010 | `DIAG_HAL_DB_FULL` | WARN | Device DB at capacity (`HAL_DB_MAX_ENTRIES = 64`) |
 | 0x1101 | `DIAG_HAL_I2C_BUS_CONFLICT` | WARN | Bus 0 scan skipped due to active WiFi SDIO |
 
 For the full diagnostic code reference, see `src/diag_error_codes.h`.

@@ -60,7 +60,7 @@ DAC device state (enabled, volume, mute, filterMode) lives in `HalDeviceConfig` 
 **GUI**: LVGL v9.4 + LovyanGFX on ST7735S 128x160. Core 0 via `gui_task`. Guarded by `-D GUI_ENABLED`. Screens in `src/gui/screens/`.
 
 ### HAL Framework
-Device lifecycle: UNKNOWN → DETECTED → CONFIGURING → AVAILABLE ⇄ UNAVAILABLE → ERROR / REMOVED / DISABLED. Cross-core atomic accessors: `setReady(bool)`/`isReady()` with `__ATOMIC_RELEASE`/`__ATOMIC_ACQUIRE`. **All drivers must use `setReady()` — never raw `_ready =`**. Config validation via `hal_validate_config()`. Capability flags: `uint16_t` (all 16 bits now used: 0-15). Key caps: `HAL_CAP_DSD` (11), `HAL_CAP_HP_AMP` (12), `HAL_CAP_POWER_MGMT` (13), `HAL_CAP_ASRC` (14, placeholder for hardware ASRC mezzanine), `HAL_CAP_DPLL` (15, device has onboard DPLL/clock recovery). **uint16_t capability flags are now full — next capability requires widening to uint32_t.** `HAL_REGISTER()` macro for driver registration. Detailed docs: `docs-site/docs/developer/hal/`.
+Device lifecycle: UNKNOWN → DETECTED → CONFIGURING → AVAILABLE ⇄ UNAVAILABLE → ERROR / REMOVED / DISABLED. Cross-core atomic accessors: `setReady(bool)`/`isReady()` with `__ATOMIC_RELEASE`/`__ATOMIC_ACQUIRE`. **All drivers must use `setReady()` — never raw `_ready =`**. Config validation via `hal_validate_config()`. Capability flags: `uint32_t` (bits 0-15 assigned, 16 spare bits 16-31). Key caps: `HAL_CAP_DSD` (11), `HAL_CAP_HP_AMP` (12), `HAL_CAP_POWER_MGMT` (13), `HAL_CAP_ASRC` (14, placeholder for hardware ASRC mezzanine), `HAL_CAP_DPLL` (15, device has onboard DPLL/clock recovery). Heap-allocated devices registered with `takeOwnership=true` are automatically deinited and deleted by `removeDevice()`. Stack/global devices use default `false`. `HAL_REGISTER()` macro for driver registration. Detailed docs: `docs-site/docs/developer/hal/`.
 
 **Clock quality diagnostics**: `HalDevice` exposes a virtual `getClockStatus()` method returning a `ClockStatus` struct with fields: `locked` (bool), `source` (string), `description` (char[]). Drivers with `HAL_CAP_DPLL` implement this to report PLL lock state and clock source. Used by the `clock` health category to surface clock quality issues.
 
@@ -96,7 +96,7 @@ Defined in `platformio.ini` with fallback defaults in `src/config.h`. Key pins: 
 - Mocks in `test/test_mocks/` (Arduino, WiFi, MQTT, NVS)
 - Compiles with `-D UNIT_TEST -D NATIVE_TEST` (`test_build_src = no`)
 - Each test module in its own directory
-- 3701 tests across 125 modules (includes `test_clock_diagnostics`, `test_device_deps`)
+- 3707 tests across 126 modules (includes `test_clock_diagnostics`, `test_device_deps`, `test_hal_remove_device`)
 
 ### E2E Tests (Playwright)
 Mock Express server + `routeWebSocket()` interception. Infrastructure: `e2e/helpers/` (fixtures, WS assertions, selectors), `e2e/pages/` (19 POMs), `e2e/fixtures/` (WS + API), `e2e/mock-server/` (Express + WS state). Tags: `@smoke`, `@ws`, `@api`, `@hal`, `@audio`, `@settings`, `@error`.
@@ -128,14 +128,14 @@ All 4 must pass: `cpp-tests`, `cpp-lint`, `js-lint`, `e2e-tests`. See `.github/w
 - **No logging in ISR/audio task**: `Serial.print` blocks on UART TX buffer full, starving DMA. Use dirty-flag pattern: task sets flag, main loop does Serial/WS output
 - **Slot-indexed sink removal only**: Never call `audio_pipeline_clear_sinks()` from deinit paths — use `audio_pipeline_remove_sink(slot)` to remove only the specific device
 - **I2S driver reinstall handshake**: Use `audio_pipeline_request_pause()`/`audio_pipeline_resume()` — never set `appState.audio.paused` directly. See FreeRTOS Tasks section
-- **HAL slot capacity**: 14/32 onboard slots at boot + up to 2 expansion (ADC+DAC) = 16/32 (`HAL_MAX_DEVICES=32`). Driver registry: 44/48 (`HAL_MAX_DRIVERS=48`). Device DB: 44/48 (`HAL_DB_MAX_ENTRIES=48`). Pin tracking: `HAL_MAX_PINS=56` with `HAL_GPIO_MAX=54` validation
+- **HAL slot capacity**: 14/32 onboard slots at boot + up to 2 expansion (ADC+DAC) = 16/32 (`HAL_MAX_DEVICES=32`). Driver registry: 44/64 (`HAL_MAX_DRIVERS=64`). Device DB: 44/64 (`HAL_DB_MAX_ENTRIES=64`). Pin tracking: `HAL_MAX_PINS=56` with `HAL_GPIO_MAX=54` validation
 - **Board config**: Use `board=esp32-p4` (360MHz, ES variant). `esp32-p4_r3` crashes on Waveshare ECO2 silicon. `board_upload.flash_size=16MB` override handles 4MB default mismatch
 - **Heap 40KB reserve**: WiFi RX buffers need ~40KB free internal SRAM. DSP/audio allocations must use PSRAM or be heap-guarded
 - **MCLK continuity**: Never call `i2s_configure_adc1()` in the audio task loop — MCLK must remain continuous for PCM1808 PLL stability
 - **Capacity constants when adding features**:
   | Feature Added | Constants to Check |
   |---|---|
-  | New HAL driver (`HAL_REGISTER()`) | `HAL_MAX_DRIVERS` (48), `HAL_DB_MAX_ENTRIES` (48), `HAL_BUILTIN_DRIVER_COUNT` in `hal_builtin_devices.cpp` |
+  | New HAL driver (`HAL_REGISTER()`) | `HAL_MAX_DRIVERS` (64), `HAL_DB_MAX_ENTRIES` (64), `HAL_BUILTIN_DRIVER_COUNT` in `hal_builtin_devices.cpp` |
   | New event bit | `EVT_*` in `app_events.h` (24 usable bits, 17 assigned, 7 spare) |
   | New pipeline sink/source | `AUDIO_PIPELINE_MAX_OUTPUTS` (16), `AUDIO_PIPELINE_MATRIX_SIZE` (32) |
   | New HAL device instance at boot | `HAL_MAX_DEVICES` (32, 14 onboard + expansion) |

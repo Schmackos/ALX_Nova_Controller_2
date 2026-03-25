@@ -1321,7 +1321,7 @@ Registers the onboard status LED in the HAL device model. The driver claims the 
 | `HAL_CAP_DSD` | 11 | DSD native playback |
 
 :::note
-The `capabilities` field is `uint16_t` (widened from `uint8_t` to accommodate bits 8-11).
+The `capabilities` field is `uint32_t` (widened from `uint16_t` to provide room for future capability bits 16-31).
 :::
 
 The pipeline bridge uses `HAL_CAP_DAC_PATH` and `HAL_CAP_ADC_PATH` exclusively to decide whether to assign a sink slot or input lane. Device type (`HAL_DEV_DAC`, `HAL_DEV_ADC`, etc.) is used only for UI display and type-based fallback when capabilities are zero.

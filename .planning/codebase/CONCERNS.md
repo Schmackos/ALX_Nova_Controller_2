@@ -6,6 +6,8 @@
 
 ### HAL Capability Flags Full (uint16_t saturated)
 
+**Status: RESOLVED (2026-03-25)** — Widened to uint32_t, 16 spare bits available.
+
 - **Severity:** Critical
 - **Issue:** All 16 bits of the `uint16_t capabilities` field are now assigned (bits 0-15: HW_VOLUME, FILTERS, MUTE, ADC_PATH, DAC_PATH, PGA_CONTROL, HPF_CONTROL, CODEC, MQA, LINE_DRIVER, APLL, DSD, HP_AMP, POWER_MGMT, ASRC, DPLL). The next capability flag requires widening to `uint32_t`.
 - **Files:**
@@ -31,6 +33,8 @@
 - **Fix approach:** Propagate actual output frame count from `asrc_process_lane()` return value through DSP and matrix stages. Requires changing `pipeline_run_dsp()` and `pipeline_run_matrix()` to accept per-lane frame counts. Moderate complexity.
 
 ### removeDevice() Memory Leak
+
+**Status: RESOLVED (2026-03-25)** — Ownership tracking added, removeDevice() now deinits + deletes owned devices.
 
 - **Severity:** High
 - **Issue:** `HalDeviceManager::removeDevice()` sets `_devices[slot] = nullptr` without calling `delete` on the device pointer. The device object (heap-allocated via `new` in factory functions) is leaked. Some callers (`hal_api.cpp`, `hal_custom_device.cpp`) call `dev->deinit()` before `removeDevice()`, but none call `delete dev`. The `hal_discovery.cpp` rescan path also calls `removeDevice()` without `delete`.
@@ -174,6 +178,8 @@
 
 ### HAL Driver Registry: 44/48 Slots Used
 
+**Status: RESOLVED (2026-03-25)** — Increased to 64 slots (44/64 used).
+
 - **Severity:** High
 - **Issue:** 44 of 48 `HAL_MAX_DRIVERS` slots are occupied. Only 4 slots remain for new device drivers. Each new expansion DAC/ADC/codec chip requires a driver registration.
 - **Files:**
@@ -277,11 +283,11 @@
 
 ## Recommendations (prioritized)
 
-1. **[Critical] Widen capability flags to uint32_t** -- Blocking next capability addition. Touch HAL types, 5 driver descriptor structs, WS/REST/MQTT serialization, web UI JS constants. Estimated effort: 2-3 hours, mechanical changes.
+1. **[Critical] ~~Widen capability flags to uint32_t~~** -- **RESOLVED (2026-03-25).** Widened to uint32_t, 16 spare bits available.
 
-2. **[High] Fix removeDevice() memory leak** -- Add `delete _devices[slot]` before nulling pointer. Verify all 3 callers (`hal_api.cpp`, `hal_custom_device.cpp`, `hal_discovery.cpp`) no longer need separate cleanup. Estimated effort: 30 minutes.
+2. **[High] ~~Fix removeDevice() memory leak~~** -- **RESOLVED (2026-03-25).** Ownership tracking via `takeOwnership` parameter; removeDevice() deinits + deletes owned devices.
 
-3. **[High] Increase HAL_MAX_DRIVERS to 64** -- Only 4 spare driver slots. Preemptive increase costs ~3.3KB BSS. Update `HAL_MAX_DRIVERS`, `HAL_DB_MAX_ENTRIES`, and `static_assert` in `hal_builtin_devices.cpp`. Estimated effort: 15 minutes.
+3. **[High] ~~Increase HAL_MAX_DRIVERS to 64~~** -- **RESOLVED (2026-03-25).** Increased HAL_MAX_DRIVERS and HAL_DB_MAX_ENTRIES to 64 (44/64 used).
 
 4. **[Medium] Fix ASRC frame count propagation** -- Stale buffer data on downsampled lanes is an audio quality concern. Propagate `asrc_process_lane()` return value through DSP and matrix. Estimated effort: 4-6 hours, needs careful testing.
 
