@@ -436,7 +436,6 @@ void hal_load_custom_devices() {
     for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
         HalDevice* dev = mgr.getDevice(i);
         if (dev && dev->getDiscovery() == HAL_DISC_MANUAL) {
-            dev->deinit();
             mgr.removeDevice(i);
         }
     }
@@ -525,7 +524,7 @@ void hal_load_custom_devices() {
                 }
             }
 
-            int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
+            int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL, true);
             if (slot < 0) {
                 LOG_E("[HAL:Custom]", "No free slots for device: %s", compatible);
                 delete dev;

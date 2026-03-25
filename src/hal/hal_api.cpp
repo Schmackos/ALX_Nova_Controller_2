@@ -260,7 +260,7 @@ void registerHalApiEndpoints(WebServer& server) {
         HalDevice* dev = entry->factory();
         if (!dev) { server_send(500, "application/json", "{\"error\":\"Factory failed\"}"); return; }
 
-        int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
+        int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL, true);
         if (slot < 0) { delete dev; server_send(500, "application/json", "{\"error\":\"No free slots\"}"); return; }
 
         dev->_state = HAL_STATE_CONFIGURING;
@@ -406,8 +406,7 @@ void registerHalApiEndpoints(WebServer& server) {
             appState.markHalDeviceDirty();
         }
 
-        // Deinit and remove
-        dev->deinit();
+        // Remove (removeDevice handles deinit and ownership-based delete)
         mgr.removeDevice(slot);
 
         // Clear config

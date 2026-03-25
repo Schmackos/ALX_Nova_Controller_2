@@ -27,6 +27,7 @@ HalDeviceManager::HalDeviceManager() : _count(0) {
     memset(_configs, 0, sizeof(_configs));
     memset(_retryState, 0, sizeof(_retryState));
     memset(_faultCount, 0, sizeof(_faultCount));
+    memset(_ownsDevice, 0, sizeof(_ownsDevice));
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         _configs[i].valid = false;
         _configs[i].pinSda = -1;
@@ -47,7 +48,7 @@ HalDeviceManager::HalDeviceManager() : _count(0) {
 }
 
 // ===== Registration =====
-int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery) {
+int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery, bool takeOwnership) {
     if (!device || _count >= HAL_MAX_DEVICES) {
         if (device) {
             LOG_W("[HAL] Device slots full (%d/%d): %s", _count, HAL_MAX_DEVICES, device->getDescriptor().name);
@@ -70,6 +71,7 @@ int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery) 
     device->_descriptor.instanceId = countByCompatible(device->getDescriptor().compatible);
 
     _devices[slot] = device;
+    _ownsDevice[slot] = takeOwnership;
     _resetRetryState(static_cast<uint8_t>(slot));
     _count++;
 
@@ -90,7 +92,13 @@ bool HalDeviceManager::removeDevice(uint8_t slot) {
               slot, name, "removed");
 
     if (_stateChangeCb) _stateChangeCb(slot, oldState, HAL_STATE_REMOVED);
+
+    _devices[slot]->deinit();
+    if (_ownsDevice[slot]) {
+        delete _devices[slot];
+    }
     _devices[slot] = nullptr;
+    _ownsDevice[slot] = false;
     _resetRetryState(slot);
     _count--;
     return true;
@@ -511,8 +519,15 @@ void HalDeviceManager::clearFaultCounters() {
 // ===== Reset (testing) =====
 void HalDeviceManager::reset() {
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_ownsDevice[i] && _devices[i]) {
+            _devices[i]->deinit();
+            delete _devices[i];
+        }
+    }
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         _devices[i] = nullptr;
     }
+    memset(_ownsDevice, 0, sizeof(_ownsDevice));
     memset(_configs, 0, sizeof(_configs));
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         _configs[i].valid = false;

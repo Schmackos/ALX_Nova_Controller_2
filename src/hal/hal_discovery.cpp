@@ -178,7 +178,7 @@ static int hal_eeprom_scan_expansion(HalDeviceManager& mgr) {
             continue;
         }
 
-        int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM);
+        int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM, true);
         if (slot < 0) {
             LOG_W("[HAL:Discovery]", "EXP registration failed (slots full): %s", desc.name);
             delete dev;
@@ -289,7 +289,7 @@ int hal_discover_devices() {
                         // Use HalDriverRegistry factory to create the device
                         HalDevice* dev = entry->factory ? entry->factory() : nullptr;
                         if (dev) {
-                            int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM);
+                            int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM, true);
                             if (slot < 0) {
                                 LOG_W("[HAL:Discovery]", "Device registration failed (slots full): %s", desc.name);
                                 delete dev;
