@@ -23,9 +23,11 @@
 //     at the end of this file).  Never set appState.audio.paused
 //     directly. The audio task gives taskPausedAck when it observes the
 //     flag and yields, guaranteeing it has exited i2s_read().
-//   - Thread safety: set_sink/set_source/remove_sink/remove_source use
-//     ScopedSchedulerSuspend (vTaskSuspendAll RAII guard) on Core 1.
-//     VU metering uses snap-read float (atomic on RISC-V).
+//   - Thread safety: set_sink/set_source/remove_sink/remove_source use an
+//     atomic sentinel pattern (null write/read pointer with RELEASE/ACQUIRE
+//     memory ordering) instead of vTaskSuspendAll — no global scheduler
+//     suspension. set_sink_muted and set_sink_volume use single aligned
+//     writes (naturally atomic on RISC-V). VU metering uses snap-read float.
 // ===================================================================
 
 #include "audio_pipeline.h"
@@ -60,20 +62,28 @@
 #include "audio_input_source.h"
 #include "audio_output_sink.h"
 
-// ===== RAII Scheduler Suspend Guard =====
-// Wraps vTaskSuspendAll()/xTaskResumeAll() to prevent deadlocks from early returns.
-// Constructed only on non-native targets (FreeRTOS required). Zero overhead on native.
-#ifndef NATIVE_TEST
-struct ScopedSchedulerSuspend {
-    ScopedSchedulerSuspend()  { vTaskSuspendAll(); }
-    ~ScopedSchedulerSuspend() { xTaskResumeAll();  }
-    // Non-copyable, non-movable
-    ScopedSchedulerSuspend(const ScopedSchedulerSuspend&)            = delete;
-    ScopedSchedulerSuspend& operator=(const ScopedSchedulerSuspend&) = delete;
-};
-#else
-struct ScopedSchedulerSuspend { /* No-op on native test platform */ };
-#endif
+// ===== Atomic Slot Sentinel Pattern =====
+// Sink/source slot registration uses an atomic sentinel pattern instead of
+// vTaskSuspendAll(), avoiding system-wide scheduling suspension during slot ops.
+//
+// Pattern for set_sink(slot, sink):
+//   1. Null out _sinks[slot].write atomically (__ATOMIC_RELEASE) — audio task skips slot
+//   2. memcpy the full struct body (non-critical, task is not touching it)
+//   3. Set the real write pointer atomically (__ATOMIC_RELEASE) — makes slot live
+//
+// Pattern for remove_sink(slot):
+//   1. Null out write pointer atomically (__ATOMIC_RELEASE) — task stops calling immediately
+//   2. Clean up remaining fields (no rush, task won't read them)
+//
+// Pattern for set_source / remove_source: identical, using `read` as the sentinel.
+//
+// On ESP32-P4 RISC-V, aligned pointer stores/loads are single bus transactions.
+// __ATOMIC_RELEASE / __ATOMIC_ACQUIRE ordering ensures all preceding stores are
+// visible to the Core 1 audio task before it observes the non-null sentinel.
+//
+// All slot-indexed APIs (set_sink, remove_sink, set_source, remove_source,
+// register_sink) use the atomic sentinel pattern. ScopedSchedulerSuspend
+// (vTaskSuspendAll) is no longer used in this file.
 
 // ===== Compile-time dimension invariants =====
 static_assert(AUDIO_PIPELINE_MAX_INPUTS * 2 <= AUDIO_PIPELINE_MATRIX_SIZE,
@@ -146,6 +156,30 @@ static AudioOutputSink _sinks[AUDIO_OUT_MAX_SINKS] = {
     AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
 };
 static volatile int _sinkCount = 0;
+
+// ===== Atomic Slot Sentinel Accessors =====
+// Used by both the Core 1 audio task (read path) and the Core 0 slot API (write path).
+// These are defined here — after _sinks/_sources — so they can reference the arrays.
+
+// Core 1 read path: atomically load sink write-callback (null = slot empty, skip it)
+static inline void (*slot_sink_write_fn(int s))(const int32_t*, int) {
+    return __atomic_load_n(&_sinks[s].write, __ATOMIC_ACQUIRE);
+}
+
+// Core 0 write path: atomically store sink write-callback (null clears, non-null makes live)
+static inline void slot_sink_store_write_fn(int s, void (*fn)(const int32_t*, int)) {
+    __atomic_store_n(&_sinks[s].write, fn, __ATOMIC_RELEASE);
+}
+
+// Core 1 read path: atomically load source read-callback (null = lane empty, skip it)
+static inline uint32_t (*slot_source_read_fn(int lane))(int32_t*, uint32_t) {
+    return __atomic_load_n(&_sources[lane].read, __ATOMIC_ACQUIRE);
+}
+
+// Core 0 write path: atomically store source read-callback
+static inline void slot_source_store_read_fn(int lane, uint32_t (*fn)(int32_t*, uint32_t)) {
+    __atomic_store_n(&_sources[lane].read, fn, __ATOMIC_RELEASE);
+}
 
 // ===== No-sink warning flag (reset when first sink is registered) =====
 static bool _noSinkWarned = false;
@@ -230,10 +264,13 @@ static void pipeline_read_inputs() {
         }
 
         // --- Registered source (ADC, USB, SigGen, or any HAL-managed input) ---
-        if (_sources[lane].read) {
+        // __ATOMIC_ACQUIRE load ensures we see the fully-written struct if read != NULL
+        // (paired with __ATOMIC_RELEASE store in slot_source_store_read_fn on Core 0).
+        auto readFn = slot_source_read_fn(lane);
+        if (readFn) {
             bool active = !_sources[lane].isActive || _sources[lane].isActive();
             if (active) {
-                uint32_t got = _sources[lane].read(_rawBuf[lane], FRAMES);
+                uint32_t got = readFn(_rawBuf[lane], FRAMES);
                 if (got < (uint32_t)FRAMES) {
                     memset(&_rawBuf[lane][got * 2], 0, (FRAMES - got) * 2 * sizeof(int32_t));
                 }
@@ -406,8 +443,12 @@ static void pipeline_write_output() {
         // slot-indexed sinks with gaps between them (e.g., slot 0 empty, slot 1 active)
         // are still dispatched. Empty slots are skipped by the write/isReady checks below.
         for (int s = 0; s < AUDIO_OUT_MAX_SINKS; s++) {
+            // __ATOMIC_ACQUIRE load ensures we see the fully-written struct if writeFn != NULL
+            // (paired with __ATOMIC_RELEASE store in slot_sink_store_write_fn on Core 0).
+            auto writeFn = slot_sink_write_fn(s);
+            if (!writeFn) continue;
             AudioOutputSink *sink = &_sinks[s];
-            if (!sink->write || !sink->isReady || !sink->isReady()) continue;
+            if (!sink->isReady || !sink->isReady()) continue;
             if (sink->muted) continue;
 
             int chL = sink->firstChannel;
@@ -431,7 +472,7 @@ static void pipeline_write_output() {
             } else {
                 to_int32_lj(srcL, srcR, _sinkBuf[s], FRAMES);
             }
-            sink->write(_sinkBuf[s], FRAMES);
+            writeFn(_sinkBuf[s], FRAMES);
 
             // Compute output sink VU metering
             {
@@ -918,9 +959,19 @@ bool audio_pipeline_set_source(int lane, const AudioInputSource *src) {
               (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
         heap_budget_record("pipe_rawBuf_lazy", RAW_SAMPLES * sizeof(int32_t), false);
     }
+    // Atomic sentinel swap (no scheduler suspend needed):
+    // 1. Null the sentinel so the audio task stops using this lane immediately.
+    // 2. Copy all non-sentinel fields into the slot.
+    // 3. Store the real read pointer last with RELEASE ordering — makes the slot live.
+    //    The audio task's ACQUIRE load in slot_source_read_fn() guarantees it sees
+    //    the complete struct before observing the non-null sentinel.
+    slot_source_store_read_fn(lane, nullptr);  // Step 1: disable lane
     {
-        ScopedSchedulerSuspend guard;
-        _sources[lane] = *src;  // Value copy — atomic w.r.t. task preemption
+        auto realRead = src->read;
+        AudioInputSource tmp = *src;
+        tmp.read = nullptr;               // Don't clobber the just-cleared sentinel yet
+        _sources[lane] = tmp;             // Step 2: copy body (task ignores lane, read==NULL)
+        slot_source_store_read_fn(lane, realRead);  // Step 3: make live (RELEASE barrier)
     }
 #endif
     return true;
@@ -928,11 +979,12 @@ bool audio_pipeline_set_source(int lane, const AudioInputSource *src) {
 
 void audio_pipeline_remove_source(int lane) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return;
+    // Step 1: atomically null the sentinel — audio task stops using this lane immediately.
+    slot_source_store_read_fn(lane, nullptr);
+    // Step 2: reset remaining fields (no rush, task won't touch them now).
     AudioInputSource empty = AUDIO_INPUT_SOURCE_INIT;
-    {
-        ScopedSchedulerSuspend guard;
-        _sources[lane] = empty;
-    }
+    empty.read = nullptr;  // Already null; reinforce for memcpy
+    _sources[lane] = empty;
 }
 
 // DEPRECATED alias
@@ -1000,12 +1052,16 @@ void audio_pipeline_dump_raw_diag() {
 
 void audio_pipeline_register_sink(const AudioOutputSink *sink) {
     if (!sink || _sinkCount >= AUDIO_OUT_MAX_SINKS) return;
-    // Suspend scheduler to prevent audio task (priority 3) from preempting
-    // mid-struct-copy and reading a partially-written sink with garbage function pointers.
+    int slot = _sinkCount;
+    // Use same atomic sentinel pattern as set_sink(): null first, copy body, store write last.
+    slot_sink_store_write_fn(slot, nullptr);
     {
-        ScopedSchedulerSuspend guard;
-        _sinks[_sinkCount] = *sink;  // Value copy — atomic w.r.t. task preemption
-        _sinkCount = _sinkCount + 1;
+        auto realWrite = sink->write;
+        AudioOutputSink tmp = *sink;
+        tmp.write = nullptr;
+        _sinks[slot] = tmp;
+        _sinkCount = slot + 1;  // Increment count before making slot live
+        slot_sink_store_write_fn(slot, realWrite);
     }
     LOG_I("[Audio] Sink registered: %s ch=%d,%d (count=%d)",
           sink->name ? sink->name : "?",
@@ -1061,15 +1117,25 @@ bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
     }
     // Reset the no-sink warning so it fires again if all sinks are later removed
     _noSinkWarned = false;
+    // Atomic sentinel swap (no scheduler suspend needed):
+    // 1. Null the sentinel — audio task stops dispatching to this slot immediately.
+    // 2. Copy all non-sentinel fields into the slot.
+    // 3. Store the real write pointer with RELEASE ordering — makes the slot live.
+    //    The audio task's ACQUIRE load in slot_sink_write_fn() guarantees it sees
+    //    the complete struct before observing the non-null sentinel.
+    slot_sink_store_write_fn(slot, nullptr);  // Step 1: disable slot
     {
-        ScopedSchedulerSuspend guard;
-        _sinks[slot] = *sink;
+        auto realWrite = sink->write;
+        AudioOutputSink tmp = *sink;
+        tmp.write = nullptr;               // Don't clobber the cleared sentinel yet
+        _sinks[slot] = tmp;               // Step 2: copy body (task ignores slot, write==NULL)
+        slot_sink_store_write_fn(slot, realWrite);  // Step 3: make live (RELEASE barrier)
     }
 #endif
-    // Update _sinkCount to reflect highest occupied slot + 1
+    // Update _sinkCount to reflect highest occupied slot + 1 (use atomic read for consistency)
     _sinkCount = 0;
     for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
-        if (_sinks[i].write) _sinkCount = i + 1;
+        if (slot_sink_write_fn(i)) _sinkCount = i + 1;
     }
 #ifndef NATIVE_TEST
     AppState::getInstance().markChannelMapDirty();
@@ -1083,10 +1149,8 @@ bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
 
 void audio_pipeline_set_sink_muted(uint8_t slot, bool muted) {
     if (slot >= AUDIO_OUT_MAX_SINKS) return;
-    {
-        ScopedSchedulerSuspend guard;
-        _sinks[slot].muted = muted;  // Single bool write — no heap allocation
-    }
+    // Single aligned bool write — atomic on ESP32-P4 RISC-V. No scheduler suspend needed.
+    _sinks[slot].muted = muted;
 }
 
 bool audio_pipeline_is_sink_muted(uint8_t slot) {
@@ -1106,21 +1170,21 @@ float audio_pipeline_get_sink_volume(uint8_t slot) {
 
 void audio_pipeline_remove_sink(int slot) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS) return;
-    if (!_sinks[slot].write) return;  // Already empty
+    if (!slot_sink_write_fn(slot)) return;  // Already empty — atomic read
     const char *name = _sinks[slot].name;
-    {
-        ScopedSchedulerSuspend guard;
-        memset(&_sinks[slot], 0, sizeof(AudioOutputSink));
-        _sinks[slot].gainLinear = 1.0f;
-        _sinks[slot].volumeGain = 1.0f;
-        _sinks[slot].vuL = -90.0f;
-        _sinks[slot].vuR = -90.0f;
-        _sinks[slot].halSlot = 0xFF;
-    }
-    // Update _sinkCount
+    // Step 1: atomically null the sentinel — audio task stops dispatching immediately.
+    slot_sink_store_write_fn(slot, nullptr);
+    // Step 2: reset remaining fields (no rush, audio task won't read them now).
+    memset(&_sinks[slot], 0, sizeof(AudioOutputSink));
+    _sinks[slot].gainLinear = 1.0f;
+    _sinks[slot].volumeGain = 1.0f;
+    _sinks[slot].vuL = -90.0f;
+    _sinks[slot].vuR = -90.0f;
+    _sinks[slot].halSlot = 0xFF;
+    // Update _sinkCount (use atomic read for consistency with sentinel pattern)
     _sinkCount = 0;
     for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
-        if (_sinks[i].write) _sinkCount = i + 1;
+        if (slot_sink_write_fn(i)) _sinkCount = i + 1;
     }
 #ifndef NATIVE_TEST
     AppState::getInstance().markChannelMapDirty();

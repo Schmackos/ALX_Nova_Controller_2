@@ -69,10 +69,21 @@ public:
     uint16_t getInitPriority() const { return _initPriority; }
     HalDiscovery getDiscovery() const { return _discovery; }
 
+    // ----- Power management (optional, opt-in per driver) -----
+    // Drivers that support HAL_CAP_POWER_MGMT override these methods.
+    // Default implementations return false (unsupported).
+    virtual bool enterStandby() { return false; }  // Transition to low-power standby
+    virtual bool wake()         { return false; }  // Wake from standby
+    virtual bool powerOff()     { return false; }  // Full power-down (requires init to wake)
+    virtual bool powerOn()      { return false; }  // Full power-on (mirrors init sequence)
+
+    HalPowerState getPowerState() const { return _powerState; }
+
     // ----- Hot-path state (volatile for cross-core reads) -----
     // Audio pipeline reads _ready directly — NO virtual dispatch
     volatile bool _ready;
     volatile HalDeviceState _state;
+    volatile HalPowerState  _powerState;
 
     // Atomic accessors for _ready — use release/acquire semantics on RISC-V targets
     // so descriptor fields written by Core 0 are visible to Core 1 before _ready=true.
@@ -116,7 +127,7 @@ protected:
 
     friend class HalDeviceManager;
 
-    HalDevice() : _ready(false), _state(HAL_STATE_UNKNOWN),
+    HalDevice() : _ready(false), _state(HAL_STATE_UNKNOWN), _powerState(HAL_PM_ACTIVE),
                   _slot(0), _initPriority(HAL_PRIORITY_HARDWARE),
                   _discovery(HAL_DISC_BUILTIN) {
         memset(&_descriptor, 0, sizeof(_descriptor));

@@ -141,6 +141,42 @@ test('heap critical row becomes visible when heapCritical is true', async ({ con
   await expect(page.locator('#heapCriticalValue')).toHaveText('YES');
 });
 
+test('pipeline timing fields in hardware_stats populate DSP CPU section', async ({ connectedPage: page }) => {
+  await page.evaluate(() => switchTab('debug'));
+
+  // Enable debug mode so the DSP CPU section is visible
+  page.wsRoute.send({ type: 'debugState', debugMode: true, debugHwStats: true, debugI2sMetrics: false, debugTaskMonitor: false, debugSerialLevel: 2 });
+  await page.waitForTimeout(300);
+
+  // Send hardware_stats with pipeline timing fields (inputReadUs, perInputDspUs,
+  // sinkWriteUs added in foundation hardening — these come from PipelineTimingMetrics).
+  // The frontend updateHardwareStats() handler processes pipelineCpu/pipelineFrameUs/
+  // matrixUs/outputDspUs/firBypassCount when present on the data object.
+  page.wsRoute.send({
+    type: 'hardware_stats',
+    cpu: { usageTotal: 40, usageCore0: 25, usageCore1: 15, temperature: 45.0, freqMHz: 360, model: 'ESP32-P4', revision: 1, cores: 2 },
+    memory: { heapTotal: 327680, heapFree: 182340, heapMinFree: 154880, heapMaxBlock: 131072, psramTotal: 8388608, psramFree: 7000000 },
+    storage: { flashSize: 16777216, sketchSize: 1245184, sketchFree: 2883584, LittleFSTotal: 1441792, LittleFSUsed: 32768 },
+    wifi: { rssi: -45, channel: 6, apClients: 0 },
+    uptime: 60000,
+    pipelineCpu: 8.3,
+    pipelineFrameUs: 1200,
+    matrixUs: 180,
+    outputDspUs: 320,
+    inputReadUs: 210,
+    perInputDspUs: 150,
+    sinkWriteUs: 340,
+    firBypassCount: 0,
+  });
+
+  // The DSP CPU section should become visible with pipeline timing values
+  await expect(page.locator('#dsp-cpu-section')).toBeVisible({ timeout: 3000 });
+  await expect(page.locator('#dsp-cpu-pipeline')).toHaveText(/8\.3/);
+  await expect(page.locator('#dsp-frame-us')).toHaveText(/1200/);
+  await expect(page.locator('#dsp-matrix-us')).toHaveText(/180/);
+  await expect(page.locator('#dsp-output-us')).toHaveText(/320/);
+});
+
 test('DMA allocation failure row becomes visible with lane bitmask', async ({ connectedPage: page }) => {
   await page.evaluate(() => switchTab('debug'));
 

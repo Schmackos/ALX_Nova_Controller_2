@@ -89,14 +89,14 @@ int  audio_pipeline_get_sink_count();
 const AudioOutputSink* audio_pipeline_get_sink(int idx);
 
 // Slot-indexed sink API — preferred for HAL-managed devices.
-// audio_pipeline_set_sink()    atomically places a sink at a fixed slot index (0..AUDIO_OUT_MAX_SINKS-1).
-// audio_pipeline_remove_sink() atomically clears a slot; no-ops if the slot is already empty.
+// audio_pipeline_set_sink()    places a sink at a fixed slot index using lock-free atomic sentinel pattern.
+// audio_pipeline_remove_sink() clears a slot via atomic sentinel null; no-ops if already empty.
 // _sinkCount is updated after each call to reflect the highest occupied slot + 1,
 // keeping backward compatibility with legacy _sinkCount-based iteration.
 bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink);
 void audio_pipeline_remove_sink(int slot);
 
-// Atomic mute control on sink structs. Uses vTaskSuspendAll() for atomicity.
+// Atomic mute control on sink structs. Single aligned bool write — atomic on RISC-V.
 // Bounds-checked: slots >= AUDIO_OUT_MAX_SINKS are ignored silently.
 void audio_pipeline_set_sink_muted(uint8_t slot, bool muted);
 bool audio_pipeline_is_sink_muted(uint8_t slot);

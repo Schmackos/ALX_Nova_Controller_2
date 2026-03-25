@@ -386,6 +386,7 @@ void sendHalDeviceState() {
         obj["busFreq"] = desc.bus.freqHz;
         obj["sampleRates"] = desc.sampleRatesMask;
         obj["legacyId"] = desc.legacyId;
+        obj["powerState"] = (uint8_t)dev->getPowerState();
 
         // Surface last init error for devices in error/unavailable state
         if (dev->_state == HAL_STATE_ERROR || dev->_state == HAL_STATE_UNAVAILABLE) {

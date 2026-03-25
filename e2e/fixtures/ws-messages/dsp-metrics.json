@@ -1,0 +1,16 @@
+{
+  "type": "dspMetrics",
+  "processTimeUs": 450,
+  "cpuLoad": 12.5,
+  "limiterGr": [0.0, 0.0, 0.0, 0.0],
+  "pipelineCpu": 8.3,
+  "pipelineFrameUs": 1200,
+  "matrixUs": 180,
+  "outputDspUs": 320,
+  "inputReadUs": 210,
+  "perInputDspUs": 150,
+  "sinkWriteUs": 340,
+  "dspCpuWarn": false,
+  "dspCpuCrit": false,
+  "firBypassCount": 0
+}

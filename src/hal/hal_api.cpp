@@ -442,6 +442,75 @@ void registerHalApiEndpoints(WebServer& server) {
         server_send(200, "application/json", json);
     });
 
+    // POST /api/hal/devices/power — set power management state for a device
+    // Body: {"slot": N, "state": "active"|"standby"|"off"}
+    // Returns 422 if the device does not advertise HAL_CAP_POWER_MGMT.
+    server.on("/api/hal/devices/power", HTTP_POST, [&server]() {
+        if (!requireAuth()) return;
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, server.arg("plain"));
+        if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+
+        uint8_t slot = doc["slot"] | 255;
+        if (slot >= HAL_MAX_DEVICES) {
+            server_send(400, "application/json", "{\"error\":\"Invalid slot\"}");
+            return;
+        }
+
+        HalDeviceManager& mgr = HalDeviceManager::instance();
+        HalDevice* dev = mgr.getDevice(slot);
+        if (!dev) {
+            server_send(404, "application/json", "{\"error\":\"No device in slot\"}");
+            return;
+        }
+
+        if (!(dev->getDescriptor().capabilities & HAL_CAP_POWER_MGMT)) {
+            server_send(422, "application/json", "{\"error\":\"Device does not support power management\"}");
+            return;
+        }
+
+        const char* stateStr = doc["state"] | "";
+        bool ok = false;
+        HalPowerState newPm = dev->getPowerState();
+
+        if (strcmp(stateStr, "active") == 0) {
+            if (dev->getPowerState() == HAL_PM_STANDBY) {
+                ok = dev->wake();
+            } else if (dev->getPowerState() == HAL_PM_OFF) {
+                ok = dev->powerOn();
+            } else {
+                ok = true;  // Already active
+            }
+            if (ok) newPm = HAL_PM_ACTIVE;
+        } else if (strcmp(stateStr, "standby") == 0) {
+            ok = dev->enterStandby();
+            if (ok) newPm = HAL_PM_STANDBY;
+        } else if (strcmp(stateStr, "off") == 0) {
+            ok = dev->powerOff();
+            if (ok) newPm = HAL_PM_OFF;
+        } else {
+            server_send(400, "application/json", "{\"error\":\"state must be active, standby, or off\"}");
+            return;
+        }
+
+        if (ok) {
+            dev->_powerState = newPm;
+            appState.markHalDeviceDirty();
+            LOG_I("[HAL:API] Power state for slot %d set to %s", slot, stateStr);
+        } else {
+            LOG_W("[HAL:API] Power state transition to %s failed for slot %d", stateStr, slot);
+        }
+
+        JsonDocument resp;
+        resp["status"] = ok ? "ok" : "error";
+        resp["slot"] = slot;
+        resp["powerState"] = (uint8_t)dev->getPowerState();
+        if (!ok) resp["error"] = "Power state transition failed";
+        String json;
+        serializeJson(resp, json);
+        server_send(ok ? 200 : 500, "application/json", json);
+    });
+
     // GET /api/hal/settings — auto-discovery toggle
     server.on("/api/hal/settings", HTTP_GET, [&server]() {
         if (!requireAuth()) return;

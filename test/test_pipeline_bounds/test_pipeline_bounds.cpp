@@ -658,16 +658,22 @@ void test_dsp_bypass_write_read_all_8(void) {
 // We cannot include audio_pipeline.h directly because it declares dozens of
 // functions that would need stubs. Testing the struct layout and getter API
 // only requires the struct definition.
+// Canonical definition: src/audio_pipeline.h — keep in sync.
 struct PipelineTimingMetrics {
     uint32_t totalFrameUs;
     uint32_t matrixMixUs;
     uint32_t outputDspUs;
     float    totalCpuPercent;
-    // Per-stage breakdown (foundation hardening)
+    // Per-stage breakdown (added in foundation hardening)
     uint32_t inputReadUs;
     uint32_t perInputDspUs;
     uint32_t sinkWriteUs;
+    uint32_t totalE2eUs;
 };
+// Guard: if fields are added/removed/reordered in audio_pipeline.h, this will
+// fail to compile and alert the developer to update the replica above.
+// 8 fields: 7 x uint32_t (28) + 1 x float (4) = 32 bytes (no padding on common ABIs).
+static_assert(sizeof(PipelineTimingMetrics) == 32, "PipelineTimingMetrics layout changed — update replica from audio_pipeline.h");
 
 // Native stub for audio_pipeline_get_timing() — returns zero-initialized struct.
 static PipelineTimingMetrics stub_audio_pipeline_get_timing() {
@@ -689,6 +695,7 @@ void test_timing_metrics_fields_exist(void) {
     m.inputReadUs = 10;
     m.perInputDspUs = 20;
     m.sinkWriteUs = 30;
+    m.totalE2eUs = 400;
 
     TEST_ASSERT_EQUAL_UINT32(123, m.totalFrameUs);
     TEST_ASSERT_EQUAL_UINT32(45, m.matrixMixUs);
@@ -697,6 +704,7 @@ void test_timing_metrics_fields_exist(void) {
     TEST_ASSERT_EQUAL_UINT32(10, m.inputReadUs);
     TEST_ASSERT_EQUAL_UINT32(20, m.perInputDspUs);
     TEST_ASSERT_EQUAL_UINT32(30, m.sinkWriteUs);
+    TEST_ASSERT_EQUAL_UINT32(400, m.totalE2eUs);
 }
 
 // 7b. PipelineTimingMetrics zero-initialized by default
@@ -711,13 +719,12 @@ void test_timing_metrics_initial_zero(void) {
     TEST_ASSERT_EQUAL_UINT32(0, m.inputReadUs);
     TEST_ASSERT_EQUAL_UINT32(0, m.perInputDspUs);
     TEST_ASSERT_EQUAL_UINT32(0, m.sinkWriteUs);
+    TEST_ASSERT_EQUAL_UINT32(0, m.totalE2eUs);
 }
 
-// 7c. Struct size is consistent (7 fields: 6 x uint32_t + 1 x float = 28 bytes min)
+// 7c. Struct size is exact (8 fields: 7 x uint32_t + 1 x float = 32 bytes)
 void test_timing_metrics_struct_size(void) {
-    TEST_ASSERT_TRUE(sizeof(PipelineTimingMetrics) >= 28);
-    // Exact size depends on padding, but must hold all 7 fields
-    TEST_ASSERT_TRUE(sizeof(PipelineTimingMetrics) <= 48); // Reasonable upper bound with padding
+    TEST_ASSERT_EQUAL(32, sizeof(PipelineTimingMetrics));
 }
 
 // 7d. Getter API returns a zeroed struct (simulates native no-op)
@@ -732,6 +739,7 @@ void test_timing_metrics_getter(void) {
     TEST_ASSERT_EQUAL_UINT32(0, m.inputReadUs);
     TEST_ASSERT_EQUAL_UINT32(0, m.perInputDspUs);
     TEST_ASSERT_EQUAL_UINT32(0, m.sinkWriteUs);
+    TEST_ASSERT_EQUAL_UINT32(0, m.totalE2eUs);
 }
 
 // ============================================================
