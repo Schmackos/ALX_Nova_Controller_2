@@ -63,7 +63,13 @@ const config = {
           remarkPlugins: [remarkMath],
           rehypePlugins: [rehypeKatex],
         },
-        blog: false,
+        blog: {
+          showReadingTime: true,
+          blogTitle: 'ALX Nova Release Notes',
+          postsPerPage: 10,
+          feedOptions: { type: 'all' },
+          onInlineAuthors: 'ignore',
+        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -142,6 +148,11 @@ const config = {
             docId: 'developer/api/rest-main',
             position: 'left',
             label: 'API Reference',
+          },
+          {
+            to: '/blog',
+            label: 'Release Notes',
+            position: 'left',
           },
           {
             href: 'https://github.com/Schmackos/ALX_Nova_Controller_2',
