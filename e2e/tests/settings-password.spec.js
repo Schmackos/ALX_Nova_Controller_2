@@ -108,7 +108,7 @@ test.describe('@settings @api Settings Password', () => {
     let requestBody = null;
 
     await test.step('Intercept /api/auth/change and fill valid passwords', async () => {
-      await page.route('**/api/auth/change', async (route) => {
+      await page.route('**/api/v1/auth/change', async (route) => {
         changeCalled = true;
         const req = route.request();
         requestBody = JSON.parse(req.postData());
@@ -140,7 +140,7 @@ test.describe('@settings @api Settings Password', () => {
     let changeCalled = false;
 
     await test.step('Set up route intercept and open modal', async () => {
-      await page.route('**/api/auth/change', async (route) => {
+      await page.route('**/api/v1/auth/change', async (route) => {
         changeCalled = true;
         await route.fulfill({ status: 200, body: JSON.stringify({ success: true }) });
       });
@@ -169,7 +169,7 @@ test.describe('@settings @api Settings Password', () => {
       await page.locator('button[onclick="showPasswordChangeModal()"]').click();
       await expect(page.locator('#passwordChangeModal')).toBeVisible({ timeout: 3000 });
 
-      await page.route('**/api/auth/change', async (route) => {
+      await page.route('**/api/v1/auth/change', async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',

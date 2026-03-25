@@ -13,7 +13,7 @@ extern bool requireAuth();
 
 void registerPsramApiEndpoints(WebServer &/*srv*/) {
     // GET /api/psram/status — PSRAM health and allocation stats
-    server.on("/api/psram/status", HTTP_GET, []() {
+    server_on_versioned("/api/psram/status", HTTP_GET, []() {
         if (!requireAuth()) return;
 
         JsonDocument doc;

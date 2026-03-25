@@ -13,7 +13,7 @@ test.describe('@error @api API Error Handling', () => {
     const page = connectedPage;
 
     await test.step('intercept settings API to return 401', async () => {
-      await page.route('**/api/settings', async (route) => {
+      await page.route('**/api/v1/settings', async (route) => {
         if (route.request().method() === 'POST') {
           await route.fulfill({
             status: 401,
@@ -58,7 +58,7 @@ test.describe('@error @api API Error Handling', () => {
     const page = connectedPage;
 
     await test.step('intercept API to return 404', async () => {
-      await page.route('**/api/hal/devices', async (route) => {
+      await page.route('**/api/v1/hal/devices', async (route) => {
         await route.fulfill({
           status: 404,
           contentType: 'application/json',
@@ -86,7 +86,7 @@ test.describe('@error @api API Error Handling', () => {
     const page = connectedPage;
 
     await test.step('intercept settings POST to return 500', async () => {
-      await page.route('**/api/settings', async (route) => {
+      await page.route('**/api/v1/settings', async (route) => {
         if (route.request().method() === 'POST') {
           await route.fulfill({
             status: 500,
@@ -124,7 +124,7 @@ test.describe('@error @api API Error Handling', () => {
     const page = connectedPage;
 
     await test.step('intercept API to simulate timeout by aborting', async () => {
-      await page.route('**/api/settings', async (route) => {
+      await page.route('**/api/v1/settings', async (route) => {
         if (route.request().method() === 'POST') {
           await route.abort('timedout');
         } else {
@@ -160,7 +160,7 @@ test.describe('@error @api API Error Handling', () => {
     const page = connectedPage;
 
     await test.step('intercept HAL scan to always return 409', async () => {
-      await page.route('**/api/hal/scan', async (route) => {
+      await page.route('**/api/v1/hal/scan', async (route) => {
         await route.fulfill({
           status: 409,
           contentType: 'application/json',
@@ -204,7 +204,7 @@ test.describe('@error @api API Error Handling', () => {
     const page = connectedPage;
 
     await test.step('intercept settings POST to return failure', async () => {
-      await page.route('**/api/settings', async (route) => {
+      await page.route('**/api/v1/settings', async (route) => {
         if (route.request().method() === 'POST') {
           await route.fulfill({
             status: 500,

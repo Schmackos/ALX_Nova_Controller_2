@@ -5582,7 +5582,12 @@ body.night-mode {
         // Cookie is HttpOnly — browser sends it automatically with credentials: 'include'
 
         // Global fetch wrapper for API calls (handles 401 Unauthorized + 10s timeout)
+        // Automatically prefixes /api/ paths with /api/v1/ for versioned endpoints.
         async function apiFetch(url, options = {}) {
+            // Rewrite /api/ to /api/v1/ for all API calls (backward compat preserved on server)
+            if (url.startsWith('/api/') && !url.startsWith('/api/v1/') && !url.startsWith('/api/__test__/')) {
+                url = '/api/v1/' + url.slice(5);
+            }
             const controller = new AbortController();
             const timeoutMs = options.timeout || 10000;
             const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs);
@@ -6489,7 +6494,7 @@ body.night-mode {
         }
 
         function setMatrixGainDb(outCh, inCh, db) {
-            fetch('/api/pipeline/matrix/cell', {
+            apiFetch('/api/pipeline/matrix/cell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ out: outCh, in: inCh, gainDb: db })
@@ -6521,16 +6526,16 @@ body.night-mode {
                     setMatrixGainDb(o, i, -96);
         }
         function matrixSave() {
-            fetch('/api/pipeline/matrix/save', { method: 'POST' })
+            apiFetch('/api/pipeline/matrix/save', { method: 'POST' })
                 .then(function() { showToast('Matrix saved', 'success'); })
                 .catch(function() { showToast('Save failed', 'error'); });
         }
         function matrixLoad() {
-            fetch('/api/pipeline/matrix/load', { method: 'POST' })
+            apiFetch('/api/pipeline/matrix/load', { method: 'POST' })
                 .then(function() {
                     showToast('Matrix loaded', 'success');
                     // Refresh channel map to get updated matrix
-                    fetch('/api/pipeline/matrix').then(function(r) { return r.json(); }).then(function(d) {
+                    apiFetch('/api/pipeline/matrix').then(function(r) { return r.json(); }).then(function(d) {
                         if (audioChannelMap) audioChannelMap.matrix = d.matrix;
                         renderMatrixGrid();
                     });
@@ -7026,7 +7031,7 @@ body.night-mode {
             if (target.type === 'output') {
                 // Apply via output DSP REST API
                 // First get current config, then update biquad stages
-                fetch('/api/output/dsp?ch=' + target.channel)
+                apiFetch('/api/output/dsp?ch=' + target.channel)
                     .then(function(r) { return r.json(); })
                     .then(function(cfg) {
                         // Build updated stages: keep non-biquad stages, replace biquads with new bands
@@ -7051,7 +7056,7 @@ body.night-mode {
                             });
                         }
 
-                        return fetch('/api/output/dsp', {
+                        return apiFetch('/api/output/dsp', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -7197,7 +7202,7 @@ body.night-mode {
 
         function openOutputPeq(channel) {
             // Fetch current output DSP config and extract biquad stages
-            fetch('/api/output/dsp?ch=' + channel)
+            apiFetch('/api/output/dsp?ch=' + channel)
                 .then(function(r) { return r.json(); })
                 .then(function(cfg) {
                     var bands = [];
@@ -7277,7 +7282,7 @@ body.night-mode {
             var order = orderMap[type] || 4;
 
             // Use the output DSP crossover REST endpoint
-            fetch('/api/output/dsp/crossover', {
+            apiFetch('/api/output/dsp/crossover', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subCh: channel, mainCh: channel + 1, freqHz: freq, order: order })
@@ -7335,7 +7340,7 @@ body.night-mode {
             };
 
             // Add compressor stage via REST API
-            fetch('/api/output/dsp/stage', {
+            apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ch: channel, type: 14 })  // DSP_COMPRESSOR = 14
@@ -7379,7 +7384,7 @@ body.night-mode {
         }
 
         function applyLimiter(channel) {
-            fetch('/api/output/dsp/stage', {
+            apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ch: channel, type: 11 })  // DSP_LIMITER = 11
@@ -14285,7 +14290,7 @@ function initFirmwareDragDrop() {
         var i2sPortData = null;
 
         function loadI2sPorts() {
-            fetch('/api/i2s/ports')
+            apiFetch('/api/i2s/ports')
                 .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
                 .then(function(data) {
                     i2sPortData = data;

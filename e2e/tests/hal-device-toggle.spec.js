@@ -29,7 +29,7 @@ test.describe('@hal @ws HAL Device Toggle', () => {
 
     // Intercept the PUT request
     let putPayload = null;
-    await page.route('/api/hal/devices', async (route) => {
+    await page.route('/api/v1/hal/devices', async (route) => {
       if (route.request().method() === 'PUT') {
         putPayload = JSON.parse(route.request().postData());
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok' }) });
@@ -62,7 +62,7 @@ test.describe('@hal @ws HAL Device Toggle', () => {
     await expect(page.locator('#hal-device-list')).toContainText('ES9822PRO', { timeout: 5000 });
 
     let putPayload = null;
-    await page.route('/api/hal/devices', async (route) => {
+    await page.route('/api/v1/hal/devices', async (route) => {
       if (route.request().method() === 'PUT') {
         putPayload = JSON.parse(route.request().postData());
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok' }) });

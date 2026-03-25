@@ -497,6 +497,17 @@ void sendAudioChannelMap() {
         }
     }
 
+    // --- Format negotiation state ---
+    doc["rateMismatch"] = appState.audio.rateMismatch;
+    JsonArray laneRates = doc["laneSampleRates"].to<JsonArray>();
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        laneRates.add(appState.audio.laneSampleRates[lane]);
+    }
+    JsonArray laneDsd = doc["laneDsd"].to<JsonArray>();
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        laneDsd.add(appState.audio.laneDsd[lane]);
+    }
+
     // --- Matrix dimensions ---
     doc["matrixInputs"] = AUDIO_PIPELINE_MATRIX_SIZE;
     doc["matrixOutputs"] = AUDIO_PIPELINE_MATRIX_SIZE;

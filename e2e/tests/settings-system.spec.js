@@ -35,7 +35,7 @@ test.describe('@settings @api Settings System', () => {
     let rebootCalled = false;
 
     await test.step('Set up route intercept', async () => {
-      await page.route('**/api/reboot', async (route) => {
+      await page.route('**/api/v1/reboot', async (route) => {
         rebootCalled = true;
         await route.fulfill({
           status: 200,
@@ -69,7 +69,7 @@ test.describe('@settings @api Settings System', () => {
     let rebootCalled = false;
 
     await test.step('Set up route intercept', async () => {
-      await page.route('**/api/reboot', async (route) => {
+      await page.route('**/api/v1/reboot', async (route) => {
         rebootCalled = true;
         await route.fulfill({ status: 200, body: JSON.stringify({ success: true }) });
       });
@@ -110,7 +110,7 @@ test.describe('@settings @api Settings System', () => {
     let resetCalled = false;
 
     await test.step('Set up route intercept', async () => {
-      await page.route('**/api/factoryreset', async (route) => {
+      await page.route('**/api/v1/factoryreset', async (route) => {
         resetCalled = true;
         await route.fulfill({
           status: 200,
@@ -147,7 +147,7 @@ test.describe('@settings @api Settings System', () => {
       // The export function fetches /api/settings/export, creates a blob, then clicks a link
       // We intercept the API call to verify it was made
       let exportCalled = false;
-      await page.route('**/api/settings/export', async (route) => {
+      await page.route('**/api/v1/settings/export', async (route) => {
         exportCalled = true;
         await route.fulfill({
           status: 200,

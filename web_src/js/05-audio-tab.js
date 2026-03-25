@@ -352,7 +352,7 @@
         }
 
         function setMatrixGainDb(outCh, inCh, db) {
-            fetch('/api/pipeline/matrix/cell', {
+            apiFetch('/api/pipeline/matrix/cell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ out: outCh, in: inCh, gainDb: db })
@@ -384,16 +384,16 @@
                     setMatrixGainDb(o, i, -96);
         }
         function matrixSave() {
-            fetch('/api/pipeline/matrix/save', { method: 'POST' })
+            apiFetch('/api/pipeline/matrix/save', { method: 'POST' })
                 .then(function() { showToast('Matrix saved', 'success'); })
                 .catch(function() { showToast('Save failed', 'error'); });
         }
         function matrixLoad() {
-            fetch('/api/pipeline/matrix/load', { method: 'POST' })
+            apiFetch('/api/pipeline/matrix/load', { method: 'POST' })
                 .then(function() {
                     showToast('Matrix loaded', 'success');
                     // Refresh channel map to get updated matrix
-                    fetch('/api/pipeline/matrix').then(function(r) { return r.json(); }).then(function(d) {
+                    apiFetch('/api/pipeline/matrix').then(function(r) { return r.json(); }).then(function(d) {
                         if (audioChannelMap) audioChannelMap.matrix = d.matrix;
                         renderMatrixGrid();
                     });

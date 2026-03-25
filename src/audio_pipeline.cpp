@@ -37,6 +37,7 @@
 #include "debug_serial.h"
 #include "heap_budget.h"
 #include "diag_journal.h"
+#include "app_events.h"
 #include "psram_alloc.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
@@ -281,6 +282,39 @@ static void pipeline_read_inputs() {
                         _rawBuf[lane][s] = (int32_t)((float)_rawBuf[lane][s] * g);
                     }
                 }
+
+                // DoP (DSD-over-PCM) detection: check alternating 0x05/0xFA markers in
+                // the top byte of left-justified int32 samples. Hardware ADC lanes only —
+                // software sources (SigGen, USB) cannot carry DoP content.
+                if (_sources[lane].isHardwareAdc && FRAMES >= 2) {
+                    uint8_t b0 = (uint8_t)((uint32_t)_rawBuf[lane][0] >> 24);
+                    uint8_t b1 = (uint8_t)((uint32_t)_rawBuf[lane][2] >> 24);  // frame 1, L sample
+                    bool isDop = ((b0 == DOP_MARKER_A && b1 == DOP_MARKER_B) ||
+                                  (b0 == DOP_MARKER_B && b1 == DOP_MARKER_A));
+
+                    bool wasDsd = _sources[lane].isDsd;
+                    if (isDop) {
+                        if (_dopConfirmCount[lane] < 0) _dopConfirmCount[lane] = 0;
+                        if (_dopConfirmCount[lane] < DOP_CONFIRM_THR) _dopConfirmCount[lane]++;
+                        if (!wasDsd && _dopConfirmCount[lane] >= DOP_CONFIRM_THR) {
+                            _sources[lane].isDsd = true;
+                            appState.audio.laneDsd[lane] = true;
+                            diag_emit(DIAG_AUDIO_DSD_DETECTED, DIAG_SEV_INFO,
+                                      (uint8_t)lane, "Audio", "DoP DSD detected");
+                            LOG_I("[Audio] DoP DSD detected on lane %d", lane);
+                            app_events_signal(EVT_FORMAT_CHANGE);
+                        }
+                    } else {
+                        if (_dopConfirmCount[lane] > 0) _dopConfirmCount[lane] = 0;
+                        if (_dopConfirmCount[lane] > -DOP_CLEAR_THR) _dopConfirmCount[lane]--;
+                        if (wasDsd && _dopConfirmCount[lane] <= -DOP_CLEAR_THR) {
+                            _sources[lane].isDsd = false;
+                            appState.audio.laneDsd[lane] = false;
+                            LOG_I("[Audio] DoP DSD cleared on lane %d", lane);
+                            app_events_signal(EVT_FORMAT_CHANGE);
+                        }
+                    }
+                }
             } else {
                 memset(_rawBuf[lane], 0, bufBytes);
             }
@@ -301,6 +335,17 @@ static const float GATE_OPEN_THRESH  = 1.62e-4f;  // -65 dBFS
 static const float GATE_CLOSE_THRESH = 5.12e-5f;  // -70 dBFS (5 dB hysteresis window)
 
 static bool _gateOpen[AUDIO_PIPELINE_MAX_INPUTS] = {};  // Gate state per ADC lane (for diagnostics)
+
+// ===== DoP (DSD-over-PCM) Detection State =====
+// DoP v1.1: the top byte (bits 31..24) of each left-justified 32-bit sample alternates
+// between 0x05 and 0xFA across consecutive frames when DSD content is present.
+// We confirm across 3 consecutive DMA buffers before setting isDsd to avoid false positives.
+// Clears after 3 consecutive non-DoP buffers to handle stream transitions gracefully.
+#define DOP_MARKER_A    0x05u
+#define DOP_MARKER_B    0xFAu
+#define DOP_CONFIRM_THR 3    // Consecutive DoP buffers required to assert isDsd
+#define DOP_CLEAR_THR   3    // Consecutive non-DoP buffers required to de-assert isDsd
+static int8_t _dopConfirmCount[AUDIO_PIPELINE_MAX_INPUTS] = {};  // >0: confirm pending; <0: clear pending
 
 static void pipeline_to_float() {
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
@@ -349,7 +394,8 @@ static void pipeline_run_dsp() {
 #ifdef DSP_ENABLED
     // Float-native DSP — no int32 bridge needed (saves ~2KB + 4 conversion loops)
     for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
-        if (_dspBypass[lane] || !_laneL[lane] || !_laneR[lane]) continue;
+        // Skip DSP for DSD lanes: applying biquad IIR to DoP data corrupts the bitstream
+        if (_dspBypass[lane] || _sources[lane].isDsd || !_laneL[lane] || !_laneR[lane]) continue;
         dsp_process_buffer_float(_laneL[lane], _laneR[lane], FRAMES, lane);
     }
 #else
@@ -1275,4 +1321,66 @@ void audio_pipeline_load_matrix() {
     }
     LOG_I("[Audio] Matrix loaded from /pipeline_matrix.json (%dx%d)", oldSize, oldSize);
 #endif
+}
+
+// ===== Format Negotiation =====
+// Called from main-loop context every ~5s (or on EVT_FORMAT_CHANGE).
+// Reads each active source's getSampleRate(), stores per-lane values in
+// appState.audio.laneSampleRates, and detects mismatches across active sinks.
+//
+// A mismatch exists when:
+//   - Two or more active sources report different non-zero sample rates, OR
+//   - Any active source rate differs from any active sink's configured sampleRate
+//     (when the sink has sampleRate > 0).
+//
+// On state change: emits DIAG_AUDIO_RATE_MISMATCH / signals EVT_FORMAT_CHANGE.
+bool audio_pipeline_check_format() {
+    bool mismatch = false;
+    uint32_t firstActiveRate = 0;
+
+    // Collect per-lane sample rates from active sources
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        const AudioInputSource* src = audio_pipeline_get_source(lane);
+        uint32_t rate = 0;
+        if (src && src->getSampleRate) {
+            rate = src->getSampleRate();
+        }
+        appState.audio.laneSampleRates[lane] = rate;
+
+        if (rate > 0) {
+            if (firstActiveRate == 0) {
+                firstActiveRate = rate;
+            } else if (rate != firstActiveRate) {
+                mismatch = true;
+            }
+        }
+    }
+
+    // Also check against registered sink sample rates
+    if (!mismatch && firstActiveRate > 0) {
+        int sinkCount = audio_pipeline_get_sink_count();
+        for (int s = 0; s < sinkCount && !mismatch; s++) {
+            const AudioOutputSink* sink = audio_pipeline_get_sink(s);
+            if (sink && sink->sampleRate > 0 && sink->sampleRate != firstActiveRate) {
+                mismatch = true;
+            }
+        }
+    }
+
+    // Emit diagnostic and signal event only on state transitions
+    bool wasMismatch = appState.audio.rateMismatch;
+    if (mismatch != wasMismatch) {
+        appState.audio.rateMismatch = mismatch;
+        if (mismatch) {
+            char msg[48];
+            snprintf(msg, sizeof(msg), "rate mismatch: %luHz vs other", (unsigned long)firstActiveRate);
+            diag_emit(DIAG_AUDIO_RATE_MISMATCH, DIAG_SEV_WARN, 0, "Audio", msg);
+            LOG_W("[Audio] %s", msg);
+        } else {
+            LOG_I("[Audio] Sample rate mismatch resolved");
+        }
+        app_events_signal(EVT_FORMAT_CHANGE);
+    }
+
+    return mismatch;
 }

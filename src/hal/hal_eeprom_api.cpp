@@ -14,7 +14,7 @@ extern bool requireAuth();
 
 void registerHalEepromApiEndpoints() {
     // GET /api/hal/eeprom — Read EEPROM state, parsed fields, raw hex dump
-    server.on("/api/hal/eeprom", HTTP_GET, []() {
+    server_on_versioned("/api/hal/eeprom", HTTP_GET, []() {
         if (!requireAuth()) return;
 
         JsonDocument doc;
@@ -73,7 +73,7 @@ void registerHalEepromApiEndpoints() {
     });
 
     // POST /api/hal/eeprom — Program EEPROM
-    server.on("/api/hal/eeprom", HTTP_POST, []() {
+    server_on_versioned("/api/hal/eeprom", HTTP_POST, []() {
         if (!requireAuth()) return;
 
         if (!server.hasArg("plain")) {
@@ -179,7 +179,7 @@ void registerHalEepromApiEndpoints() {
     });
 
     // POST /api/hal/eeprom/erase — Erase EEPROM
-    server.on("/api/hal/eeprom/erase", HTTP_POST, []() {
+    server_on_versioned("/api/hal/eeprom/erase", HTTP_POST, []() {
         if (!requireAuth()) return;
 
         // Get target address from body or use stored address
@@ -228,7 +228,7 @@ void registerHalEepromApiEndpoints() {
     });
 
     // POST /api/hal/eeprom/scan — Re-scan I2C bus + EEPROM
-    server.on("/api/hal/eeprom/scan", HTTP_POST, []() {
+    server_on_versioned("/api/hal/eeprom/scan", HTTP_POST, []() {
         if (!requireAuth()) return;
 
         LOG_I("[HAL EEPROM] API: Re-scan I2C bus + EEPROM");
@@ -285,7 +285,7 @@ void registerHalEepromApiEndpoints() {
     });
 
     // GET /api/hal/eeprom/presets — Pre-fill data from HAL device DB
-    server.on("/api/hal/eeprom/presets", HTTP_GET, []() {
+    server_on_versioned("/api/hal/eeprom/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
 
         JsonDocument doc;

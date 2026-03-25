@@ -87,6 +87,11 @@ struct AudioState {
   // ADC signal quality metrics
   float snrDb[AUDIO_PIPELINE_MAX_INPUTS] = {};
   float sfdrDb[AUDIO_PIPELINE_MAX_INPUTS] = {};
+
+  // Format negotiation state (Phase 1+2 hardening)
+  bool     rateMismatch = false;                          // True when input/output sample rates differ
+  uint32_t laneSampleRates[AUDIO_PIPELINE_MAX_INPUTS] = {}; // Per-lane sample rate (Hz, 0=unknown)
+  bool     laneDsd[AUDIO_PIPELINE_MAX_INPUTS] = {};      // Per-lane DoP DSD detection flag
 };
 
 #endif // STATE_AUDIO_STATE_H

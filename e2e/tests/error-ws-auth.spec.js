@@ -84,7 +84,7 @@ test.describe('@error @ws WebSocket Auth Errors', () => {
 
     await test.step('intercept ws-token endpoint to return failure', async () => {
       // Make the /api/ws-token endpoint fail
-      await page.route('**/api/ws-token', async (route) => {
+      await page.route('**/api/v1/ws-token', async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -128,7 +128,7 @@ test.describe('@error @ws WebSocket Auth Errors', () => {
     let redirectedToLogin = false;
 
     await test.step('intercept ws-token to return 401', async () => {
-      await page.route('**/api/ws-token', async (route) => {
+      await page.route('**/api/v1/ws-token', async (route) => {
         await route.fulfill({
           status: 401,
           contentType: 'application/json',

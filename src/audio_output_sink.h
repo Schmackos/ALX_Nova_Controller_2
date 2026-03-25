@@ -56,6 +56,13 @@ typedef struct AudioOutputSink {
     // its owning HalDevice*. Current write/isReady callbacks don't take ctx
     // (legacy dispatch tables), but bridge/driver code can read it for lookups.
     void *ctx;
+
+    // Format negotiation fields (Phase 1+2 hardening)
+    uint32_t sampleRate;      // Configured sample rate in Hz (0 = unknown)
+    uint32_t sampleRatesMask; // HAL_RATE_* bitmask of supported rates (0 = any)
+    uint8_t  bitDepth;        // Configured bit depth: 16, 24, or 32 (0 = auto/32)
+    uint8_t  maxBitDepth;     // Maximum bit depth supported by this sink (0 = any)
+    bool     supportsDsd;     // True if this sink can accept DoP-encoded DSD content
 } AudioOutputSink;
 
 // Default initializer
@@ -73,7 +80,12 @@ typedef struct AudioOutputSink {
     0.0f,   /* _vuSmoothedL */   \
     0.0f,   /* _vuSmoothedR */   \
     0xFF,   /* halSlot */        \
-    NULL    /* ctx */            \
+    NULL,   /* ctx */            \
+    0,      /* sampleRate */     \
+    0,      /* sampleRatesMask */\
+    0,      /* bitDepth */       \
+    0,      /* maxBitDepth */    \
+    false   /* supportsDsd */    \
 }
 
 #ifdef __cplusplus

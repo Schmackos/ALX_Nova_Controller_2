@@ -24,7 +24,7 @@ test.describe('@hal @api HAL Discovery', () => {
     await openDevicesTab(page);
 
     let scanCalled = false;
-    await page.route('/api/hal/scan', async (route) => {
+    await page.route('/api/v1/hal/scan', async (route) => {
       scanCalled = true;
       await route.fulfill({
         status: 200,
@@ -42,7 +42,7 @@ test.describe('@hal @api HAL Discovery', () => {
     await openDevicesTab(page);
 
     // Intercept scan and delay response to observe scanning state
-    await page.route('/api/hal/scan', async (route) => {
+    await page.route('/api/v1/hal/scan', async (route) => {
       // Delay fulfillment to observe scanning state
       await new Promise(r => setTimeout(r, 1000));
       await route.fulfill({
@@ -64,7 +64,7 @@ test.describe('@hal @api HAL Discovery', () => {
     await openDevicesTab(page);
     await expect(page.locator('.hal-device-card')).toHaveCount(11);
 
-    await page.route('/api/hal/scan', async (route) => {
+    await page.route('/api/v1/hal/scan', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -88,7 +88,7 @@ test.describe('@hal @api HAL Discovery', () => {
     await openDevicesTab(page);
 
     let callCount = 0;
-    await page.route('/api/hal/scan', async (route) => {
+    await page.route('/api/v1/hal/scan', async (route) => {
       callCount++;
       if (callCount === 1) {
         // First call succeeds but takes a moment
@@ -118,7 +118,7 @@ test.describe('@hal @api HAL Discovery', () => {
   test('partial scan flag shows Bus 0 warning in toast', async ({ connectedPage: page }) => {
     await openDevicesTab(page);
 
-    await page.route('/api/hal/scan', async (route) => {
+    await page.route('/api/v1/hal/scan', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -137,7 +137,7 @@ test.describe('@hal @api HAL Discovery', () => {
   test('rescan button is disabled during scan', async ({ connectedPage: page }) => {
     await openDevicesTab(page);
 
-    await page.route('/api/hal/scan', async (route) => {
+    await page.route('/api/v1/hal/scan', async (route) => {
       await new Promise(r => setTimeout(r, 1500));
       await route.fulfill({
         status: 200,

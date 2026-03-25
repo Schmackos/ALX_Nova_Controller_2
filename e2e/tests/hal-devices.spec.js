@@ -45,7 +45,7 @@ test('rescan button triggers POST /api/hal/scan and disable button sends correct
 
   // Intercept the rescan request
   let scanCalled = false;
-  await page.route('/api/hal/scan', async (route) => {
+  await page.route('/api/v1/hal/scan', async (route) => {
     scanCalled = true;
     await route.fulfill({ status: 200, body: JSON.stringify({ status: 'ok', devicesFound: 6 }) });
   });
@@ -60,7 +60,7 @@ test('rescan button triggers POST /api/hal/scan and disable button sends correct
 
   // Intercept the disable/enable PUT request
   let disableCalled = false;
-  await page.route('/api/hal/devices', async (route) => {
+  await page.route('/api/v1/hal/devices', async (route) => {
     if (route.request().method() === 'PUT') {
       disableCalled = true;
       await route.fulfill({ status: 200, body: JSON.stringify({ status: 'ok' }) });

@@ -27,7 +27,7 @@ test.describe('@audio Audio Output DSP', () => {
     }
 
     // Intercept the fetch to /api/output/dsp that openOutputPeq triggers
-    await page.route('**/api/output/dsp*', async (route) => {
+    await page.route('**/api/v1/output/dsp*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -41,7 +41,7 @@ test.describe('@audio Audio Output DSP', () => {
   });
 
   test('PEQ overlay contains frequency response canvas', async ({ connectedPage: page }) => {
-    await page.route('**/api/output/dsp*', async (route) => {
+    await page.route('**/api/v1/output/dsp*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -59,7 +59,7 @@ test.describe('@audio Audio Output DSP', () => {
   });
 
   test('close overlay returns to output view', async ({ connectedPage: page }) => {
-    await page.route('**/api/output/dsp*', async (route) => {
+    await page.route('**/api/v1/output/dsp*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

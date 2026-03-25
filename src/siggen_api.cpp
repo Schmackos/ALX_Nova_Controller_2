@@ -13,7 +13,7 @@ extern bool requireAuth();
 
 void registerSignalGenApiEndpoints() {
   // GET /api/signalgenerator — read current signal generator state
-  server.on("/api/signalgenerator", HTTP_GET, []() {
+  server_on_versioned("/api/signalgenerator", HTTP_GET, []() {
     if (!requireAuth()) return;
     JsonDocument doc;
     doc["success"] = true;
@@ -32,7 +32,7 @@ void registerSignalGenApiEndpoints() {
   });
 
   // POST /api/signalgenerator — update signal generator parameters
-  server.on("/api/signalgenerator", HTTP_POST, []() {
+  server_on_versioned("/api/signalgenerator", HTTP_POST, []() {
     if (!requireAuth()) return;
     if (!server.hasArg("plain")) {
       server_send(400, "application/json",

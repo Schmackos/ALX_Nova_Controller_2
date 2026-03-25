@@ -201,7 +201,7 @@
             if (target.type === 'output') {
                 // Apply via output DSP REST API
                 // First get current config, then update biquad stages
-                fetch('/api/output/dsp?ch=' + target.channel)
+                apiFetch('/api/output/dsp?ch=' + target.channel)
                     .then(function(r) { return r.json(); })
                     .then(function(cfg) {
                         // Build updated stages: keep non-biquad stages, replace biquads with new bands
@@ -226,7 +226,7 @@
                             });
                         }
 
-                        return fetch('/api/output/dsp', {
+                        return apiFetch('/api/output/dsp', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -372,7 +372,7 @@
 
         function openOutputPeq(channel) {
             // Fetch current output DSP config and extract biquad stages
-            fetch('/api/output/dsp?ch=' + channel)
+            apiFetch('/api/output/dsp?ch=' + channel)
                 .then(function(r) { return r.json(); })
                 .then(function(cfg) {
                     var bands = [];
@@ -452,7 +452,7 @@
             var order = orderMap[type] || 4;
 
             // Use the output DSP crossover REST endpoint
-            fetch('/api/output/dsp/crossover', {
+            apiFetch('/api/output/dsp/crossover', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subCh: channel, mainCh: channel + 1, freqHz: freq, order: order })
@@ -510,7 +510,7 @@
             };
 
             // Add compressor stage via REST API
-            fetch('/api/output/dsp/stage', {
+            apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ch: channel, type: 14 })  // DSP_COMPRESSOR = 14
@@ -554,7 +554,7 @@
         }
 
         function applyLimiter(channel) {
-            fetch('/api/output/dsp/stage', {
+            apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ch: channel, type: 11 })  // DSP_LIMITER = 11

@@ -10,7 +10,12 @@
         // Cookie is HttpOnly — browser sends it automatically with credentials: 'include'
 
         // Global fetch wrapper for API calls (handles 401 Unauthorized + 10s timeout)
+        // Automatically prefixes /api/ paths with /api/v1/ for versioned endpoints.
         async function apiFetch(url, options = {}) {
+            // Rewrite /api/ to /api/v1/ for all API calls (backward compat preserved on server)
+            if (url.startsWith('/api/') && !url.startsWith('/api/v1/') && !url.startsWith('/api/__test__/')) {
+                url = '/api/v1/' + url.slice(5);
+            }
             const controller = new AbortController();
             const timeoutMs = options.timeout || 10000;
             const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs);

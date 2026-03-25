@@ -53,7 +53,7 @@ test('password change modal shows current password field and validates matching 
 
   // Intercept the API call
   let requestBody = null;
-  await page.route('/api/auth/change', async (route) => {
+  await page.route('/api/v1/auth/change', async (route) => {
     requestBody = JSON.parse(route.request().postData() || '{}');
     await route.fulfill({
       status: 200,
@@ -75,7 +75,7 @@ test('password change modal shows current password field and validates matching 
 
 test('password change modal hides current password field when using default password', async ({ connectedPage: page }) => {
   // Set isDefaultPassword on the mock server state so /api/auth/status returns it
-  await page.route('/api/auth/status', async (route) => {
+  await page.route('/api/v1/auth/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -103,7 +103,7 @@ test('password change modal hides current password field when using default pass
   await page.locator('#confirmPassword').fill('mynewpassword');
 
   let requestBody = null;
-  await page.route('/api/auth/change', async (route) => {
+  await page.route('/api/v1/auth/change', async (route) => {
     requestBody = JSON.parse(route.request().postData() || '{}');
     await route.fulfill({
       status: 200,
@@ -136,7 +136,7 @@ test('incorrect current password shows error from API', async ({ connectedPage: 
   await page.locator('#confirmPassword').fill('newpassword123');
 
   // Intercept with 403 response (wrong current password — 403 not 401 to avoid login redirect)
-  await page.route('/api/auth/change', async (route) => {
+  await page.route('/api/v1/auth/change', async (route) => {
     await route.fulfill({
       status: 403,
       contentType: 'application/json',

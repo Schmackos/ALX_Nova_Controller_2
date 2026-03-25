@@ -36,7 +36,7 @@ static const char* _result_str(HealthCheckResult r) {
 
 void registerHealthCheckApiEndpoints() {
     // GET /api/health — run (or return cached) full health check
-    server.on("/api/health", HTTP_GET, []() {
+    server_on_versioned("/api/health", HTTP_GET, []() {
         if (!requireAuth()) return;
         if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
             server_send(429, "application/json", "{\"error\":\"Rate limit exceeded\"}");

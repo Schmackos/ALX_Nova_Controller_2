@@ -96,4 +96,27 @@ router.get('/inputnames', (req, res) => {
   });
 });
 
+// GET /status — format negotiation status (new in Phase 1+2 hardening)
+router.get('/status', (req, res) => {
+  const state = getState();
+  const laneSampleRates = Array(8).fill(0);
+  laneSampleRates[0] = 48000;
+  laneSampleRates[1] = 48000;
+  res.json({
+    success: true,
+    rateMismatch: state.rateMismatch || false,
+    laneSampleRates,
+    laneDsd: Array(8).fill(false),
+    sinks: (state.outputs || []).map((out, idx) => ({
+      index: idx,
+      name: out.name || '',
+      sampleRate: 48000,
+      sampleRatesMask: 0x1C,  // 44.1k|48k|96k
+      bitDepth: 32,
+      maxBitDepth: 32,
+      supportsDsd: false,
+    })),
+  });
+});
+
 module.exports = router;

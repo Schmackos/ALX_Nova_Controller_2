@@ -53,6 +53,10 @@ typedef struct AudioInputSource {
     // True for physical ADC sources (PCM1808). False for software sources (SigGen, USB).
     // Used by noise gate to determine which lanes get noise gating.
     bool isHardwareAdc;
+
+    // Format negotiation fields (Phase 1+2 hardening)
+    uint8_t  bitDepth;   // Actual bit depth produced: 16, 24, or 32 (0 = unknown/auto)
+    bool     isDsd;      // True when DoP DSD content detected on this lane
 } AudioInputSource;
 
 // Default initializer — all NULLs, gain=1.0, VU=-90dBFS, smoothed=0
@@ -68,7 +72,9 @@ typedef struct AudioInputSource {
     0.0f,  /* _vuSmoothedL */    \
     0.0f,  /* _vuSmoothedR */    \
     0xFF,  /* halSlot */         \
-    false  /* isHardwareAdc */   \
+    false, /* isHardwareAdc */   \
+    0,     /* bitDepth */        \
+    false  /* isDsd */           \
 }
 
 #ifdef __cplusplus

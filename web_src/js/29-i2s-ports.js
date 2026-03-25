@@ -2,7 +2,7 @@
         var i2sPortData = null;
 
         function loadI2sPorts() {
-            fetch('/api/i2s/ports')
+            apiFetch('/api/i2s/ports')
                 .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
                 .then(function(data) {
                     i2sPortData = data;

@@ -3,6 +3,7 @@
 /** @type {import('@docusaurus/plugin-content-docs').SidebarsConfig} */
 const sidebars = {
   userSidebar: [
+    'about',
     'user/intro',
     {
       type: 'category',
@@ -60,6 +61,7 @@ const sidebars = {
         'developer/hal/driver-guide',
         'developer/hal/drivers',
         'developer/hal/mezzanine-connector',
+        'developer/hal/power-supply',
       ],
     },
     {

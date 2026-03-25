@@ -51,29 +51,45 @@ const ethernet = require('./routes/ethernet');
 const i2sPorts = require('./routes/i2s-ports');
 
 app.use('/api/auth', auth);
+app.use('/api/v1/auth', auth);  // v1 alias
 
 // WS token endpoint — returns one-time token for WS auth (mock always succeeds)
-app.get('/api/ws-token', (req, res) => {
+const wsTokenHandler = (req, res) => {
   const cookieId = req.cookies && req.cookies['sessionId'];
   if (!cookieId) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
   res.json({ success: true, token: `ws-token-${Date.now()}` });
-});
+};
+app.get('/api/ws-token', wsTokenHandler);
+app.get('/api/v1/ws-token', wsTokenHandler);  // v1 alias
 
 app.use('/api/hal', hal);
+app.use('/api/v1/hal', hal);      // v1 alias
 app.use('/api', wifi);
+app.use('/api/v1', wifi);         // v1 alias
 app.use('/api/mqtt', mqtt);
+app.use('/api/v1/mqtt', mqtt);    // v1 alias
 app.use('/api', settings);
+app.use('/api/v1', settings);     // v1 alias
 app.use('/api', ota);
+app.use('/api/v1', ota);          // v1 alias
 app.use('/api/pipeline', pipeline);
+app.use('/api/v1/pipeline', pipeline);  // v1 alias
 app.use('/api', dsp);
+app.use('/api/v1', dsp);          // v1 alias
 app.use('/api', sensing);
+app.use('/api/v1', sensing);      // v1 alias
 app.use('/api', siggen);
+app.use('/api/v1', siggen);       // v1 alias
 app.use('/api', diagnostics);
+app.use('/api/v1', diagnostics);  // v1 alias
 app.use('/api', system);
+app.use('/api/v1', system);       // v1 alias
 app.use('/api', ethernet);
+app.use('/api/v1', ethernet);     // v1 alias
 app.use('/api/i2s', i2sPorts);
+app.use('/api/v1/i2s', i2sPorts); // v1 alias
 
 // ===== Start Server =====
 const PORT = process.env.PORT || 3000;

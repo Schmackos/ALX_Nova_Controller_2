@@ -24,7 +24,7 @@ test.describe('@hal @api HAL Device Reinit', () => {
     await openDevicesTab(page);
 
     let reinitPayload = null;
-    await page.route('/api/hal/devices/reinit', async (route) => {
+    await page.route('/api/v1/hal/devices/reinit', async (route) => {
       reinitPayload = JSON.parse(route.request().postData());
       await route.fulfill({
         status: 200,
@@ -33,7 +33,7 @@ test.describe('@hal @api HAL Device Reinit', () => {
       });
     });
     // Also intercept the GET /api/hal/devices that loadHalDeviceList() triggers after reinit
-    await page.route('/api/hal/devices', async (route) => {
+    await page.route('/api/v1/hal/devices', async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
       } else {
@@ -74,7 +74,7 @@ test.describe('@hal @api HAL Device Reinit', () => {
     await openDevicesTab(page);
 
     let deletePayload = null;
-    await page.route('/api/hal/devices', async (route) => {
+    await page.route('/api/v1/hal/devices', async (route) => {
       if (route.request().method() === 'DELETE') {
         deletePayload = JSON.parse(route.request().postData());
         await route.fulfill({
@@ -122,14 +122,14 @@ test.describe('@hal @api HAL Device Reinit', () => {
   test('reinit shows success toast after completion', async ({ connectedPage: page }) => {
     await openDevicesTab(page);
 
-    await page.route('/api/hal/devices/reinit', async (route) => {
+    await page.route('/api/v1/hal/devices/reinit', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ status: 'ok', state: 'AVAILABLE' })
       });
     });
-    await page.route('/api/hal/devices', async (route) => {
+    await page.route('/api/v1/hal/devices', async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
       } else {

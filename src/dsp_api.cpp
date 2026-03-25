@@ -423,7 +423,7 @@ static void autoMirrorIfLinked(int ch) {
 
 void registerDspApiEndpoints() {
     // GET /api/dsp — full config
-    server.on("/api/dsp", HTTP_GET, []() {
+    server_on_versioned("/api/dsp", HTTP_GET, []() {
         if (!requireAuth()) return;
         const int bufSize = 8192;
         char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_get");
@@ -443,7 +443,7 @@ JsonDocument doc;
     });
 
     // PUT /api/dsp — replace full config
-    server.on("/api/dsp", HTTP_PUT, []() {
+    server_on_versioned("/api/dsp", HTTP_PUT, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
@@ -462,7 +462,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/bypass — toggle global bypass
-    server.on("/api/dsp/bypass", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/bypass", HTTP_POST, []() {
         if (!requireAuth()) return;
         dsp_copy_active_to_inactive();
         DspState *cfg = dsp_get_inactive_config();
@@ -482,7 +482,7 @@ JsonDocument doc;
     });
 
     // GET /api/dsp/metrics
-    server.on("/api/dsp/metrics", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/metrics", HTTP_GET, []() {
         if (!requireAuth()) return;
         DspMetrics m = dsp_get_metrics();
 JsonDocument doc;
@@ -498,7 +498,7 @@ JsonDocument doc;
     });
 
     // GET /api/dsp/channel?ch=N — get channel config
-    server.on("/api/dsp/channel", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/channel", HTTP_GET, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -513,7 +513,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/channel/bypass?ch=N — toggle channel bypass
-    server.on("/api/dsp/channel/bypass", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/channel/bypass", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -535,7 +535,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/stage?ch=N — add stage
-    server.on("/api/dsp/stage", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/stage", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -644,7 +644,7 @@ JsonDocument doc;
     });
 
     // PUT /api/dsp/stage?ch=N&stage=M — update stage params
-    server.on("/api/dsp/stage", HTTP_PUT, []() {
+    server_on_versioned("/api/dsp/stage", HTTP_PUT, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         int si = parseStageParam();
@@ -753,7 +753,7 @@ JsonDocument doc;
     });
 
     // DELETE /api/dsp/stage?ch=N&stage=M — remove stage
-    server.on("/api/dsp/stage", HTTP_DELETE, []() {
+    server_on_versioned("/api/dsp/stage", HTTP_DELETE, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         int si = parseStageParam();
@@ -776,7 +776,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/stage/reorder?ch=N — reorder stages
-    server.on("/api/dsp/stage/reorder", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/stage/reorder", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -810,7 +810,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/stage/enable?ch=N&stage=M — toggle stage enable
-    server.on("/api/dsp/stage/enable", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/stage/enable", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         int si = parseStageParam();
@@ -846,7 +846,7 @@ JsonDocument doc;
     // ===== Import/Export Endpoints =====
 
     // POST /api/dsp/import/apo?ch=N
-    server.on("/api/dsp/import/apo", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/import/apo", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -872,7 +872,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/import/minidsp?ch=N
-    server.on("/api/dsp/import/minidsp", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/import/minidsp", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -896,7 +896,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/import/fir?ch=N — import FIR text coefficients
-    server.on("/api/dsp/import/fir", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/import/fir", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -941,7 +941,7 @@ JsonDocument doc;
     });
 
     // GET /api/dsp/export/apo?ch=N
-    server.on("/api/dsp/export/apo", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/export/apo", HTTP_GET, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -953,7 +953,7 @@ JsonDocument doc;
     });
 
     // GET /api/dsp/export/minidsp?ch=N
-    server.on("/api/dsp/export/minidsp", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/export/minidsp", HTTP_GET, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -965,7 +965,7 @@ JsonDocument doc;
     });
 
     // GET /api/dsp/export/json
-    server.on("/api/dsp/export/json", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/export/json", HTTP_GET, []() {
         if (!requireAuth()) return;
         const int bufSize = 8192;
         char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_export");
@@ -979,7 +979,7 @@ JsonDocument doc;
     // ===== Crossover & Bass Management Endpoints =====
 
     // POST /api/dsp/crossover?ch=N — apply crossover filter
-    server.on("/api/dsp/crossover", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/crossover", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -1024,7 +1024,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/bassmanagement — setup bass management
-    server.on("/api/dsp/bassmanagement", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/bassmanagement", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
@@ -1062,7 +1062,7 @@ JsonDocument doc;
     // ===== Baffle Step & THD Endpoints =====
 
     // POST /api/dsp/bafflestep?ch=N — apply baffle step correction
-    server.on("/api/dsp/bafflestep", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/bafflestep", HTTP_POST, []() {
         if (!requireAuth()) return;
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
@@ -1097,7 +1097,7 @@ JsonDocument doc;
     });
 
     // GET /api/thd — get THD measurement result
-    server.on("/api/thd", HTTP_GET, []() {
+    server_on_versioned("/api/thd", HTTP_GET, []() {
         if (!requireAuth()) return;
         ThdResult r = thd_get_result();
 JsonDocument doc;
@@ -1117,7 +1117,7 @@ JsonDocument doc;
     });
 
     // POST /api/thd — start THD measurement
-    server.on("/api/thd", HTTP_POST, []() {
+    server_on_versioned("/api/thd", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 JsonDocument doc;
@@ -1130,7 +1130,7 @@ JsonDocument doc;
     });
 
     // DELETE /api/thd — stop THD measurement
-    server.on("/api/thd", HTTP_DELETE, []() {
+    server_on_versioned("/api/thd", HTTP_DELETE, []() {
         if (!requireAuth()) return;
         thd_stop_measurement();
         server_send(200, "application/json", "{\"success\":true}");
@@ -1139,7 +1139,7 @@ JsonDocument doc;
     // ===== PEQ Preset Endpoints =====
 
     // GET /api/dsp/peq/presets — list preset names
-    server.on("/api/dsp/peq/presets", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/peq/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
 JsonDocument doc;
         JsonArray names = doc["presets"].to<JsonArray>();
@@ -1166,7 +1166,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/peq/presets — save preset
-    server.on("/api/dsp/peq/presets", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/peq/presets", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
@@ -1247,7 +1247,7 @@ JsonDocument doc;
     });
 
     // GET /api/dsp/peq/preset?name=X — load preset
-    server.on("/api/dsp/peq/preset", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/peq/preset", HTTP_GET, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("name")) { sendJsonError(400, "Name required"); return; }
 
@@ -1268,7 +1268,7 @@ JsonDocument doc;
     });
 
     // DELETE /api/dsp/peq/preset?name=X — delete preset
-    server.on("/api/dsp/peq/preset", HTTP_DELETE, []() {
+    server_on_versioned("/api/dsp/peq/preset", HTTP_DELETE, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("name")) { sendJsonError(400, "Name required"); return; }
 
@@ -1289,7 +1289,7 @@ JsonDocument doc;
     // ===== DSP Config Preset Endpoints (up to 32 slots) =====
 
     // GET /api/dsp/presets — list all preset slots
-    server.on("/api/dsp/presets", HTTP_GET, []() {
+    server_on_versioned("/api/dsp/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
 JsonDocument doc;
         doc["activeIndex"] = appState.dsp.presetIndex;
@@ -1306,7 +1306,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/presets/save?slot=N — save current config to slot
-    server.on("/api/dsp/presets/save", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/presets/save", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
         int slot = server.arg("slot").toInt();
@@ -1326,7 +1326,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/presets/load?slot=N — load preset into active config
-    server.on("/api/dsp/presets/load", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/presets/load", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
         int slot = server.arg("slot").toInt();
@@ -1340,7 +1340,7 @@ JsonDocument doc;
     });
 
     // DELETE /api/dsp/presets?slot=N — delete preset
-    server.on("/api/dsp/presets", HTTP_DELETE, []() {
+    server_on_versioned("/api/dsp/presets", HTTP_DELETE, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
         int slot = server.arg("slot").toInt();
@@ -1355,7 +1355,7 @@ JsonDocument doc;
     });
 
     // POST /api/dsp/presets/rename — rename preset
-    server.on("/api/dsp/presets/rename", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/presets/rename", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
         int slot = server.arg("slot").toInt();
@@ -1380,7 +1380,7 @@ JsonDocument doc;
     // Delay alignment API endpoints removed in v1.8.3 - incomplete feature, never functional
 
     // POST /api/dsp/channel/stereolink — toggle stereo link for a channel pair
-    server.on("/api/dsp/channel/stereolink", HTTP_POST, []() {
+    server_on_versioned("/api/dsp/channel/stereolink", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 

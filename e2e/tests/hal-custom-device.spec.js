@@ -62,7 +62,7 @@ test.describe('@hal HAL Custom Device', () => {
     // Intercept the custom device creation endpoint
     let postCalled = false;
     let postPayload = null;
-    await page.route('/api/hal/devices/custom', async (route) => {
+    await page.route('/api/v1/hal/devices/custom', async (route) => {
       if (route.request().method() === 'POST') {
         postCalled = true;
         postPayload = JSON.parse(route.request().postData());
@@ -98,7 +98,7 @@ test.describe('@hal HAL Custom Device', () => {
     await openDevicesTab(page);
 
     let postCalled = false;
-    await page.route('/api/hal/devices/custom', async (route) => {
+    await page.route('/api/v1/hal/devices/custom', async (route) => {
       if (route.request().method() === 'POST') {
         postCalled = true;
       }
