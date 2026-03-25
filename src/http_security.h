@@ -9,6 +9,16 @@ extern WebServer server;
 inline void http_add_security_headers() {
     server.sendHeader("X-Frame-Options", "DENY");
     server.sendHeader("X-Content-Type-Options", "nosniff");
+    server.sendHeader("Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self' ws: wss: https://cdn.jsdelivr.net https://github.com https://raw.githubusercontent.com; "
+        "frame-src 'none'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'");
 }
 
 // Convenience wrappers that inject security headers then call server.send().
@@ -24,6 +34,14 @@ inline void server_send(int code, const char* contentType, const char* content) 
 inline void server_send(int code) {
     http_add_security_headers();
     server.send(code);
+}
+inline void server_send_P(int code, const char* contentType, const char* content) {
+    http_add_security_headers();
+    server.send_P(code, contentType, content);
+}
+inline void server_send_P(int code, const char* contentType, const char* content, size_t len) {
+    http_add_security_headers();
+    server.send_P(code, contentType, content, len);
 }
 // Structured JSON response envelope: {"success":true/false[,"data":...][,"error":"..."]}.
 // Use for new REST endpoints to ensure consistent response shape.
@@ -79,6 +97,8 @@ inline bool sanitize_filename(const char* name, char* out, size_t outSize) {
 inline void http_add_security_headers() {}
 inline void server_send(int /*code*/, const char* /*contentType*/, const char* /*content*/) {}
 inline void server_send(int /*code*/) {}
+inline void server_send_P(int /*code*/, const char* /*contentType*/, const char* /*content*/) {}
+inline void server_send_P(int /*code*/, const char* /*contentType*/, const char* /*content*/, size_t /*len*/) {}
 // json_response stub — server type omitted since WebServer is not available in native builds
 template<typename T>
 inline void json_response(T& /*server*/, int /*code*/, const char* /*data*/ = nullptr, const char* /*error*/ = nullptr) {}

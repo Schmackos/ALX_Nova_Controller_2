@@ -989,7 +989,7 @@ void sendWiFiStatus() {
 
 void handleAPRoot() {
   if (!sendGzipped(server, apHtmlPage_gz, apHtmlPage_gz_len)) {
-    server.send_P(200, "text/html", apHtmlPage);
+    server_send_P(200, "text/html", apHtmlPage);
   }
 }
 
