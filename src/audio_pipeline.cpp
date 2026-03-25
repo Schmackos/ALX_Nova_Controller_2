@@ -242,6 +242,17 @@ static void to_int32_lj(const float *L, const float *R, int32_t *raw, int frames
     }
 }
 
+// ===== DoP (DSD-over-PCM) Detection State =====
+// DoP v1.1: the top byte (bits 31..24) of each left-justified 32-bit sample alternates
+// between 0x05 and 0xFA across consecutive frames when DSD content is present.
+// We confirm across 3 consecutive DMA buffers before setting isDsd to avoid false positives.
+// Clears after 3 consecutive non-DoP buffers to handle stream transitions gracefully.
+#define DOP_MARKER_A    0x05u
+#define DOP_MARKER_B    0xFAu
+#define DOP_CONFIRM_THR 3    // Consecutive DoP buffers required to assert isDsd
+#define DOP_CLEAR_THR   3    // Consecutive non-DoP buffers required to de-assert isDsd
+static int8_t _dopConfirmCount[AUDIO_PIPELINE_MAX_INPUTS] = {};  // >0: confirm pending; <0: clear pending
+
 // ===== Pipeline Stages =====
 
 static void pipeline_sync_flags() {
@@ -336,17 +347,6 @@ static const float GATE_OPEN_THRESH  = 1.62e-4f;  // -65 dBFS
 static const float GATE_CLOSE_THRESH = 5.12e-5f;  // -70 dBFS (5 dB hysteresis window)
 
 static bool _gateOpen[AUDIO_PIPELINE_MAX_INPUTS] = {};  // Gate state per ADC lane (for diagnostics)
-
-// ===== DoP (DSD-over-PCM) Detection State =====
-// DoP v1.1: the top byte (bits 31..24) of each left-justified 32-bit sample alternates
-// between 0x05 and 0xFA across consecutive frames when DSD content is present.
-// We confirm across 3 consecutive DMA buffers before setting isDsd to avoid false positives.
-// Clears after 3 consecutive non-DoP buffers to handle stream transitions gracefully.
-#define DOP_MARKER_A    0x05u
-#define DOP_MARKER_B    0xFAu
-#define DOP_CONFIRM_THR 3    // Consecutive DoP buffers required to assert isDsd
-#define DOP_CLEAR_THR   3    // Consecutive non-DoP buffers required to de-assert isDsd
-static int8_t _dopConfirmCount[AUDIO_PIPELINE_MAX_INPUTS] = {};  // >0: confirm pending; <0: clear pending
 
 static void pipeline_to_float() {
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
