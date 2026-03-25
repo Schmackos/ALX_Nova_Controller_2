@@ -103,6 +103,15 @@ function IconWifi() {
   );
 }
 
+function IconFactory() {
+  return (
+    <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor" aria-hidden="true">
+      {/* mdi-factory */}
+      <path d="M10 2H14V3H19V5H5V3H10V2M5 6H19L18 20H6L5 6M8 8V18H10V8H8M14 8V18H16V8H14Z"/>
+    </svg>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Feature card data
 // ---------------------------------------------------------------------------
@@ -113,24 +122,56 @@ const features = [
     description:
       'Mix and match certified hardware modules from any manufacturer. Replace components without rewriting code — the HAL keeps everything compatible.',
     Icon: IconOpenLock,
+    to: '/docs/about',
   },
   {
     title: 'Modular by Design',
     description:
       'Hot-pluggable ADC, DSP, DAC, and amplifier components with I2C auto-discovery. Build the exact stack you need — nothing more.',
     Icon: IconChip,
+    to: '/docs/developer/hal/overview',
   },
   {
     title: 'Prototype to Production',
     description:
       'Start on the ESP32-P4 dev kit, ship on a custom board. The same firmware scales from tinkerer bench to commercial audio product.',
     Icon: IconRocket,
+    to: '/docs/user/getting-started',
   },
   {
     title: 'Web + MQTT Control',
     description:
       'Real-time web dashboard with WebSocket streaming, plus full Home Assistant integration via MQTT auto-discovery.',
     Icon: IconWifi,
+    to: '/docs/user/mqtt-home-assistant',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Audience section data
+// ---------------------------------------------------------------------------
+
+const audiences = [
+  {
+    label: 'End Users',
+    tagline: 'Set up, configure, and control your audio system.',
+    ctaText: 'Get Started',
+    to: '/docs/user/getting-started',
+    Icon: IconRocket,
+  },
+  {
+    label: 'Developers',
+    tagline: 'Write HAL drivers, extend the firmware, build mezzanines.',
+    ctaText: 'Developer Docs',
+    to: '/docs/developer/overview',
+    Icon: IconChip,
+  },
+  {
+    label: 'Enterprise',
+    tagline: 'OEM integration, carrier board customisation, production deployment.',
+    ctaText: 'Enterprise Docs',
+    to: '/docs/enterprise/overview',
+    Icon: IconFactory,
   },
 ];
 
@@ -138,15 +179,33 @@ const features = [
 // Components
 // ---------------------------------------------------------------------------
 
-function FeatureCard({ title, description, Icon }) {
+function FeatureCard({ title, description, Icon, to }) {
   return (
-    <div className={styles.featureCard}>
+    <Link to={to} className={styles.featureCard}>
       <div className={styles.featureIconWrapper}>
         <Icon />
       </div>
       <h3 className={styles.featureTitle}>{title}</h3>
       <p className={styles.featureDescription}>{description}</p>
-    </div>
+    </Link>
+  );
+}
+
+function AudienceSection() {
+  return (
+    <section className={styles.audience}>
+      <p className={styles.audienceHeading}>Who is this for?</p>
+      <div className={styles.audienceGrid}>
+        {audiences.map((a) => (
+          <div key={a.label} className={styles.audienceCard}>
+            <div className={styles.audienceIconWrapper}><a.Icon /></div>
+            <p className={styles.audienceLabel}>{a.label}</p>
+            <p className={styles.audienceTagline}>{a.tagline}</p>
+            <Link to={a.to} className={styles.audienceCta}>{a.ctaText} &rarr;</Link>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -215,6 +274,7 @@ export default function Home() {
     >
       <main>
         <HeroSection />
+        <AudienceSection />
         <FeaturesSection />
       </main>
     </Layout>

@@ -94,6 +94,14 @@ const sidebars = {
     },
     'developer/contributing',
   ],
+
+  enterpriseSidebar: [
+    'enterprise/overview',
+    'enterprise/oem-integration',
+    'enterprise/production-deployment',
+    'enterprise/certification',
+    'enterprise/support-tiers',
+  ],
 };
 
 module.exports = sidebars;
