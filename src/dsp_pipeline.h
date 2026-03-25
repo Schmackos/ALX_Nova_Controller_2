@@ -40,7 +40,7 @@ enum DspStageType : uint8_t {
     DSP_CONVOLUTION = 23,      // Partitioned convolution (room correction IR)
     DSP_NOISE_GATE = 24,       // Noise gate / expander
     DSP_TONE_CTRL = 25,        // 3-band bass/mid/treble tone controls
-    DSP_SPEAKER_PROT = 26,     // Speaker protection (thermal + excursion)
+    // DSP_SPEAKER_PROT = 26,  // removed — enum gap preserved
     DSP_STEREO_WIDTH = 27,     // Stereo width / mid-side processing
     DSP_LOUDNESS = 28,         // Fletcher-Munson loudness compensation
     DSP_BASS_ENHANCE = 29,     // Psychoacoustic bass enhancement
