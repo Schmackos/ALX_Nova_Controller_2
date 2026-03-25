@@ -105,6 +105,7 @@ public:
         _descriptor.type = HAL_DEV_DAC;
         _initPriority = HAL_PRIORITY_HARDWARE;
     }
+    void setCapabilities(uint16_t caps) { _descriptor.capabilities = caps; }
 
     bool probe() override { return probeResult; }
     HalInitResult init() override {
@@ -347,7 +348,7 @@ void test_device_with_dpll_cap_but_no_override_returns_not_available() {
     // A device that has HAL_CAP_DPLL in capabilities but does NOT override
     // getClockStatus() — uses base class default which returns not available
     MinimalTestDevice dev;
-    dev._descriptor.capabilities = HAL_CAP_DPLL;
+    dev.setCapabilities(HAL_CAP_DPLL);
     ClockStatus cs = dev.getClockStatus();
     TEST_ASSERT_FALSE(cs.available);
 }

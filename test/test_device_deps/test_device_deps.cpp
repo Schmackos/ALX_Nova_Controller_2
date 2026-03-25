@@ -77,6 +77,7 @@ public:
     }
     void deinit() override {}
     void dumpConfig() override {}
+    void setCompatible(const char* name) { strncpy(_descriptor.compatible, name, 31); _descriptor.compatible[31] = '\0'; }
     bool healthCheck() override { return true; }
 };
 
@@ -515,8 +516,7 @@ void test_initall_wide_fan_out() {
     for (int i = 0; i < 5; i++) {
         char name[32];
         snprintf(name, sizeof(name), "test,fan%d", i);
-        strncpy(fans[i]._descriptor.compatible, name, 31);
-        fans[i]._descriptor.compatible[31] = '\0';
+        fans[i].setCompatible(name);
         mgr->registerDevice(&fans[i], HAL_DISC_BUILTIN);
         fans[i].addDependency(rootSlot);
     }
