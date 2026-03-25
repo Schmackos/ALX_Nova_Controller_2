@@ -426,30 +426,30 @@ void setup() {
 
   // Favicon (don't redirect/auth for this)
   server.on("/favicon.ico", HTTP_GET,
-            []() { server.send(404, "text/plain", "Not Found"); });
+            []() { server_send(404, "text/plain", "Not Found"); });
 
   // Common browser auto-requests (reduce console noise)
   server.on("/manifest.json", HTTP_GET,
-            []() { server.send(404, "text/plain", "Not Found"); });
+            []() { server_send(404, "text/plain", "Not Found"); });
   server.on("/robots.txt", HTTP_GET,
-            []() { server.send(404, "text/plain", "Not Found"); });
+            []() { server_send(404, "text/plain", "Not Found"); });
   server.on("/sitemap.xml", HTTP_GET,
-            []() { server.send(404, "text/plain", "Not Found"); });
+            []() { server_send(404, "text/plain", "Not Found"); });
   server.on("/apple-touch-icon.png", HTTP_GET,
-            []() { server.send(404, "text/plain", "Not Found"); });
+            []() { server_send(404, "text/plain", "Not Found"); });
   server.on("/apple-touch-icon-precomposed.png", HTTP_GET,
-            []() { server.send(404, "text/plain", "Not Found"); });
+            []() { server_send(404, "text/plain", "Not Found"); });
 
   // Android/Chrome captive portal check
   server.on("/generate_204", HTTP_GET, []() {
     server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "Redirecting...");
+    server_send(302, "text/plain", "Redirecting...");
   });
 
   // Apple captive portal check
   server.on("/hotspot-detect.html", HTTP_GET, []() {
     server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "Redirecting...");
+    server_send(302, "text/plain", "Redirecting...");
   });
 
   // Redirect all unknown routes to root in AP mode (Captive Portal)
@@ -474,7 +474,7 @@ void setup() {
   server.on("/login", HTTP_GET, []() {
     httpServingPage = true;
     if (!sendGzipped(server, loginPage_gz, loginPage_gz_len)) {
-      server.send_P(200, "text/html", loginPage);
+      server_send_P(200, "text/html", loginPage);
     }
     httpServingPage = false;
   });
@@ -495,7 +495,7 @@ void setup() {
     // Serve gzipped dashboard if client supports it (~85% smaller)
     httpServingPage = true;
     if (!sendGzipped(server, htmlPage_gz, htmlPage_gz_len)) {
-      server.send_P(200, "text/html", htmlPage);
+      server_send_P(200, "text/html", htmlPage);
     }
     httpServingPage = false;
   });
@@ -648,19 +648,19 @@ void setup() {
     }
     String json;
     serializeJson(doc, json);
-    server.send(200, "application/json", json);
+    server_send(200, "application/json", json);
   });
   server_on_versioned("/api/pipeline/matrix", HTTP_PUT, []() {
     if (!requireAuth())
       return;
     if (!server.hasArg("plain")) {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\":false,\"message\":\"No data\"}");
       return;
     }
     JsonDocument doc;
     if (deserializeJson(doc, server.arg("plain"))) {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\":false,\"message\":\"Invalid JSON\"}");
       return;
     }
@@ -697,7 +697,7 @@ void setup() {
         o++;
       }
     }
-    server.send(200, "application/json", "{\"success\":true}");
+    server_send(200, "application/json", "{\"success\":true}");
   });
   // Input Names API
   server_on_versioned("/api/inputnames", HTTP_GET, []() {
@@ -712,19 +712,19 @@ void setup() {
     doc["numAdcsDetected"] = appState.audio.numAdcsDetected;
     String json;
     serializeJson(doc, json);
-    server.send(200, "application/json", json);
+    server_send(200, "application/json", json);
   });
   server_on_versioned("/api/inputnames", HTTP_POST, []() {
     if (!requireAuth())
       return;
     if (!server.hasArg("plain")) {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\":false,\"message\":\"No data\"}");
       return;
     }
     JsonDocument doc;
     if (deserializeJson(doc, server.arg("plain"))) {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\":false,\"message\":\"Invalid JSON\"}");
       return;
     }
@@ -736,7 +736,7 @@ void setup() {
       }
       saveInputNames();
     }
-    server.send(200, "application/json", "{\"success\":true}");
+    server_send(200, "application/json", "{\"success\":true}");
   });
 
   // Pipeline format status — new v1 endpoint (also available on /api/v1/ prefix)
