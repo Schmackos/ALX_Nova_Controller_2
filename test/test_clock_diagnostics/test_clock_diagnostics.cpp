@@ -105,7 +105,7 @@ public:
         _descriptor.type = HAL_DEV_DAC;
         _initPriority = HAL_PRIORITY_HARDWARE;
     }
-    void setCapabilities(uint16_t caps) { _descriptor.capabilities = caps; }
+    void setCapabilities(uint32_t caps) { _descriptor.capabilities = caps; }
 
     bool probe() override { return probeResult; }
     HalInitResult init() override {
@@ -191,7 +191,7 @@ void test_hal_cap_dpll_is_bit15() {
 }
 
 void test_hal_cap_dpll_no_overlap_with_other_caps() {
-    uint16_t all_other_caps =
+    uint32_t all_other_caps =
         HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE |
         HAL_CAP_ADC_PATH  | HAL_CAP_DAC_PATH | HAL_CAP_PGA_CONTROL |
         HAL_CAP_HPF_CONTROL | HAL_CAP_CODEC | HAL_CAP_MQA |
@@ -200,9 +200,11 @@ void test_hal_cap_dpll_no_overlap_with_other_caps() {
     TEST_ASSERT_EQUAL_UINT32(0, HAL_CAP_DPLL & all_other_caps);
 }
 
-void test_hal_cap_dpll_fits_in_uint16() {
-    // capabilities field is uint16_t — bit 15 = 0x8000, still fits
-    TEST_ASSERT_LESS_THAN_UINT32(0x10000, (uint32_t)HAL_CAP_DPLL);
+void test_hal_cap_dpll_fits_in_uint32() {
+    // capabilities field is uint32_t — HAL_CAP_DPLL (bit 15) must fit
+    uint32_t cap = HAL_CAP_DPLL;
+    TEST_ASSERT_NOT_EQUAL(0u, cap);
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)HAL_CAP_DPLL, cap);
 }
 
 void test_hal_cap_dpll_distinct_from_apll() {
@@ -218,7 +220,7 @@ void test_hal_cap_dpll_distinct_from_asrc() {
 }
 
 void test_device_capabilities_can_combine_dpll_with_others() {
-    uint16_t caps = HAL_CAP_HW_VOLUME | HAL_CAP_DAC_PATH | HAL_CAP_DPLL;
+    uint32_t caps = HAL_CAP_HW_VOLUME | HAL_CAP_DAC_PATH | HAL_CAP_DPLL;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DPLL);
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
@@ -413,7 +415,7 @@ int main(int argc, char** argv) {
     // Section 3: HAL_CAP_DPLL capability bit
     RUN_TEST(test_hal_cap_dpll_is_bit15);
     RUN_TEST(test_hal_cap_dpll_no_overlap_with_other_caps);
-    RUN_TEST(test_hal_cap_dpll_fits_in_uint16);
+    RUN_TEST(test_hal_cap_dpll_fits_in_uint32);
     RUN_TEST(test_hal_cap_dpll_distinct_from_apll);
     RUN_TEST(test_hal_cap_dpll_distinct_from_asrc);
     RUN_TEST(test_device_capabilities_can_combine_dpll_with_others);

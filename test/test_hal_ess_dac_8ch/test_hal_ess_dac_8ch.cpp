@@ -68,7 +68,7 @@ struct EssDac8chDesc {
     uint8_t      altChipId;         // 0xFF = no alternate
     const char*  altChipName;       // nullptr = no alternate
     const char*  altCompatible;     // nullptr = no alternate
-    uint16_t     capabilities;
+    uint32_t     capabilities;
     uint32_t     sampleRateMask;
 
     // Register addresses
@@ -431,7 +431,7 @@ void test_desc_es9017_identity(void) {
 
 void test_caps_all_chips_have_dac_volume_mute_filters(void) {
     for (int i = 0; i < kDescCount; i++) {
-        uint16_t c = kAllDescs[i]->capabilities;
+        uint32_t c = kAllDescs[i]->capabilities;
         TEST_ASSERT_TRUE_MESSAGE(c & HAL_CAP_DAC_PATH,   kAllDescs[i]->chipName);
         TEST_ASSERT_TRUE_MESSAGE(c & HAL_CAP_HW_VOLUME,  kAllDescs[i]->chipName);
         TEST_ASSERT_TRUE_MESSAGE(c & HAL_CAP_MUTE,       kAllDescs[i]->chipName);

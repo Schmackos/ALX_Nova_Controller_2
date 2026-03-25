@@ -135,7 +135,7 @@ static uint32_t _custom_adc_get_sample_rate(void) {
 // ===== HalCustomDevice =====
 
 HalCustomDevice::HalCustomDevice(const char* compatible, const char* name,
-                                  uint16_t caps, HalBusType busType, HalDeviceType devType) {
+                                  uint32_t caps, HalBusType busType, HalDeviceType devType) {
     hal_safe_strcpy(_descriptor.compatible, sizeof(_descriptor.compatible), compatible);
     hal_safe_strcpy(_descriptor.name, sizeof(_descriptor.name), name);
     _descriptor.type         = devType;
@@ -486,7 +486,7 @@ void hal_load_custom_devices() {
             // default: HAL_DEV_DAC
 
             // Determine capabilities from JSON array
-            uint16_t caps = 0;
+            uint32_t caps = 0;
             JsonArray capArr = doc["capabilities"].as<JsonArray>();
             for (const char* cap : capArr) {
                 if (strcmp(cap, "volume_control") == 0) caps |= HAL_CAP_HW_VOLUME;

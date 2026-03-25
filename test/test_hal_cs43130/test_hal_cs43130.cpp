@@ -236,25 +236,25 @@ void test_descriptor_type_is_dac(void) {
 
 // ----- 3. capabilities include HAL_CAP_DAC_PATH -----
 void test_descriptor_capabilities_include_dac_path(void) {
-    uint16_t caps = dac->getDescriptor().capabilities;
+    uint32_t caps = dac->getDescriptor().capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
 }
 
 // ----- 4. capabilities include HAL_CAP_HW_VOLUME -----
 void test_descriptor_capabilities_include_hw_volume(void) {
-    uint16_t caps = dac->getDescriptor().capabilities;
+    uint32_t caps = dac->getDescriptor().capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
 }
 
 // ----- 5. capabilities include HAL_CAP_HP_AMP -----
 void test_descriptor_capabilities_include_hp_amp(void) {
-    uint16_t caps = dac->getDescriptor().capabilities;
+    uint32_t caps = dac->getDescriptor().capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_HP_AMP);
 }
 
 // ----- 6. capabilities exclude HAL_CAP_ADC_PATH -----
 void test_descriptor_capabilities_exclude_adc_path(void) {
-    uint16_t caps = dac->getDescriptor().capabilities;
+    uint32_t caps = dac->getDescriptor().capabilities;
     TEST_ASSERT_FALSE(caps & HAL_CAP_ADC_PATH);
 }
 

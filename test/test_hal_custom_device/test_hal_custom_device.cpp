@@ -540,7 +540,7 @@ void test_custom_device_input_source_cleared_after_deinit(void) {
 
 // ----- 16. dac_path capability sets HAL_CAP_DAC_PATH -----
 void test_custom_device_capability_dac_path(void) {
-    uint16_t caps = HAL_CAP_DAC_PATH;
+    uint32_t caps = HAL_CAP_DAC_PATH;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
     TEST_ASSERT_FALSE(caps & HAL_CAP_ADC_PATH);
 
@@ -550,9 +550,9 @@ void test_custom_device_capability_dac_path(void) {
 
 // ----- 17. adc_path capability sets HAL_CAP_ADC_PATH -----
 void test_custom_device_capability_adc_path(void) {
-    uint16_t caps = HAL_CAP_ADC_PATH | HAL_CAP_PGA_CONTROL;
+    uint32_t caps = HAL_CAP_ADC_PATH | HAL_CAP_PGA_CONTROL;
     HalCustomDevice dev("custom,cap-adc", "Cap ADC", caps, HAL_BUS_I2S, HAL_DEV_ADC);
-    uint16_t got = dev.getDescriptor().capabilities;
+    uint32_t got = dev.getDescriptor().capabilities;
     TEST_ASSERT_TRUE(got & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(got & HAL_CAP_PGA_CONTROL);
     TEST_ASSERT_FALSE(got & HAL_CAP_DAC_PATH);
@@ -560,9 +560,9 @@ void test_custom_device_capability_adc_path(void) {
 
 // ----- 18. Combined volume_control + mute capabilities -----
 void test_custom_device_capability_volume_and_mute(void) {
-    uint16_t caps = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE;
+    uint32_t caps = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE;
     HalCustomDevice dev("custom,cap-vm", "Cap Vol+Mute", caps, HAL_BUS_I2S);
-    uint16_t got = dev.getDescriptor().capabilities;
+    uint32_t got = dev.getDescriptor().capabilities;
     TEST_ASSERT_TRUE(got & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(got & HAL_CAP_MUTE);
 }

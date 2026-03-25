@@ -626,7 +626,7 @@ static void _check_clock(HealthCheckReport* report) {
 
     HalDeviceManager::instance().forEach([](HalDevice* dev, void* vctx) {
         ClockCheckCtx* ctx = static_cast<ClockCheckCtx*>(vctx);
-        uint16_t caps = dev->getDescriptor().capabilities;
+        uint32_t caps = dev->getDescriptor().capabilities;
         if (!(caps & (HAL_CAP_DPLL | HAL_CAP_APLL))) return;
         if (dev->_state != HAL_STATE_AVAILABLE) return;
 

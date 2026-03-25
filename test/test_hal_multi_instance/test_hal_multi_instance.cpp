@@ -38,7 +38,7 @@ public:
 class TestAudioDevice : public HalDevice {
 public:
     TestAudioDevice(const char* compatible, HalDeviceType type,
-                    uint16_t capabilities, int sinkCount = 1, int sourceCount = 1)
+                    uint32_t capabilities, int sinkCount = 1, int sourceCount = 1)
         : _sinkCount(sinkCount), _sourceCount(sourceCount)
     {
         strncpy(_descriptor.compatible, compatible, 31);

@@ -109,7 +109,7 @@ void test_hal_cap_asrc_is_bit14() {
 }
 
 void test_hal_cap_asrc_no_overlap_with_other_caps() {
-    uint16_t all_other_caps =
+    uint32_t all_other_caps =
         HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE |
         HAL_CAP_ADC_PATH  | HAL_CAP_DAC_PATH | HAL_CAP_PGA_CONTROL |
         HAL_CAP_HPF_CONTROL | HAL_CAP_CODEC | HAL_CAP_MQA |
@@ -118,9 +118,11 @@ void test_hal_cap_asrc_no_overlap_with_other_caps() {
     TEST_ASSERT_EQUAL_UINT32(0, HAL_CAP_ASRC & all_other_caps);
 }
 
-void test_hal_cap_asrc_fits_in_uint16() {
-    // All capability flags must fit in uint16_t (the capabilities field type)
-    TEST_ASSERT_LESS_THAN_UINT32(0x10000, (uint32_t)HAL_CAP_ASRC);
+void test_hal_cap_asrc_fits_in_uint32() {
+    // capabilities field is uint32_t — HAL_CAP_ASRC (bit 14) must fit
+    uint32_t cap = HAL_CAP_ASRC;
+    TEST_ASSERT_NOT_EQUAL(0u, cap);
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)HAL_CAP_ASRC, cap);
 }
 
 // ============================================================
@@ -309,7 +311,7 @@ int main(int argc, char** argv) {
     // HAL_CAP_ASRC
     RUN_TEST(test_hal_cap_asrc_is_bit14);
     RUN_TEST(test_hal_cap_asrc_no_overlap_with_other_caps);
-    RUN_TEST(test_hal_cap_asrc_fits_in_uint16);
+    RUN_TEST(test_hal_cap_asrc_fits_in_uint32);
 
     // Diagnostic codes
     RUN_TEST(test_diag_rate_mismatch_code_value);

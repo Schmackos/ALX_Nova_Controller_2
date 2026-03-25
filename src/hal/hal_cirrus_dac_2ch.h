@@ -47,7 +47,7 @@ struct CirrusDac2chDescriptor {
     const char* chipName;
     uint8_t     chipId;          // Expected chip ID value
     uint8_t     chipIdMask;      // Mask to apply before comparing chip ID (0xF0 for CS4398, 0xFF for others)
-    uint16_t    capabilities;    // HAL_CAP_* flags
+    uint32_t    capabilities;    // HAL_CAP_* flags
     uint32_t    sampleRateMask;  // HAL_RATE_* flags
 
     // Supported sample rates for _validateSampleRate()

@@ -133,7 +133,7 @@ void test_desc_es9840_identity(void) {
 // ==========================================================================
 
 void test_caps_es9843pro(void) {
-    uint16_t c = kDescES9843PRO.capabilities;
+    uint32_t c = kDescES9843PRO.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);
@@ -142,7 +142,7 @@ void test_caps_es9843pro(void) {
 }
 
 void test_caps_es9842pro(void) {
-    uint16_t c = kDescES9842PRO.capabilities;
+    uint32_t c = kDescES9842PRO.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);
@@ -151,7 +151,7 @@ void test_caps_es9842pro(void) {
 }
 
 void test_caps_es9841(void) {
-    uint16_t c = kDescES9841.capabilities;
+    uint32_t c = kDescES9841.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);
@@ -160,7 +160,7 @@ void test_caps_es9841(void) {
 }
 
 void test_caps_es9840(void) {
-    uint16_t c = kDescES9840.capabilities;
+    uint32_t c = kDescES9840.capabilities;
     TEST_ASSERT_TRUE(c & HAL_CAP_ADC_PATH);
     TEST_ASSERT_TRUE(c & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(c & HAL_CAP_PGA_CONTROL);

@@ -41,7 +41,7 @@ struct EssDac8chDescriptor {
     uint8_t     altChipId;        // 0xFF = no alternate (used for ES9039MPRO)
     const char* altChipName;      // nullptr = no alternate
     const char* altCompatible;    // nullptr = no alternate
-    uint16_t    capabilities;     // HAL_CAP_* flags
+    uint32_t    capabilities;     // HAL_CAP_* flags
     uint32_t    sampleRateMask;   // HAL_RATE_* flags
 
     // Supported sample rates for _validateSampleRate()

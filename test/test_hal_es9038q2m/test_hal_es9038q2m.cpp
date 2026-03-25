@@ -192,7 +192,7 @@ void test_descriptor_type_is_dac(void) {
 
 // ----- 3. capabilities include HAL_CAP_DAC_PATH, HW_VOLUME, MUTE, FILTERS -----
 void test_descriptor_capabilities(void) {
-    uint16_t caps = dac->getDescriptor().capabilities;
+    uint32_t caps = dac->getDescriptor().capabilities;
     TEST_ASSERT_TRUE(caps & HAL_CAP_DAC_PATH);
     TEST_ASSERT_TRUE(caps & HAL_CAP_HW_VOLUME);
     TEST_ASSERT_TRUE(caps & HAL_CAP_MUTE);

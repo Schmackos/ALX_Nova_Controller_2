@@ -50,7 +50,7 @@ struct DsdDescStub {
     uint8_t  dsdPathMask;
     uint16_t regDsdInt;
     uint8_t  dsdIntDefault;
-    uint16_t capabilities;
+    uint32_t capabilities;
 };
 
 static const DsdDescStub kDsdCapable = {

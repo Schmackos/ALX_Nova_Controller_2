@@ -71,7 +71,7 @@ struct EssAdc4chDescriptor {
     const char* chipName;
     uint8_t     chipId;
 
-    uint16_t    capabilities;    // HAL_CAP_* flags
+    uint32_t    capabilities;    // HAL_CAP_* flags
     uint32_t    sampleRateMask;  // HAL_RATE_* flags
 
     // Supported sample rates
