@@ -78,6 +78,27 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
         obj["cfgUsbPid"]       = cfg->usbPid;
         obj["cfgFilterMode"]   = cfg->filterMode;
     }
+
+    // Clock quality diagnostics — for devices with DPLL or APLL capability
+    if (desc.capabilities & (HAL_CAP_DPLL | HAL_CAP_APLL)) {
+        ClockStatus cs = dev->getClockStatus();
+        JsonObject clk = obj["clockStatus"].to<JsonObject>();
+        clk["available"] = cs.available;
+        clk["locked"]    = cs.locked;
+        clk["desc"]      = cs.description;
+    }
+
+    // Device dependency graph — list of slot indices this device depends on
+    uint32_t deps = dev->getDependencies();
+    if (deps) {
+        JsonArray depArr = obj["dependsOn"].to<JsonArray>();
+        uint32_t tmp = deps;
+        while (tmp) {
+            int s = __builtin_ctz(tmp);
+            depArr.add(s);
+            tmp &= tmp - 1;
+        }
+    }
 }
 
 void registerHalApiEndpoints(WebServer& server) {

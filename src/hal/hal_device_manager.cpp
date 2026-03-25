@@ -156,25 +156,112 @@ void HalDeviceManager::initAll() {
     // retry logic sees the correct accumulated fault history from previous boots.
     loadFaultCounters();
 
-    // Collect non-null devices into a sortable array
-    HalDevice* sorted[HAL_MAX_DEVICES];
+    // Collect non-null devices and compute slot index map (slot -> array index).
+    // Slot indices are 0-31; array indices are 0-n.
+    HalDevice* candidates[HAL_MAX_DEVICES];
+    int slotToIdx[HAL_MAX_DEVICES];
     int n = 0;
+    memset(slotToIdx, -1, sizeof(slotToIdx));
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        if (_devices[i]) sorted[n++] = _devices[i];
+        if (_devices[i]) {
+            slotToIdx[i] = n;
+            candidates[n++] = _devices[i];
+        }
     }
 
-    // Insertion sort by priority descending (stable, small N)
-    for (int i = 1; i < n; i++) {
-        HalDevice* key = sorted[i];
+    // ===== Topological sort (Kahn's BFS) with priority tiebreaker =====
+    // in_degree[i] counts unresolved dependencies for candidates[i].
+    // Only count edges within the candidate set (registered devices).
+    int inDegree[HAL_MAX_DEVICES] = {};
+    for (int i = 0; i < n; i++) {
+        uint32_t deps = candidates[i]->getDependencies();
+        while (deps) {
+            int s = __builtin_ctz(deps);  // LSB = lowest set slot index
+            deps &= deps - 1;             // Clear LSB
+            if (s < HAL_MAX_DEVICES && slotToIdx[s] >= 0) {
+                // candidates[i] depends on candidates[slotToIdx[s]]
+                inDegree[i]++;
+            }
+        }
+    }
+
+    // Build ready queue: all devices with in_degree == 0.
+    // Use a simple priority queue (max-heap by initPriority, small N: insertion sort on ready list).
+    HalDevice* sorted[HAL_MAX_DEVICES];
+    int sortedN = 0;
+
+    // ready[]: indices into candidates[] with in_degree == 0, sorted by priority desc
+    int ready[HAL_MAX_DEVICES];
+    int readyN = 0;
+    for (int i = 0; i < n; i++) {
+        if (inDegree[i] == 0) ready[readyN++] = i;
+    }
+    // Sort ready list by priority descending
+    for (int i = 1; i < readyN; i++) {
+        int key = ready[i];
         int j = i - 1;
-        while (j >= 0 && sorted[j]->getInitPriority() < key->getInitPriority()) {
-            sorted[j + 1] = sorted[j];
+        while (j >= 0 && candidates[ready[j]]->getInitPriority() < candidates[key]->getInitPriority()) {
+            ready[j + 1] = ready[j];
             j--;
         }
-        sorted[j + 1] = key;
+        ready[j + 1] = key;
     }
 
-    // Init in priority order
+    while (readyN > 0) {
+        // Pop highest-priority ready device (front of sorted ready list)
+        int idx = ready[0];
+        // Shift remaining ready entries left
+        for (int r = 0; r < readyN - 1; r++) ready[r] = ready[r + 1];
+        readyN--;
+
+        sorted[sortedN++] = candidates[idx];
+
+        // Decrement in_degree for devices that depend on this slot
+        uint8_t mySlot = candidates[idx]->getSlot();
+        for (int j = 0; j < n; j++) {
+            if (inDegree[j] > 0 && candidates[j]->hasDependency(mySlot)) {
+                inDegree[j]--;
+                if (inDegree[j] == 0) {
+                    // Insert into ready list maintaining priority order
+                    int insertPos = readyN;
+                    for (int r = 0; r < readyN; r++) {
+                        if (candidates[ready[r]]->getInitPriority() < candidates[j]->getInitPriority()) {
+                            insertPos = r;
+                            break;
+                        }
+                    }
+                    // Shift right from insertPos
+                    for (int r = readyN; r > insertPos; r--) ready[r] = ready[r - 1];
+                    ready[insertPos] = j;
+                    readyN++;
+                }
+            }
+        }
+    }
+
+    // Cycle detection: if not all devices were processed, append remaining in priority order
+    if (sortedN < n) {
+        LOG_W("[HAL] Dependency cycle detected — %d device(s) not in topo order; using priority fallback", n - sortedN);
+        // Collect unprocessed devices (in_degree still > 0)
+        HalDevice* fallback[HAL_MAX_DEVICES];
+        int fallbackN = 0;
+        for (int i = 0; i < n; i++) {
+            if (inDegree[i] > 0) fallback[fallbackN++] = candidates[i];
+        }
+        // Insertion sort by priority descending
+        for (int i = 1; i < fallbackN; i++) {
+            HalDevice* key = fallback[i];
+            int j = i - 1;
+            while (j >= 0 && fallback[j]->getInitPriority() < key->getInitPriority()) {
+                fallback[j + 1] = fallback[j];
+                j--;
+            }
+            fallback[j + 1] = key;
+        }
+        for (int i = 0; i < fallbackN; i++) sorted[sortedN++] = fallback[i];
+    }
+
+    // Init in topological (dependency-respecting, priority-tiebroken) order
     for (int i = 0; i < n; i++) {
         HalDevice* dev = sorted[i];
         if (dev->_state == HAL_STATE_UNKNOWN || dev->_state == HAL_STATE_CONFIGURING) {

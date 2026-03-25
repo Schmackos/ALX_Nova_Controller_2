@@ -49,6 +49,7 @@ static void _check_mqtt(HealthCheckReport* report);
 static void _check_tasks(HealthCheckReport* report);
 static void _check_storage(HealthCheckReport* report);
 static void _check_audio(HealthCheckReport* report);
+static void _check_clock(HealthCheckReport* report);
 static void _update_appstate(const HealthCheckReport* report);
 
 // ===== Item helpers =====
@@ -206,6 +207,7 @@ static void _run_all(HealthCheckReport* report, bool deferredPhase) {
         _check_mqtt(report);
         _check_tasks(report);
         _check_audio(report);
+        _check_clock(report);
     }
 
     report->durationMs = millis() - report->timestamp;
@@ -608,6 +610,57 @@ static void _check_audio(HealthCheckReport* report) {
               appState.audio.activeInputCount,
               appState.audio.activeOutputCount);
     }
+}
+
+// 9. Clock quality — DPLL/APLL lock status for ESS SABRE DAC/ADC devices (deferred)
+static void _check_clock(HealthCheckReport* report) {
+#ifdef DAC_ENABLED
+    struct ClockCheckCtx {
+        HealthCheckReport* report;
+        uint8_t total;
+        uint8_t locked;
+        uint8_t unlocked;
+    } ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.report = report;
+
+    HalDeviceManager::instance().forEach([](HalDevice* dev, void* vctx) {
+        ClockCheckCtx* ctx = static_cast<ClockCheckCtx*>(vctx);
+        uint16_t caps = dev->getDescriptor().capabilities;
+        if (!(caps & (HAL_CAP_DPLL | HAL_CAP_APLL))) return;
+        if (dev->_state != HAL_STATE_AVAILABLE) return;
+
+        ctx->total++;
+        ClockStatus cs = dev->getClockStatus();
+        if (!cs.available) return;
+
+        if (cs.locked) {
+            ctx->locked++;
+        } else {
+            ctx->unlocked++;
+            char itemName[24];
+            snprintf(itemName, sizeof(itemName), "clock_%u", dev->getSlot());
+            char detail[40];
+            snprintf(detail, sizeof(detail), "%s: %s", dev->getDescriptor().name, cs.description);
+            detail[39] = '\0';
+            _add_item(ctx->report, itemName, HC_WARN, detail);
+            LOG_W("[Health] %s: WARN (%s)", itemName, detail);
+        }
+    }, &ctx);
+
+    if (ctx.total == 0) {
+        _add_item(report, "clock_lock", HC_SKIP, "no DPLL/APLL devices");
+        LOG_I("[Health] clock_lock: SKIP (no DPLL/APLL devices)");
+    } else if (ctx.unlocked == 0) {
+        _add_item_fmt(report, "clock_lock", HC_PASS, "%u/%u locked", ctx.locked, ctx.total);
+        LOG_I("[Health] clock_lock: PASS (%u/%u devices locked)", ctx.locked, ctx.total);
+    } else {
+        _add_item_fmt(report, "clock_lock", HC_WARN, "%u/%u unlocked", ctx.unlocked, ctx.total);
+        LOG_W("[Health] clock_lock: WARN (%u/%u devices unlocked)", ctx.unlocked, ctx.total);
+    }
+#else
+    _add_item(report, "clock_lock", HC_SKIP, "DAC_ENABLED not set");
+#endif
 }
 
 #endif // NATIVE_TEST

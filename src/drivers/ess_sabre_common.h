@@ -35,6 +35,12 @@
 #define ESS_SABRE_FILTER_MIN_SLOW_LD        7  // Minimum Slow Low Dispersion
 #define ESS_SABRE_FILTER_COUNT              8  // Total number of filter presets
 
+// ===== DPLL Lock Status =====
+// Register 0xE2 — available on all ESS SABRE DAC family chips.
+// bit0 = DPLL_LOCKED (1=locked to incoming clock, 0=searching/unlocked)
+#define ESS_SABRE_REG_DPLL_LOCK     0xE2
+#define ESS_SABRE_DPLL_LOCKED_BIT   0x01
+
 // ===== Timing =====
 #define ESS_SABRE_RESET_DELAY_MS    5  // Soft reset delay (ms) -- required on all ESS SABRE devices
 
