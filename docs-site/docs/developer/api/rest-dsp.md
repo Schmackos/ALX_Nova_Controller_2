@@ -22,7 +22,6 @@ The DSP API configures the per-input biquad IIR/FIR processing chain. Each input
 | POST | `/api/dsp/stage/reorder` | Yes | Reorder stages on a channel |
 | POST | `/api/dsp/stage/enable` | Yes | Enable or toggle a stage |
 | POST | `/api/dsp/crossover` | Yes | Apply a crossover filter to a channel |
-| POST | `/api/dsp/bassmanagement` | Yes | Configure bass management routing |
 | POST | `/api/dsp/bafflestep` | Yes | Apply baffle step correction |
 | POST | `/api/dsp/import/apo` | Yes | Import Equalizer APO filter text |
 | POST | `/api/dsp/import/minidsp` | Yes | Import miniDSP biquad coefficients |
@@ -91,7 +90,6 @@ The `type` field in all stage objects is a string:
 | `NOISE_GATE` | `thresholdDb`, `attackMs`, `holdMs`, `releaseMs`, `ratio`, `rangeDb` |
 | `FIR` | Loaded via `/api/dsp/import/fir` — not directly settable through stage add |
 | `TONE_CTRL` | `bassGain`, `midGain`, `trebleGain` |
-| `SPEAKER_PROT` | `powerRatingW`, `impedanceOhms`, `thermalTauMs`, `excursionLimitMm`, `driverDiameterMm`, `maxTempC` |
 | `STEREO_WIDTH` | `width`, `centerGainDb` |
 | `LOUDNESS` | `referenceLevelDb`, `currentLevelDb`, `amount` |
 | `BASS_ENHANCE` | `frequency`, `harmonicGainDb`, `mix`, `order` |
@@ -520,36 +518,6 @@ Applies a crossover filter to a channel. All existing crossover-tagged stages on
 |--------|---------|
 | 200 | Crossover applied |
 | 400 | Invalid channel, missing body, unknown type, or setup failed |
-| 503 | DSP busy; retry |
-
----
-
-## POST /api/dsp/bassmanagement
-
-Configures bass management: an LPF is inserted on the subwoofer channel and an HPF is inserted on each main channel, all at the same crossover frequency.
-
-**Request**
-
-```json
-{
-  "subChannel": 0,
-  "freq": 80.0,
-  "mainChannels": [2, 3]
-}
-```
-
-**Response**
-
-```json
-{ "success": true }
-```
-
-**Error codes**
-
-| Status | Meaning |
-|--------|---------|
-| 200 | Bass management configured |
-| 400 | Invalid body, missing `mainChannels`, or setup failed |
 | 503 | DSP busy; retry |
 
 ---
