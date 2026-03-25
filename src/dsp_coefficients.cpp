@@ -134,8 +134,6 @@ void dsp_recompute_channel_coeffs(DspChannelConfig &ch, uint32_t sampleRate) {
             dsp_compute_loudness_coeffs(s.loudness, sampleRate);
         } else if (s.type == DSP_BASS_ENHANCE) {
             dsp_compute_bass_enhance_coeffs(s.bassEnhance, sampleRate);
-        } else if (s.type == DSP_SPEAKER_PROT) {
-            dsp_compute_speaker_prot(s.speakerProt);
         } else if (s.type == DSP_STEREO_WIDTH) {
             dsp_compute_stereo_width(s.stereoWidth);
         }
@@ -239,15 +237,6 @@ void dsp_compute_bass_enhance_coeffs(DspBassEnhanceParams &params, uint32_t samp
     dsp_gen_hpf_f32(params.hpfCoeffs, hpfFreq, 0.707f);
     dsp_gen_bpf_f32(params.bpfCoeffs, bpfFreq, 1.0f);
     params.harmonicGainLin = powf(10.0f, params.harmonicGainDb / 20.0f);
-}
-
-// ===== Speaker Protection Precomputation =====
-void dsp_compute_speaker_prot(DspSpeakerProtParams &params) {
-    // No coefficient computation needed — thermal model is computed per-sample
-    // Just ensure runtime state is reasonable
-    if (params.impedanceOhms <= 0.0f) params.impedanceOhms = 8.0f;
-    if (params.maxTempC <= 25.0f) params.maxTempC = 180.0f;
-    if (params.thermalTauMs <= 0.0f) params.thermalTauMs = 2000.0f;
 }
 
 // ===== Stereo Width Precomputation =====

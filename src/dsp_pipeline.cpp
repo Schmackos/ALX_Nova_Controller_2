@@ -202,7 +202,6 @@ static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int le
 static int  dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, int stateIdx);
 static void dsp_noise_gate_process(DspNoiseGateParams &gate, float *buf, int len, uint32_t sampleRate);
 static void dsp_tone_ctrl_process(DspToneCtrlParams &tc, float *buf, int len);
-static void dsp_speaker_prot_process(DspSpeakerProtParams &sp, float *buf, int len, uint32_t sampleRate);
 static void dsp_loudness_process(DspLoudnessParams &ld, float *buf, int len);
 static void dsp_bass_enhance_process(DspBassEnhanceParams &be, float *buf, int len);
 static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, int len, uint32_t sampleRate);
@@ -546,10 +545,6 @@ bool dsp_swap_config() {
                     memcpy(newS.toneCtrl.bassDelay, oldS.toneCtrl.bassDelay, sizeof(float) * 2);
                     memcpy(newS.toneCtrl.midDelay, oldS.toneCtrl.midDelay, sizeof(float) * 2);
                     memcpy(newS.toneCtrl.trebleDelay, oldS.toneCtrl.trebleDelay, sizeof(float) * 2);
-                } else if (newS.type == DSP_SPEAKER_PROT) {
-                    newS.speakerProt.currentTempC = oldS.speakerProt.currentTempC;
-                    newS.speakerProt.envelope = oldS.speakerProt.envelope;
-                    newS.speakerProt.gainReduction = oldS.speakerProt.gainReduction;
                 } else if (newS.type == DSP_LOUDNESS) {
                     memcpy(newS.loudness.bassDelay, oldS.loudness.bassDelay, sizeof(float) * 2);
                     memcpy(newS.loudness.trebleDelay, oldS.loudness.trebleDelay, sizeof(float) * 2);
@@ -732,7 +727,6 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
                 if (ch.stages[s].type == DSP_LIMITER) gr = ch.stages[s].limiter.gainReduction;
                 else if (ch.stages[s].type == DSP_COMPRESSOR) gr = ch.stages[s].compressor.gainReduction;
                 else if (ch.stages[s].type == DSP_NOISE_GATE) gr = ch.stages[s].noiseGate.gainReduction;
-                else if (ch.stages[s].type == DSP_SPEAKER_PROT) gr = ch.stages[s].speakerProt.gainReduction;
                 if (gr < _metrics.limiterGrDb[c]) _metrics.limiterGrDb[c] = gr;
             }
         }
@@ -845,7 +839,6 @@ void dsp_process_buffer_float(float *left, float *right, int frames, int lane) {
                 if (ch.stages[s].type == DSP_LIMITER) gr = ch.stages[s].limiter.gainReduction;
                 else if (ch.stages[s].type == DSP_COMPRESSOR) gr = ch.stages[s].compressor.gainReduction;
                 else if (ch.stages[s].type == DSP_NOISE_GATE) gr = ch.stages[s].noiseGate.gainReduction;
-                else if (ch.stages[s].type == DSP_SPEAKER_PROT) gr = ch.stages[s].speakerProt.gainReduction;
                 if (gr < _metrics.limiterGrDb[c]) _metrics.limiterGrDb[c] = gr;
             }
         }
@@ -950,9 +943,6 @@ static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int st
                 break;
             case DSP_TONE_CTRL:
                 dsp_tone_ctrl_process(s.toneCtrl, buf, curLen);
-                break;
-            case DSP_SPEAKER_PROT:
-                dsp_speaker_prot_process(s.speakerProt, buf, curLen, cfg->sampleRate);
                 break;
             case DSP_STEREO_WIDTH:
                 // Stereo width is handled post-channel in dsp_process_buffer()
@@ -1249,71 +1239,6 @@ static void dsp_tone_ctrl_process(DspToneCtrlParams &tc, float *buf, int len) {
     dsps_biquad_f32(buf, buf, len, tc.bassCoeffs, tc.bassDelay);
     dsps_biquad_f32(buf, buf, len, tc.midCoeffs, tc.midDelay);
     dsps_biquad_f32(buf, buf, len, tc.trebleCoeffs, tc.trebleDelay);
-}
-
-// ===== Speaker Protection =====
-
-static void dsp_speaker_prot_process(DspSpeakerProtParams &sp, float *buf, int len, uint32_t sampleRate) {
-    if (len <= 0 || sampleRate == 0) return;
-
-    float dt = 1.0f / (float)sampleRate;
-    float thermalTau = sp.thermalTauMs * 0.001f;
-    float thermalLimit = sp.maxTempC * 0.7f;  // Start limiting at 70%
-    float excursionLimit = sp.excursionLimitMm * 0.7f;
-
-    float temp = sp.currentTempC;
-    float env = sp.envelope;
-    float maxGr = 0.0f;
-
-    // Thermal mass: power to heat with time constant
-    float thermalMass = thermalTau > 0.0f ? thermalTau : 2.0f;
-
-    for (int i = 0; i < len; i++) {
-        float sample = buf[i];
-        float v2 = sample * sample;
-        float power = v2 / sp.impedanceOhms;  // Normalized power
-
-        // Smooth power envelope
-        float alphaUp = expf(-dt / 0.010f);   // 10ms attack
-        float alphaDn = expf(-dt / 0.050f);    // 50ms release
-        if (power > env) env = alphaUp * env + (1.0f - alphaUp) * power;
-        else             env = alphaDn * env + (1.0f - alphaDn) * power;
-
-        // Thermal model: heat up based on power, cool down toward ambient (25C)
-        temp += (env * sp.powerRatingW) * dt / thermalMass - (temp - 25.0f) * dt / thermalMass;
-        if (temp < 25.0f) temp = 25.0f;
-
-        // Thermal gain reduction (soft knee at 70% of max)
-        float thermalGain = 1.0f;
-        if (temp > thermalLimit && thermalLimit > 25.0f) {
-            float over = (temp - thermalLimit) / (sp.maxTempC - thermalLimit);
-            if (over > 1.0f) over = 1.0f;
-            thermalGain = 1.0f - over * 0.9f;  // Max 90% reduction
-        }
-
-        // Excursion estimation (amplitude-based, scaled by driver area)
-        float amplitude = fabsf(sample);
-        float driverArea = sp.driverDiameterMm * sp.driverDiameterMm * 0.7854f; // pi/4 * d^2
-        float estimatedExcursion = amplitude * 10.0f * 1000.0f / (driverArea > 0.0f ? driverArea : 1.0f);
-        float excursionGain = 1.0f;
-        if (estimatedExcursion > excursionLimit && excursionLimit > 0.0f) {
-            excursionGain = excursionLimit / estimatedExcursion;
-        }
-
-        float gain = thermalGain < excursionGain ? thermalGain : excursionGain;
-        if (gain < 0.01f) gain = 0.01f;
-
-        float grDb = -20.0f * log10f(gain);
-        if (grDb > maxGr) maxGr = grDb;
-
-        _gainBuf[i] = gain;
-    }
-
-    dsps_mul_f32(buf, _gainBuf, buf, len, 1, 1, 1);
-
-    sp.currentTempC = temp;
-    sp.envelope = env;
-    sp.gainReduction = -maxGr;
 }
 
 // ===== Loudness Compensation =====
@@ -1773,10 +1698,6 @@ void dsp_mirror_channel_config(int srcCh, int dstCh) {
             memset(dst.stages[i].toneCtrl.bassDelay, 0, sizeof(float) * 2);
             memset(dst.stages[i].toneCtrl.midDelay, 0, sizeof(float) * 2);
             memset(dst.stages[i].toneCtrl.trebleDelay, 0, sizeof(float) * 2);
-        } else if (dst.stages[i].type == DSP_SPEAKER_PROT) {
-            dst.stages[i].speakerProt.currentTempC = 25.0f;
-            dst.stages[i].speakerProt.envelope = 0.0f;
-            dst.stages[i].speakerProt.gainReduction = 0.0f;
         } else if (dst.stages[i].type == DSP_LOUDNESS) {
             memset(dst.stages[i].loudness.bassDelay, 0, sizeof(float) * 2);
             memset(dst.stages[i].loudness.trebleDelay, 0, sizeof(float) * 2);
@@ -1827,7 +1748,6 @@ const char *stage_type_name(DspStageType t) {
         case DSP_CONVOLUTION:      return "CONVOLUTION";
         case DSP_NOISE_GATE:       return "NOISE_GATE";
         case DSP_TONE_CTRL:        return "TONE_CTRL";
-        case DSP_SPEAKER_PROT:     return "SPEAKER_PROT";
         case DSP_STEREO_WIDTH:     return "STEREO_WIDTH";
         case DSP_LOUDNESS:         return "LOUDNESS";
         case DSP_BASS_ENHANCE:     return "BASS_ENHANCE";
@@ -1864,7 +1784,6 @@ static DspStageType stage_type_from_name(const char *name) {
     if (strcmp(name, "CONVOLUTION") == 0) return DSP_CONVOLUTION;
     if (strcmp(name, "NOISE_GATE") == 0) return DSP_NOISE_GATE;
     if (strcmp(name, "TONE_CTRL") == 0) return DSP_TONE_CTRL;
-    if (strcmp(name, "SPEAKER_PROT") == 0) return DSP_SPEAKER_PROT;
     if (strcmp(name, "STEREO_WIDTH") == 0) return DSP_STEREO_WIDTH;
     if (strcmp(name, "LOUDNESS") == 0) return DSP_LOUDNESS;
     if (strcmp(name, "BASS_ENHANCE") == 0) return DSP_BASS_ENHANCE;
@@ -1952,14 +1871,6 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize) {
             params["bassGain"] = s.toneCtrl.bassGain;
             params["midGain"] = s.toneCtrl.midGain;
             params["trebleGain"] = s.toneCtrl.trebleGain;
-        } else if (s.type == DSP_SPEAKER_PROT) {
-            JsonObject params = stageObj["params"].to<JsonObject>();
-            params["powerRatingW"] = s.speakerProt.powerRatingW;
-            params["impedanceOhms"] = s.speakerProt.impedanceOhms;
-            params["thermalTauMs"] = s.speakerProt.thermalTauMs;
-            params["excursionLimitMm"] = s.speakerProt.excursionLimitMm;
-            params["driverDiameterMm"] = s.speakerProt.driverDiameterMm;
-            params["maxTempC"] = s.speakerProt.maxTempC;
         } else if (s.type == DSP_STEREO_WIDTH) {
             JsonObject params = stageObj["params"].to<JsonObject>();
             params["width"] = s.stereoWidth.width;
@@ -2111,14 +2022,6 @@ void dsp_load_config_from_json(const char *json, int channel) {
                 if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
                 if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
                 dsp_compute_tone_ctrl_coeffs(s.toneCtrl, cfg->sampleRate);
-            } else if (type == DSP_SPEAKER_PROT) {
-                if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
-                if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
-                if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
-                if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
-                if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
-                if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
-                dsp_compute_speaker_prot(s.speakerProt);
             } else if (type == DSP_STEREO_WIDTH) {
                 if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
                 if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
@@ -2230,14 +2133,6 @@ void dsp_export_full_config_json(char *buf, int bufSize) {
                 params["bassGain"] = s.toneCtrl.bassGain;
                 params["midGain"] = s.toneCtrl.midGain;
                 params["trebleGain"] = s.toneCtrl.trebleGain;
-            } else if (s.type == DSP_SPEAKER_PROT) {
-                JsonObject params = stageObj["params"].to<JsonObject>();
-                params["powerRatingW"] = s.speakerProt.powerRatingW;
-                params["impedanceOhms"] = s.speakerProt.impedanceOhms;
-                params["thermalTauMs"] = s.speakerProt.thermalTauMs;
-                params["excursionLimitMm"] = s.speakerProt.excursionLimitMm;
-                params["driverDiameterMm"] = s.speakerProt.driverDiameterMm;
-                params["maxTempC"] = s.speakerProt.maxTempC;
             } else if (s.type == DSP_STEREO_WIDTH) {
                 JsonObject params = stageObj["params"].to<JsonObject>();
                 params["width"] = s.stereoWidth.width;
@@ -2396,14 +2291,6 @@ void dsp_import_full_config_json(const char *json) {
                         if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
                         if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
                         dsp_compute_tone_ctrl_coeffs(s.toneCtrl, cfg->sampleRate);
-                    } else if (type == DSP_SPEAKER_PROT) {
-                        if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
-                        if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
-                        if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
-                        if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
-                        if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
-                        if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
-                        dsp_compute_speaker_prot(s.speakerProt);
                     } else if (type == DSP_STEREO_WIDTH) {
                         if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
                         if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();

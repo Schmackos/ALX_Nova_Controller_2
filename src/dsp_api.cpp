@@ -403,7 +403,6 @@ static DspStageType typeFromString(const char *name) {
     if (strcmp(name, "LINKWITZ") == 0) return DSP_BIQUAD_LINKWITZ;
     if (strcmp(name, "NOISE_GATE") == 0) return DSP_NOISE_GATE;
     if (strcmp(name, "TONE_CTRL") == 0) return DSP_TONE_CTRL;
-    if (strcmp(name, "SPEAKER_PROT") == 0) return DSP_SPEAKER_PROT;
     if (strcmp(name, "STEREO_WIDTH") == 0) return DSP_STEREO_WIDTH;
     if (strcmp(name, "LOUDNESS") == 0) return DSP_LOUDNESS;
     if (strcmp(name, "BASS_ENHANCE") == 0) return DSP_BASS_ENHANCE;
@@ -607,13 +606,6 @@ JsonDocument doc;
             if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
             if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
             dsp_compute_tone_ctrl_coeffs(s.toneCtrl, inactive->sampleRate);
-        } else if (type == DSP_SPEAKER_PROT && !params.isNull()) {
-            if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
-            if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
-            if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
-            if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
-            if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
-            if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
         } else if (type == DSP_STEREO_WIDTH && !params.isNull()) {
             if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
             if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
@@ -720,13 +712,6 @@ JsonDocument doc;
             if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
             if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
             dsp_compute_tone_ctrl_coeffs(s.toneCtrl, inactive->sampleRate);
-        } else if (s.type == DSP_SPEAKER_PROT && !params.isNull()) {
-            if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
-            if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
-            if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
-            if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
-            if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
-            if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
         } else if (s.type == DSP_STEREO_WIDTH && !params.isNull()) {
             if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
             if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();

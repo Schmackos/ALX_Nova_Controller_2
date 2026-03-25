@@ -34,9 +34,6 @@ void dsp_compute_loudness_coeffs(DspLoudnessParams &params, uint32_t sampleRate)
 // Bass enhancement filter computation (HPF + BPF for harmonic generation)
 void dsp_compute_bass_enhance_coeffs(DspBassEnhanceParams &params, uint32_t sampleRate);
 
-// Speaker protection precomputation
-void dsp_compute_speaker_prot(DspSpeakerProtParams &params);
-
 // Stereo width precomputation
 void dsp_compute_stereo_width(DspStereoWidthParams &params);
 

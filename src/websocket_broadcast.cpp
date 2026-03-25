@@ -294,15 +294,6 @@ void sendDspState() {
         so["bassGain"] = st.toneCtrl.bassGain;
         so["midGain"] = st.toneCtrl.midGain;
         so["trebleGain"] = st.toneCtrl.trebleGain;
-      } else if (st.type == DSP_SPEAKER_PROT) {
-        so["powerRatingW"] = st.speakerProt.powerRatingW;
-        so["impedanceOhms"] = st.speakerProt.impedanceOhms;
-        so["thermalTauMs"] = st.speakerProt.thermalTauMs;
-        so["excursionLimitMm"] = st.speakerProt.excursionLimitMm;
-        so["driverDiameterMm"] = st.speakerProt.driverDiameterMm;
-        so["maxTempC"] = st.speakerProt.maxTempC;
-        so["currentTempC"] = st.speakerProt.currentTempC;
-        so["gr"] = st.speakerProt.gainReduction;
       } else if (st.type == DSP_STEREO_WIDTH) {
         so["width"] = st.stereoWidth.width;
         so["centerGainDb"] = st.stereoWidth.centerGainDb;

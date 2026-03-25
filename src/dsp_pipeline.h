@@ -159,19 +159,6 @@ struct DspToneCtrlParams {
     float trebleCoeffs[5]; float trebleDelay[2];
 };
 
-// ===== Speaker Protection Parameters =====
-struct DspSpeakerProtParams {
-    float powerRatingW;      // Speaker power rating (W)
-    float impedanceOhms;     // Speaker impedance (Ohms)
-    float thermalTauMs;      // Thermal time constant (ms)
-    float excursionLimitMm;  // Maximum excursion (mm)
-    float driverDiameterMm;  // Driver diameter (mm)
-    float maxTempC;          // Maximum voice coil temp (C)
-    float currentTempC;      // Current estimated temp (runtime)
-    float envelope;          // Power envelope (runtime)
-    float gainReduction;     // Current GR in dB (runtime)
-};
-
 // ===== Stereo Width Parameters =====
 struct DspStereoWidthParams {
     float width;           // 0=mono, 100=normal, 200=extra wide
@@ -226,7 +213,6 @@ struct DspStage {
         DspConvolutionParams convolution;
         DspNoiseGateParams noiseGate;
         DspToneCtrlParams toneCtrl;
-        DspSpeakerProtParams speakerProt;
         DspStereoWidthParams stereoWidth;
         DspLoudnessParams loudness;
         DspBassEnhanceParams bassEnhance;
@@ -355,18 +341,6 @@ inline void dsp_init_tone_ctrl_params(DspToneCtrlParams &p) {
     p.trebleDelay[0] = p.trebleDelay[1] = 0;
 }
 
-inline void dsp_init_speaker_prot_params(DspSpeakerProtParams &p) {
-    p.powerRatingW = 100.0f;
-    p.impedanceOhms = 8.0f;
-    p.thermalTauMs = 2000.0f;
-    p.excursionLimitMm = 5.0f;
-    p.driverDiameterMm = 165.0f;
-    p.maxTempC = 180.0f;
-    p.currentTempC = 25.0f;
-    p.envelope = 0.0f;
-    p.gainReduction = 0.0f;
-}
-
 inline void dsp_init_stereo_width_params(DspStereoWidthParams &p) {
     p.width = 100.0f;
     p.centerGainDb = 0.0f;
@@ -428,8 +402,6 @@ inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
         dsp_init_noise_gate_params(s.noiseGate);
     } else if (t == DSP_TONE_CTRL) {
         dsp_init_tone_ctrl_params(s.toneCtrl);
-    } else if (t == DSP_SPEAKER_PROT) {
-        dsp_init_speaker_prot_params(s.speakerProt);
     } else if (t == DSP_STEREO_WIDTH) {
         dsp_init_stereo_width_params(s.stereoWidth);
     } else if (t == DSP_LOUDNESS) {
