@@ -1024,42 +1024,6 @@ JsonDocument doc;
         LOG_I("[DSP] Crossover applied: ch=%d type=%s freq=%.0f role=%d", ch, typeStr, freq, role);
     });
 
-    // POST /api/dsp/bassmanagement — setup bass management
-    server_on_versioned("/api/dsp/bassmanagement", HTTP_POST, []() {
-        if (!requireAuth()) return;
-        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
-
-JsonDocument doc;
-        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
-
-        int subChannel = doc["subChannel"] | 0;
-        float crossoverFreq = doc["freq"] | 80.0f;
-
-        if (!doc["mainChannels"].is<JsonArray>()) {
-            sendJsonError(400, "Missing mainChannels array");
-            return;
-        }
-
-        JsonArray mains = doc["mainChannels"].as<JsonArray>();
-        int mainChannels[DSP_MAX_CHANNELS];
-        int numMains = 0;
-        for (JsonVariant v : mains) {
-            if (numMains >= DSP_MAX_CHANNELS) break;
-            mainChannels[numMains++] = v.as<int>();
-        }
-
-        dsp_copy_active_to_inactive();
-
-        int result = dsp_setup_bass_management(subChannel, mainChannels, numMains, crossoverFreq);
-        if (result < 0) { sendJsonError(400, "Failed to setup bass management"); return; }
-
-        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
-        saveDspSettingsDebounced();
-        appState.markDspConfigDirty();
-        server_send(200, "application/json", "{\"success\":true}");
-        LOG_I("[DSP] Bass management: sub=%d mains=%d freq=%.0f", subChannel, numMains, crossoverFreq);
-    });
-
     // ===== Baffle Step & THD Endpoints =====
 
     // POST /api/dsp/bafflestep?ch=N — apply baffle step correction

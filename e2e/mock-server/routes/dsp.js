@@ -15,7 +15,6 @@
  * POST /dsp/stage/reorder       — reorder stages
  * POST /dsp/stage/enable        — enable/disable a stage
  * POST /dsp/crossover           — apply crossover preset
- * POST /dsp/bassmanagement      — apply bass management
  * POST /dsp/bafflestep          — apply baffle step correction
  * GET  /dsp/peq/presets         — list PEQ presets
  * POST /dsp/peq/presets         — save PEQ preset
@@ -171,11 +170,6 @@ router.post('/dsp/stage/enable', (req, res) => {
 
 // POST /dsp/crossover — apply crossover preset to two channels
 router.post('/dsp/crossover', (req, res) => {
-  res.json({ success: true });
-});
-
-// POST /dsp/bassmanagement — apply bass management
-router.post('/dsp/bassmanagement', (req, res) => {
   res.json({ success: true });
 });
 
