@@ -2,7 +2,7 @@
  * clock-diagnostics.spec.js — Clock quality diagnostics E2E tests.
  *
  * Verifies:
- *   1. WS broadcast: halDeviceState includes clockLocked/clockDesc for DPLL-capable devices
+ *   1. WS broadcast: halDeviceState includes clockStatus object for DPLL-capable devices
  *   2. REST API: GET /api/v1/hal/devices includes clock status per device
  *   3. UI: Device cards show clock indicator for applicable devices
  *   4. Health check: /api/v1/health includes clock category
@@ -27,8 +27,7 @@ function buildHalStateWithClockFields() {
   const HAL_CAP_DPLL = 32768;
   for (const dev of state.devices) {
     if (dev.capabilities & HAL_CAP_DPLL) {
-      dev.clockLocked = true;
-      dev.clockDesc = 'DPLL locked 48kHz';
+      dev.clockStatus = { available: true, locked: true, desc: 'DPLL locked 48kHz' };
     }
   }
   return state;
@@ -40,8 +39,7 @@ function buildHalStateWithUnlockedClock() {
   const HAL_CAP_DPLL = 32768;
   for (const dev of state.devices) {
     if (dev.capabilities & HAL_CAP_DPLL) {
-      dev.clockLocked = false;
-      dev.clockDesc = 'DPLL unlocked';
+      dev.clockStatus = { available: true, locked: false, desc: 'DPLL unlocked' };
     }
   }
   return state;
@@ -74,8 +72,7 @@ function addDpllDevice(state, slot, name) {
     cfgI2sPort: 2,
     cfgVolume: 100,
     cfgMute: false,
-    clockLocked: true,
-    clockDesc: 'DPLL locked 48kHz',
+    clockStatus: { available: true, locked: true, desc: 'DPLL locked 48kHz' },
   });
   state.deviceCount = state.devices.length;
   return state;
@@ -104,8 +101,7 @@ test.describe('@hal Clock Quality Diagnostics — WS Broadcast', () => {
 
     const state = JSON.parse(JSON.stringify(HAL_FIXTURE));
     const dpllState = addDpllDevice(state, 12, 'ES9038PRO');
-    dpllState.devices[dpllState.devices.length - 1].clockLocked = false;
-    dpllState.devices[dpllState.devices.length - 1].clockDesc = 'DPLL unlocked';
+    dpllState.devices[dpllState.devices.length - 1].clockStatus = { available: true, locked: false, desc: 'DPLL unlocked' };
 
     page.wsRoute.send(dpllState);
     await page.waitForTimeout(500);
@@ -195,8 +191,7 @@ test.describe('@hal Clock Quality Diagnostics — UI', () => {
     // First: send locked state
     const state1 = JSON.parse(JSON.stringify(HAL_FIXTURE));
     const dpllState1 = addDpllDevice(state1, 12, 'ES9038PRO');
-    dpllState1.devices[dpllState1.devices.length - 1].clockLocked = true;
-    dpllState1.devices[dpllState1.devices.length - 1].clockDesc = 'DPLL locked 48kHz';
+    dpllState1.devices[dpllState1.devices.length - 1].clockStatus = { available: true, locked: true, desc: 'DPLL locked 48kHz' };
     page.wsRoute.send(dpllState1);
 
     const deviceList = page.locator('#hal-device-list');
@@ -205,8 +200,7 @@ test.describe('@hal Clock Quality Diagnostics — UI', () => {
     // Second: send unlocked state
     const state2 = JSON.parse(JSON.stringify(HAL_FIXTURE));
     const dpllState2 = addDpllDevice(state2, 12, 'ES9038PRO');
-    dpllState2.devices[dpllState2.devices.length - 1].clockLocked = false;
-    dpllState2.devices[dpllState2.devices.length - 1].clockDesc = 'DPLL unlocked';
+    dpllState2.devices[dpllState2.devices.length - 1].clockStatus = { available: true, locked: false, desc: 'DPLL unlocked' };
     page.wsRoute.send(dpllState2);
 
     await page.waitForTimeout(500);
