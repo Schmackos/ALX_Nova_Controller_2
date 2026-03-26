@@ -23,8 +23,14 @@ test('PEQ overlay opens with frequency response canvas when DSP button clicked',
   const container = page.locator('#audio-inputs-container');
   await expect(container).not.toContainText('Waiting for device data...', { timeout: 5000 });
 
+  // Open the DSP drawer first (PEQ button is inside the collapsible drawer)
+  const drawerToggle = container.locator('[data-action="toggle-input-dsp-drawer"]').first();
+  if (await drawerToggle.count() > 0) {
+    await drawerToggle.click();
+  }
+
   // Find the first PEQ button within a channel strip
-  // Channel strips render buttons with text "PEQ" via renderInputStrips() in 05-audio-tab.js
+  // Channel strips render "Edit PEQ" button inside the drawer via renderInputStrips() in 05-audio-tab.js
   const dspBtn = container.locator('button').filter({ hasText: /PEQ|DSP|EQ/i }).first();
 
   // If no DSP button is found the channel strips may use a different label —

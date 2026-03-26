@@ -220,11 +220,9 @@
             .matrix-col-hdr {
                 font-size: 9px;
             }
-            /* Matrix horizontal scroll on narrow screens */
-            .matrix-table {
-                display: block;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
+            /* Matrix horizontal scroll handled by .matrix-scroll-wrap */
+            .matrix-cell {
+                min-width: 32px;
             }
         }
 

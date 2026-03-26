@@ -16,9 +16,28 @@ const LOGIN_PAGE_H = path.join(ROOT, 'src', 'login_page.h');
 
 let _cachedPage = null;
 let _cachedLogin = null;
+let _cachedPageMtime = 0;
+
+function _getMaxMtime() {
+  let max = 0;
+  try {
+    const check = (dir) => {
+      fs.readdirSync(dir).forEach(f => {
+        const stat = fs.statSync(path.join(dir, f));
+        if (stat.mtimeMs > max) max = stat.mtimeMs;
+      });
+    };
+    check(CSS_DIR);
+    check(JS_DIR);
+    const htmlStat = fs.statSync(HTML_TEMPLATE);
+    if (htmlStat.mtimeMs > max) max = htmlStat.mtimeMs;
+  } catch (e) { /* ignore */ }
+  return max;
+}
 
 function assembleMainPage() {
-  if (_cachedPage) return _cachedPage;
+  const mtime = _getMaxMtime();
+  if (_cachedPage && mtime <= _cachedPageMtime) return _cachedPage;
 
   const html = fs.readFileSync(HTML_TEMPLATE, 'utf8');
 
@@ -37,6 +56,7 @@ function assembleMainPage() {
   _cachedPage = html
     .replace('/* CSS_INJECT */', css)
     .replace('/* JS_INJECT */', js);
+  _cachedPageMtime = mtime;
 
   return _cachedPage;
 }
