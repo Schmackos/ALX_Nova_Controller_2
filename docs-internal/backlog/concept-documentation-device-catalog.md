@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | `raw` |
+| Workflow | `draft` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Docs and devices overview.m4a, Docs and oitnof box devices.m4a |

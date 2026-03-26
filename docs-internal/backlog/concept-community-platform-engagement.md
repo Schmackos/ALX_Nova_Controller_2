@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | `raw` |
+| Workflow | `draft` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Community Platform Strategy.m4a, Community Strategy.m4a, Community Platform Features.m4a, Community traction of platform.m4a, Community Plugin System.m4a |

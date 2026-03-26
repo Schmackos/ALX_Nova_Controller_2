@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import io
 import json
 import os
 import re
@@ -21,6 +22,10 @@ import sys
 import tempfile
 from datetime import date
 from pathlib import Path
+
+# Ensure UTF-8 output on Windows
+if sys.stdout.encoding != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # --- Paths ---
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -74,7 +79,7 @@ CONCEPT_TEMPLATE = """# Concept: {title}
 
 | Field | Value |
 |---|---|
-| Status | `raw` |
+| Workflow | `draft` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | {sources} |
@@ -498,7 +503,7 @@ Generate a markdown document with EXACTLY this structure:
 
 | Field | Value |
 |---|---|
-| Status | `raw` |
+| Workflow | `draft` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | <comma-separated list of source .m4a filenames> |
@@ -630,6 +635,63 @@ def stage_archive(manifest, dry_run=False, verbose=False):
     return manifest
 
 
+# --- Pick command ---
+def command_pick():
+    """List concept docs and let user pick one for brainstorming."""
+    concept_files = sorted(BACKLOG_DIR.glob("concept-*.md"))
+    if not concept_files:
+        log("No concept docs found in docs-internal/backlog/")
+        return
+
+    entries = []
+    for f in concept_files:
+        content = f.read_text(encoding="utf-8")
+
+        # Extract workflow status
+        workflow_match = re.search(r"\|\s*Workflow\s*\|\s*`(\w[\w-]*)`", content)
+        workflow = workflow_match.group(1) if workflow_match else "draft"
+
+        # Count unchecked action items
+        actions = len(re.findall(r"^- \[ \]", content, re.MULTILINE))
+
+        # Extract title from first heading
+        title_match = re.search(r"^# Concept:\s*(.+)", content, re.MULTILINE)
+        title = title_match.group(1).strip() if title_match else f.stem
+
+        entries.append({
+            "file": f,
+            "workflow": workflow,
+            "actions": actions,
+            "title": title,
+        })
+
+    log("\n=== Concept Backlog ===\n")
+    log(f"  {'#':>3}  {'Workflow':<12} {'Actions':>7}  Concept")
+    for i, e in enumerate(entries, 1):
+        log(f"  {i:>3}  {e['workflow']:<12} {e['actions']:>7}  {e['title']}")
+
+    log("")
+    try:
+        choice = input(f"Pick a concept (1-{len(entries)}): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        log("\nCancelled.")
+        return
+
+    if not choice.isdigit() or not (1 <= int(choice) <= len(entries)):
+        log(f"Invalid choice: {choice}")
+        return
+
+    picked = entries[int(choice) - 1]
+    content = picked["file"].read_text(encoding="utf-8")
+    rel_path = picked["file"].relative_to(PROJECT_ROOT).as_posix()
+
+    log(f"\n{'=' * 60}")
+    log(content)
+    log(f"{'=' * 60}")
+    log(f"\nTo work on this, tell Claude:")
+    log(f'  "Read {rel_path} and brainstorm it into a PRD"')
+
+
 # --- Main ---
 STAGES = {
     "transcribe": stage_transcribe,
@@ -650,6 +712,7 @@ Examples:
   python workflows/voice_pipeline.py --dry-run          # Preview without changes
   python workflows/voice_pipeline.py --stage transcribe # Run one stage
   python workflows/voice_pipeline.py --model small      # Use larger Whisper model
+  python workflows/voice_pipeline.py --pick             # Browse and pick a concept
   python workflows/voice_pipeline.py --verbose          # Detailed output
         """,
     )
@@ -670,12 +733,21 @@ Examples:
         help="Whisper model to use (default: base)",
     )
     parser.add_argument(
+        "--pick",
+        action="store_true",
+        help="Browse concept docs and pick one for brainstorming",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable detailed logging",
     )
 
     args = parser.parse_args()
+
+    if args.pick:
+        command_pick()
+        return
 
     if args.dry_run:
         log("[DRY RUN] No changes will be made\n")

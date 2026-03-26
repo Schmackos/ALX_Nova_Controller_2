@@ -10,8 +10,9 @@ A repeatable automation pipeline that converts audio voice memos into structured
 ## Pipeline Flow
 
 ```
-Audio files → Voice notes → Concept docs → GitHub Issues → Execute
-   (Whisper)    (Claude)     (Claude)       (manual)       (Claude)
+Audio → Voice notes → Concept docs → Amend/edit → [ready] → Brainstorm → PRD → Plan → Execute
+         (Whisper)     (pipeline)    (pipeline +     ↑        (Claude)   (Claude) (Claude)
+                                      manual)     --pick
 ```
 
 1. **Transcribe** — Whisper CLI converts audio to raw JSON transcripts
@@ -45,7 +46,7 @@ Each concept doc follows this structure:
 
 | Field | Value |
 |---|---|
-| Status | `raw` / `researched` / `planned` / `in-progress` / `done` |
+| Workflow | `draft` / `ready` / `in-progress` / `done` |
 | Priority | `---` (unset until decided) |
 | Effort | `---` (unset until researched) |
 | Sources | <list of source audio filenames> |
