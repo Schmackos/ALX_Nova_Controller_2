@@ -73,16 +73,16 @@ def validate_concept_doc(content, slug):
 
 CONCEPT_TEMPLATE = """# Concept: {title}
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | {sources} |
-| Transcripts | [{slug}-transcripts.md](transcripts/{slug}-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | {date} |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | {sources} | Auto-populated by pipeline |
+| Transcripts | [{slug}-transcripts.md](transcripts/{slug}-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | {date} | YYYY-MM-DD |
 
 ## Problem / Opportunity
 
@@ -505,16 +505,16 @@ Generate a markdown document with EXACTLY this structure:
 
 # Concept: {group['title']}
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | <comma-separated list of source .m4a filenames> |
-| Transcripts | [concept-{slug}-transcripts.md](transcripts/{slug}-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | {today} |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | <comma-separated list of source .m4a filenames> | Auto-populated by pipeline |
+| Transcripts | [concept-{slug}-transcripts.md](transcripts/{slug}-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | {today} | YYYY-MM-DD |
 
 ## Problem / Opportunity
 

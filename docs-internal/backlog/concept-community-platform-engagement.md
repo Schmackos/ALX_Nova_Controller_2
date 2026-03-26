@@ -1,15 +1,15 @@
 # Concept: Community Platform & Engagement Strategy
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Community Platform Strategy.m4a, Community Strategy.m4a, Community Platform Features.m4a, Community traction of platform.m4a, Community Plugin System.m4a |
-| Transcripts | [community-platform-engagement-transcripts.md](transcripts/community-platform-engagement-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Community Platform Strategy.m4a, Community Strategy.m4a, Community Platform Features.m4a, Community traction of platform.m4a, Community Plugin System.m4a | Auto-populated by pipeline |
+| Transcripts | [community-platform-engagement-transcripts.md](transcripts/community-platform-engagement-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 
