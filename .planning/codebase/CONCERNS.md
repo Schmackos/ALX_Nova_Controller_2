@@ -100,14 +100,16 @@
 
 ### Arduino String Usage in Cross-Core State (Heap Fragmentation Risk)
 
-**Status: PARTIALLY RESOLVED (2026-03-26)** — `AudioState::inputNames` converted to `char[16][32]`, `AppState::errorMessage` converted to `char[128]`. EthernetState String fields deferred (broad caller surface, separate PR needed).
+**Status: RESOLVED (2026-03-26)** — All String fields converted to char[]: `AudioState::inputNames` → `char[16][32]`, `AppState::errorMessage` → `char[128]`, `EthernetState` 11 fields → `char[40]` (IP/MAC/gateway/subnet/DNS) and `char[64]` (hostname). All callers migrated to `strlcpy`. Zero Arduino String usage in state structs.
 
-- **Severity:** Medium (reduced — highest-risk cross-core field `inputNames` is now fixed)
-- **Issue:** `EthernetState` still uses `String` for 12 fields (ip, mac, gateway, subnet, dns1, dns2, staticIP, staticSubnet, staticGateway, staticDns1, staticDns2, hostname). These are only accessed from Core 0, so the cross-core risk is eliminated, but heap fragmentation from String alloc/free cycles remains.
+- **Severity:** Medium
+- **Issue:** `AudioState::inputNames` uses `String[16]` (Arduino heap-allocated strings) in a struct accessed from both Core 0 (main loop) and Core 1 (audio task). Ethernet, OTA, and error states also use `String`. Arduino `String` objects cause heap fragmentation over time due to repeated alloc/free cycles and are not thread-safe for concurrent access.
 - **Files:**
-  - `src/state/ethernet_state.h` (lines 11-30: 12 String fields)
-- **Impact:** Reduced. The cross-core `inputNames` field is now `char[]` (safe). EthernetState fragmentation is lower risk since Ethernet config changes are infrequent.
-- **Fix approach:** Convert remaining EthernetState String fields to `char[]` in a dedicated PR. ~200 call sites across eth_manager, wifi_manager, settings_manager, websocket_command, mqtt_publish.
+  - `src/state/audio_state.h` (line 74: `String inputNames[AUDIO_PIPELINE_MAX_INPUTS * 2]`)
+  - `src/state/ethernet_state.h` (lines 11-27: 9 String fields)
+  - `src/app_state.h` (line 209: `String errorMessage`)
+- **Impact:** On a long-running device, String operations fragment the internal SRAM heap. With only ~40KB reserved for WiFi RX buffers, fragmentation can cause WiFi packet drops. The cross-core access pattern on `inputNames` (written by main loop, potentially read by audio diagnostics) lacks memory barriers.
+- **Fix approach:** Replace `String` fields in state structs with fixed-size `char[]` arrays. `inputNames` can be `char[16][32]`. Ethernet fields can be `char[16]` (IP) or `char[18]` (MAC). This eliminates heap fragmentation from state management.
 
 ### Stale Worktree Directories (22MB disk waste)
 
@@ -326,7 +328,7 @@
 
 8. **[Medium] ~~Add virtual setDsdMode() to HalAudioDevice~~** -- **RESOLVED (2026-03-26).** Virtual dispatch added; strncmp + static_cast removed.
 
-9. **[Low] ~~Replace Arduino String in state structs~~** -- **PARTIALLY RESOLVED (2026-03-26).** `inputNames` → `char[16][32]`, `errorMessage` → `char[128]`. EthernetState deferred (broad caller surface).
+9. **[Low] ~~Replace Arduino String in state structs~~** -- **RESOLVED (2026-03-26).** All state struct String fields converted to char[]: inputNames, errorMessage, and all 11 EthernetState fields. Zero Arduino String in state structs.
 
 10. **[Low] ~~Clean up stale worktrees~~** -- **RESOLVED (2026-03-26).** Both directories removed.
 
@@ -342,4 +344,4 @@
 
 ---
 
-*Concerns audit: 2026-03-26 — 4 critical/high resolved (prior), 10 medium resolved (CSP, server.send, setDsdMode, main.cpp extraction, constants, innerHTML, static_cast, watchdog, integration test, String partial), 3 low resolved (sprintf, worktrees, String partial). Remaining: 1 medium-reduced (EthernetState Strings), 3 monitor-only (device slots, event bits, web pages monolith), 2 deferred-by-design (HTTPS, PSRAM degradation), 1 dormant (power mgmt API).*
+*Concerns audit: 2026-03-26 — 4 critical/high resolved (prior), 10 medium resolved (CSP, server.send, setDsdMode, main.cpp extraction, constants, innerHTML, static_cast, watchdog, integration test, String), 3 low resolved (sprintf, worktrees, Strings). Remaining: 3 monitor-only (device slots, event bits, web pages monolith), 2 deferred-by-design (HTTPS, PSRAM degradation), 1 dormant (power mgmt API).*
