@@ -7,6 +7,7 @@
 | Effort | `---` |
 | Success KPI | `---` |
 | Sources | Addon caed Amplifer Interfaces like pascal.m4a, Dante addon interface.m4a, New markets and missing add on cards.m4a |
+| Transcripts | [mezzanine-expansion-hardware-transcripts.md](transcripts/mezzanine-expansion-hardware-transcripts.md) |
 | Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | 2026-03-26 |
 
@@ -81,26 +82,3 @@ The ALX Nova platform currently supports only I2S/I2C-based mezzanine expansion 
 - [ ] Assess 16-pin mezzanine connector limitations — determine which proposed cards (Dante, USB audio, HDMI ARC, ADAT) require additional signals beyond the current pinout and propose connector evolution if needed
 - [ ] Research S/PDIF + AES3 + TOSLINK + ADAT "universal digital I/O" mezzanine feasibility — identify ICs (e.g., CS8416/CS8406 for S/PDIF, XMOS for ADAT), clock recovery requirements, and whether the current I2S/MCLK sharing model supports multiple digital input formats
 - [ ] Investigate Bluetooth audio mezzanine (aptX HD, LDAC, LC3plus) — evaluate modules (Qualcomm QCC5171, ESP32-C6 as BT bridge) and whether BT SIG certification is required for an open-source add-on card
-
-## Original Transcripts
-
-<details>
-<summary>Source: Addon caed Amplifer Interfaces like pascal.m4a</summary>
-
-> What about mezzanine add-on cards that can interface with amplifiers? One example? No. I want you to research the commonly best-adopted interfaces that are currently out there. One of these that I know of is the Pascal interface and that enables, basically if we create an add-on card that enables the system to interface with other manufacturers, their amplifiers and able to control them. My question then is, research what these popular interfaces are, suggest which ones should be adopted first and do the technical research and exploration on what is needed to incorporate this into the project. Step one for the incorporation is of course riding the software but also explore the electronical components that are needed in order to create this.
-
-</details>
-
-<details>
-<summary>Source: Dante addon interface.m4a</summary>
-
-> We need to also add to the list of devices an add-on card that can communicate with the professional audio daunting interface. Can we do this with the platform that we currently have in place? What would be missing that would be required in order to get this to work?
-
-</details>
-
-<details>
-<summary>Source: New markets and missing add on cards.m4a</summary>
-
-> I want you to research if you look at our current platform and our purpose. What type of add-on interface cards for audio application are we currently missing? Think about this in the context of monetizing the project, entering possibly new markets, and growing our adoption and customer base to increase the profit potential of this project.
-
-</details>

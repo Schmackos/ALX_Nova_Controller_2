@@ -35,6 +35,8 @@ docs-internal/backlog/
   voice-notes/           Intermediate voice notes (summary + cleaned text)
     raw/                 Whisper JSON transcripts
     processed.json       Manifest tracking what has been processed
+  transcripts/           Original transcripts extracted from concept docs
+  archive/               Completed concept docs (workflow: archived)
   concept-*.md           Final structured concept documents
 ```
 
@@ -118,6 +120,7 @@ Each generated concept doc has a metadata table and four sections:
 | Effort | `---` until researched |
 | Success KPI | Measurable outcome that defines success (fill before promoting to `ready`) |
 | Sources | Comma-separated list of source audio filenames |
+| Transcripts | Link to separate transcript file in `transcripts/` |
 | Audio | Relative link to `inbox/processed/` where original audio files are stored |
 | Last updated | Date of last pipeline run or manual edit |
 
@@ -128,7 +131,6 @@ Each generated concept doc has a metadata table and four sections:
   - What we know (facts, decisions, constraints)
   - What needs research (open questions, unknowns)
 - **Action Items** — Claude-promptable instructions (checkboxes)
-- **Original Transcripts** — Full text in collapsed sections
 
 ### Behavior
 

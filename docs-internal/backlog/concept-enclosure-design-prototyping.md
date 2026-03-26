@@ -7,6 +7,7 @@
 | Effort | `---` |
 | Success KPI | `---` |
 | Sources | Enclosure creation.m4a |
+| Transcripts | [enclosure-design-prototyping-transcripts.md](transcripts/enclosure-design-prototyping-transcripts.md) |
 | Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | 2026-03-26 |
 
@@ -44,12 +45,3 @@ The ALX Nova Controller 2 needs a physical enclosure to be a complete product. A
 - [ ] Research 3D printing materials and methods suitable for electronic enclosures. Compare FDM (PLA, PETG, ABS, ASA) vs SLA resin vs SLS nylon on dimensions: structural rigidity, thermal tolerance, surface finish, EMI shielding capability, cost per unit, and print time. Include recommendations for prototype vs small-batch production. Write findings to docs-internal/backlog/research/3d-printing-materials-comparison.md
 - [ ] Research alternative rapid prototyping methods beyond 3D printing for enclosure production. Evaluate laser-cut acrylic with fasteners, CNC-milled aluminum (e.g., PCBWay, Xometry), sheet metal bending services (e.g., SendCutSend, OSH Cut), and injection molding minimum order quantities. Compare lead time, cost at 1/10/50/100 units, and finish quality. Write findings to docs-internal/backlog/research/enclosure-manufacturing-methods.md
 - [ ] Design a preliminary front and rear panel layout for the ALX Nova enclosure. Front panel must include cutouts for: ST7735S 128x160 TFT display, rotary encoder with push button, status LED, and power switch. Rear panel must include: USB-C port, Ethernet jack, DC power input, and mezzanine expansion connector access. Produce a dimensioned layout diagram or CAD-ready specification. Write to docs-internal/backlog/research/enclosure-panel-layout.md
-
-## Original Transcripts
-
-<details>
-<summary>Source: Enclosure creation.m4a</summary>
-
-> For the project we also need to create an enclosure, research how we can best do this when you look at the project specifics. The first idea was to go with the half rack size approach so that the unit can either stand alone or be rack mountable. In what ways can we quickly iterate on the creation of this enclosure? One idea I had was with 3D printing but there might be other solutions in order to iterate on these in a fast way and when we have the enclosure dialed in we can outsource this to other companies if larger volume is needed.
-
-</details>

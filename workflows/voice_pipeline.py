@@ -47,7 +47,6 @@ REQUIRED_SECTIONS = [
     "## Problem / Opportunity",
     "## Sub-topics",
     "## Action Items",
-    "## Original Transcripts",
 ]
 
 
@@ -69,9 +68,6 @@ def validate_concept_doc(content, slug):
     if "- [ ]" not in content:
         errors.append("No action item checkboxes found (expected '- [ ]')")
 
-    if "<details>" not in content:
-        errors.append("No collapsed transcript sections found (expected '<details>')")
-
     return len(errors) == 0, errors
 
 
@@ -84,6 +80,7 @@ CONCEPT_TEMPLATE = """# Concept: {title}
 | Effort | `---` |
 | Success KPI | `---` |
 | Sources | {sources} |
+| Transcripts | [{slug}-transcripts.md](transcripts/{slug}-transcripts.md) |
 | Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | {date} |
 
@@ -98,10 +95,6 @@ CONCEPT_TEMPLATE = """# Concept: {title}
 ## Action Items
 
 {actions}
-
-## Original Transcripts
-
-{transcripts}
 """
 
 
@@ -519,7 +512,8 @@ Generate a markdown document with EXACTLY this structure:
 | Effort | `---` |
 | Success KPI | `---` |
 | Sources | <comma-separated list of source .m4a filenames> |
-| Audio | `voice-notes/` |
+| Transcripts | [concept-{slug}-transcripts.md](transcripts/{slug}-transcripts.md) |
+| Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | {today} |
 
 ## Problem / Opportunity
@@ -542,21 +536,10 @@ Generate a markdown document with EXACTLY this structure:
 
 - [ ] <Each action item must be a complete, self-contained instruction that can be handed directly to Claude in a future session. Include enough context that Claude can execute it without additional information. Example: "Research the Pascal amplifier interface protocol. Document the communication protocol, required hardware components, and integration effort for the ALX Nova mezzanine slot. Write findings to docs-internal/backlog/research/pascal-interface.md">
 
-## Original Transcripts
-
-<For each source audio file, create a collapsed section:>
-
-<details>
-<summary>Source: <filename></summary>
-
-> <full original transcript text, blockquoted>
-
-</details>
-
 Rules:
-- Do NOT add any sections not in the template
+- Do NOT add any sections not in the template (no Original Transcripts — those are saved separately)
 - Action items MUST be Claude-promptable (complete instructions, not vague tasks)
-- If updating an existing doc, merge new sub-topics and append new transcripts — do not duplicate existing content
+- If updating an existing doc, merge new sub-topics — do not duplicate existing content
 - Keep Problem/Opportunity to 2-4 sentences
 - Output ONLY the markdown document, no explanations"""
 
@@ -609,6 +592,19 @@ Rules:
             tmp.close()
             shutil.move(tmp.name, str(concept_file))
             log(f"  -> concept-{slug}.md")
+
+            # Save transcripts separately
+            if source_files:
+                transcript_dir = BACKLOG_DIR / "transcripts"
+                transcript_dir.mkdir(exist_ok=True)
+                transcript_file = transcript_dir / f"{slug}-transcripts.md"
+                parts = [f"# Transcripts: {slug}\n\nExtracted from [concept-{slug}.md](../concept-{slug}.md)\n"]
+                for src in source_files:
+                    parts.append(f"\n<details>\n<summary>Source: {src['filename']}</summary>\n")
+                    parts.append(f"\n> {src['text']}\n")
+                    parts.append("\n</details>\n")
+                transcript_file.write_text("\n".join(parts), encoding="utf-8")
+                log(f"  -> transcripts/{slug}-transcripts.md")
         except Exception as e:
             log(f"  [WARN] Failed to write concept-{slug}.md: {e}")
             if os.path.exists(tmp.name):
