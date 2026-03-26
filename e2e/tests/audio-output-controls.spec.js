@@ -136,16 +136,13 @@ test.describe('@audio @ws Phase 3 — Output Capability Badge Controls', () => {
     await expect(page.locator('#audio-outputs-container')).not.toContainText('Waiting for device data...', { timeout: 5000 });
   });
 
-  test('HW Volume slider visible for ES8311 (capabilities bit 0 = HAL_CAP_HW_VOLUME)', async ({ connectedPage: page }) => {
-    // ES8311 has capabilities=199 (includes bit 0)
-    const hwVolSlider = page.locator('#outputHwVol1');
-    await expect(hwVolSlider).toBeAttached();
+  test('HW Volume slider present for ES8311 (capabilities=199 includes HAL_CAP_HW_VOLUME bit 0)', async ({ connectedPage: page }) => {
+    // ES8311 is sink index 1 with capabilities=199 (bit 0 set)
+    await expect(page.locator('#outputHwVol1')).toBeAttached();
   });
 
   test('HW Volume slider absent for PCM5102A (capabilities=16, bit 0 not set)', async ({ connectedPage: page }) => {
-    // PCM5102A has capabilities=16 — no HW volume
-    const hwVolSlider = page.locator('#outputHwVol0');
-    await expect(hwVolSlider).not.toBeAttached();
+    await expect(page.locator('#outputHwVol0')).not.toBeAttached();
   });
 
   test('HW Volume slider sends PUT /api/hal/devices with correct slot and volume', async ({ connectedPage: page }) => {
@@ -173,27 +170,33 @@ test.describe('@audio @ws Phase 3 — Output Capability Badge Controls', () => {
       return;
     }
 
-    // ES8311 is in halSlot=1
+    // ES8311 has halSlot=1 in the fixture
     expect(capturedBody.slot).toBe(1);
     expect(capturedBody.volume).toBe(75);
   });
 
-  test('output delay input sends setOutputDelay WS command', async ({ connectedPage: page }) => {
+  test('output delay input for sink 1 sends setOutputDelay WS with correct channel', async ({ connectedPage: page }) => {
     clearWsCapture(page);
+    // ES8311 (sink index 1) has firstChannel=2, so delay input is #outputDelay2
     const delayInput = page.locator('#outputDelay2');
-    const count = await delayInput.count();
-    if (count === 0) {
-      test.skip(true, 'outputDelay2 not rendered — output 1 firstChannel=2');
-      return;
-    }
+    await expect(delayInput).toBeAttached({ timeout: 3000 });
 
     await delayInput.fill('2.5');
     await delayInput.dispatchEvent('change');
     await expectWsCommand(page, 'setOutputDelay', { channel: 2, ms: 2.5 });
   });
 
-  test('capability badges render correctly based on capabilities bitmask', async ({ connectedPage: page }) => {
-    // Push output with multiple capabilities including DSD (2048) and DPLL (32768)
+  test('mute button text is "HW Mute" for outputs with HAL_CAP_MUTE (bit 2=4)', async ({ connectedPage: page }) => {
+    // ES8311 capabilities=199 includes bit 2 (value 4)
+    await expect(page.locator('#outputMute1')).toHaveText('HW Mute');
+  });
+
+  test('mute button text is plain "Mute" when HAL_CAP_MUTE not set', async ({ connectedPage: page }) => {
+    // PCM5102A capabilities=16 does not include bit 2
+    await expect(page.locator('#outputMute0')).toHaveText('Mute');
+  });
+
+  test('capability badges render for combined DSD+DPLL capabilities', async ({ connectedPage: page }) => {
     await page.wsRoute.send({
       type: 'audioChannelMap',
       inputs: [],
@@ -222,10 +225,12 @@ test.describe('@audio @ws Phase 3 — Output Capability Badge Controls', () => {
     const container = page.locator('#audio-outputs-container');
     await expect(container).not.toContainText('Waiting for device data...', { timeout: 3000 });
 
-    // All badges for set capability bits should appear
+    // DSD badge (bit 11=2048) and DPLL badge (bit 15=32768) should both render
     await expect(container.locator('.badge-dsd')).toBeVisible({ timeout: 3000 });
     await expect(container.locator('.badge-dpll')).toBeVisible({ timeout: 3000 });
-    // HW volume control visible (bit 0 set)
+    // HW volume slider present (bit 0=1)
     await expect(container.locator('#outputHwVol0')).toBeAttached({ timeout: 3000 });
+    // HW mute label on mute button (bit 2=4)
+    await expect(container.locator('#outputMute0')).toHaveText('HW Mute');
   });
 });

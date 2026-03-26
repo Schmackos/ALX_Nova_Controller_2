@@ -27,10 +27,11 @@ test.describe('@audio Phase 3 — Device Grouping and Capability Badges (Outputs
     await expect(page.locator('#audio-outputs-container')).not.toContainText('Waiting for device data...', { timeout: 5000 });
   });
 
-  test('outputs are grouped by device in .device-group containers', async ({ connectedPage: page }) => {
-    // Fixture has PCM5102A (index 0) and ES8311 (index 1) as separate output devices
+  test('outputs are wrapped in .device-group containers', async ({ connectedPage: page }) => {
+    // Each distinct output device name becomes its own .device-group
     const groups = page.locator('#audio-outputs-container .device-group');
-    await expect(groups).toHaveCount({ minimum: 1 });
+    const count = await groups.count();
+    expect(count).toBeGreaterThanOrEqual(1);
   });
 
   test('empty state shown when audioChannelMap has empty outputs array', async ({ connectedPage: page }) => {
@@ -49,7 +50,6 @@ test.describe('@audio Phase 3 — Device Grouping and Capability Badges (Outputs
   });
 
   test('DSD badge visible when output capabilities include bit 11 (HAL_CAP_DSD=2048)', async ({ connectedPage: page }) => {
-    // Push an audioChannelMap with a DSD-capable output (bit 11 = 2048)
     await page.wsRoute.send({
       type: 'audioChannelMap',
       inputs: [],
@@ -75,6 +75,7 @@ test.describe('@audio Phase 3 — Device Grouping and Capability Badges (Outputs
       matrix: []
     });
 
+    // .badge-dsd is rendered inside .device-group-badges when hasDsd is truthy
     await expect(page.locator('#audio-outputs-container .badge-dsd')).toBeVisible({ timeout: 3000 });
   });
 
@@ -107,24 +108,31 @@ test.describe('@audio Phase 3 — Device Grouping and Capability Badges (Outputs
     await expect(page.locator('#audio-outputs-container .badge-dpll')).toBeVisible({ timeout: 3000 });
   });
 
-  test('HW Volume slider visible only when capabilities include bit 0 (HAL_CAP_HW_VOLUME=1)', async ({ connectedPage: page }) => {
-    // ES8311 (index 1) has capabilities=199 (bit 0 set) — hwVol slider should exist
-    const hwVolSlider = page.locator('#outputHwVol1');
-    await expect(hwVolSlider).toBeAttached({ timeout: 3000 });
-
-    // PCM5102A (index 0) has capabilities=16 (bit 0 NOT set) — hwVol slider should NOT exist
-    const hwVolSlider0 = page.locator('#outputHwVol0');
-    await expect(hwVolSlider0).not.toBeAttached();
+  test('HW Volume slider present for ES8311 (capabilities=199 includes bit 0)', async ({ connectedPage: page }) => {
+    // ES8311 is sink index 1 with capabilities=199 (bit 0 = HAL_CAP_HW_VOLUME)
+    await expect(page.locator('#outputHwVol1')).toBeAttached({ timeout: 3000 });
   });
 
-  test('HW Mute label visible when output capabilities include bit 2 (HAL_CAP_HW_MUTE=4)', async ({ connectedPage: page }) => {
-    // ES8311 has capabilities=199 which includes bit 2 (4)
-    const strip1 = page.locator('.channel-strip-output[data-sink="1"]');
-    await expect(strip1.locator('.hw-mute-label, [class*="hw-mute"]')).toBeAttached({ timeout: 3000 });
+  test('HW Volume slider absent for PCM5102A (capabilities=16, bit 0 not set)', async ({ connectedPage: page }) => {
+    // PCM5102A is sink index 0 with capabilities=16 — no HW volume slider
+    await expect(page.locator('#outputHwVol0')).not.toBeAttached();
   });
 
-  test('capability badges render based on bitmask for combined flags', async ({ connectedPage: page }) => {
-    // Push output with both DSD (2048) and DPLL (32768) flags set
+  test('mute button shows "HW Mute" text when capabilities include bit 2 (HAL_CAP_MUTE=4)', async ({ connectedPage: page }) => {
+    // ES8311 has capabilities=199 which includes bit 2 (4) — mute button label = "HW Mute"
+    const muteBtn = page.locator('#outputMute1');
+    await expect(muteBtn).toBeAttached({ timeout: 3000 });
+    await expect(muteBtn).toHaveText('HW Mute');
+  });
+
+  test('mute button shows plain "Mute" when HAL_CAP_MUTE not set', async ({ connectedPage: page }) => {
+    // PCM5102A capabilities=16, bit 2 not set — plain "Mute"
+    const muteBtn = page.locator('#outputMute0');
+    await expect(muteBtn).toBeAttached();
+    await expect(muteBtn).toHaveText('Mute');
+  });
+
+  test('DSD and DPLL badges both visible when both capability bits set', async ({ connectedPage: page }) => {
     await page.wsRoute.send({
       type: 'audioChannelMap',
       inputs: [],
