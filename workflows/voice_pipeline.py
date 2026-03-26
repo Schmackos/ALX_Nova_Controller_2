@@ -83,6 +83,7 @@ CONCEPT_TEMPLATE = """# Concept: {title}
 | Priority | `---` |
 | Effort | `---` |
 | Sources | {sources} |
+| Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | {date} |
 
 ## Problem / Opportunity
@@ -516,6 +517,7 @@ Generate a markdown document with EXACTLY this structure:
 | Priority | `---` |
 | Effort | `---` |
 | Sources | <comma-separated list of source .m4a filenames> |
+| Audio | `voice-notes/` |
 | Last updated | {today} |
 
 ## Problem / Opportunity
@@ -644,26 +646,26 @@ def stage_archive(manifest, dry_run=False, verbose=False):
     return manifest
 
 
-# --- Pick command ---
-def command_pick():
-    """List concept docs and let user pick one for brainstorming."""
+# --- Shared concept listing ---
+WORKFLOW_ORDER = ["raw", "draft", "ready", "in-progress", "done"]
+
+
+def list_concepts():
+    """List concept docs with workflow status and action counts. Returns entries list."""
     concept_files = sorted(BACKLOG_DIR.glob("concept-*.md"))
     if not concept_files:
         log("No concept docs found in docs-internal/backlog/")
-        return
+        return []
 
     entries = []
     for f in concept_files:
         content = f.read_text(encoding="utf-8")
 
-        # Extract workflow status
         workflow_match = re.search(r"\|\s*Workflow\s*\|\s*`(\w[\w-]*)`", content)
-        workflow = workflow_match.group(1) if workflow_match else "draft"
+        workflow = workflow_match.group(1) if workflow_match else "raw"
 
-        # Count unchecked action items
         actions = len(re.findall(r"^- \[ \]", content, re.MULTILINE))
 
-        # Extract title from first heading
         title_match = re.search(r"^# Concept:\s*(.+)", content, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else f.stem
 
@@ -679,18 +681,36 @@ def command_pick():
     for i, e in enumerate(entries, 1):
         log(f"  {i:>3}  {e['workflow']:<12} {e['actions']:>7}  {e['title']}")
 
+    return entries
+
+
+def pick_concept(entries, prompt_text="Pick a concept"):
+    """Prompt user to pick a concept by number. Returns entry or None."""
     log("")
     try:
-        choice = input(f"Pick a concept (1-{len(entries)}): ").strip()
+        choice = input(f"{prompt_text} (1-{len(entries)}): ").strip()
     except (EOFError, KeyboardInterrupt):
         log("\nCancelled.")
-        return
+        return None
 
     if not choice.isdigit() or not (1 <= int(choice) <= len(entries)):
         log(f"Invalid choice: {choice}")
+        return None
+
+    return entries[int(choice) - 1]
+
+
+# --- Pick command ---
+def command_pick():
+    """List concept docs and let user pick one for brainstorming."""
+    entries = list_concepts()
+    if not entries:
         return
 
-    picked = entries[int(choice) - 1]
+    picked = pick_concept(entries)
+    if not picked:
+        return
+
     content = picked["file"].read_text(encoding="utf-8")
     rel_path = picked["file"].relative_to(PROJECT_ROOT).as_posix()
 
@@ -699,6 +719,38 @@ def command_pick():
     log(f"{'=' * 60}")
     log(f"\nTo work on this, tell Claude:")
     log(f'  "Read {rel_path} and brainstorm it into a PRD"')
+
+
+# --- Promote command ---
+def command_promote():
+    """Advance a concept doc to the next workflow stage."""
+    entries = list_concepts()
+    if not entries:
+        return
+
+    picked = pick_concept(entries, "Promote which concept")
+    if not picked:
+        return
+
+    current = picked["workflow"]
+    if current not in WORKFLOW_ORDER:
+        log(f"Unknown workflow stage: {current}")
+        return
+
+    idx = WORKFLOW_ORDER.index(current)
+    if idx >= len(WORKFLOW_ORDER) - 1:
+        log(f"  Already at final stage: `{current}`")
+        return
+
+    next_stage = WORKFLOW_ORDER[idx + 1]
+    content = picked["file"].read_text(encoding="utf-8")
+    updated = re.sub(
+        r"(\|\s*Workflow\s*\|\s*)`" + re.escape(current) + r"`",
+        r"\g<1>`" + next_stage + "`",
+        content,
+    )
+    picked["file"].write_text(updated, encoding="utf-8")
+    log(f"\n  {picked['title']}: `{current}` -> `{next_stage}`")
 
 
 # --- Main ---
@@ -722,6 +774,7 @@ Examples:
   python workflows/voice_pipeline.py --stage transcribe # Run one stage
   python workflows/voice_pipeline.py --model small      # Use larger Whisper model
   python workflows/voice_pipeline.py --pick             # Browse and pick a concept
+  python workflows/voice_pipeline.py --promote          # Advance a concept's workflow stage
   python workflows/voice_pipeline.py --verbose          # Detailed output
         """,
     )
@@ -747,6 +800,11 @@ Examples:
         help="Browse concept docs and pick one for brainstorming",
     )
     parser.add_argument(
+        "--promote",
+        action="store_true",
+        help="Advance a concept doc to the next workflow stage",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable detailed logging",
@@ -756,6 +814,10 @@ Examples:
 
     if args.pick:
         command_pick()
+        return
+
+    if args.promote:
+        command_promote()
         return
 
     if args.dry_run:

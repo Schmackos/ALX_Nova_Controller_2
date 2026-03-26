@@ -6,6 +6,7 @@
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Hardware DSP.m4a, Analog devices adc and dac proprietary tooling needed.m4a, Lower bar for Analog Devices DSP.m4a |
+| Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | 2026-03-26 |
 
 ## Problem / Opportunity

@@ -56,6 +56,7 @@ docs-internal/backlog/
 | `--stage <name>` | Run only one stage: `transcribe`, `process`, `cluster`, `generate`, `archive` | all stages |
 | `--model <name>` | Whisper model: `tiny`, `base`, `small`, `medium`, `large` | `base` |
 | `--pick` | Browse concept docs and pick one for brainstorming | off |
+| `--promote` | Advance a concept doc to the next workflow stage | off |
 | `--verbose` | Show detailed logging output | off |
 
 ### Examples
@@ -73,12 +74,15 @@ python workflows/voice_pipeline.py --stage transcribe
 # Use a larger Whisper model for better accuracy
 python workflows/voice_pipeline.py --model small
 
-# Re-cluster and regenerate after manual edits
+# Re-cluster and regenerate (only overwrites `raw` docs, skips edited ones)
 python workflows/voice_pipeline.py --stage cluster
 python workflows/voice_pipeline.py --stage generate
 
 # Browse concepts and pick one to brainstorm
 python workflows/voice_pipeline.py --pick
+
+# Advance a concept to the next workflow stage (e.g. raw -> draft)
+python workflows/voice_pipeline.py --promote
 
 # Detailed output for debugging
 python workflows/voice_pipeline.py --verbose

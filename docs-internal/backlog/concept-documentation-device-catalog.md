@@ -6,6 +6,7 @@
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Docs and devices overview.m4a, Docs and oitnof box devices.m4a |
+| Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | 2026-03-26 |
 
 ## Problem / Opportunity

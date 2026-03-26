@@ -6,6 +6,7 @@
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Loudspeaker Calibration Platform.m4a, Auto EQ Software Feature Part 2 Basic and advacned.m4a |
+| Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | 2026-03-26 |
 
 ## Problem / Opportunity
