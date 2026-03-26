@@ -33,7 +33,7 @@ function updateMqttConnectionStatus(connected, broker, port, baseTopic) {
     if (connected) {
         html = `
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
-                    <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${escapeHtml(broker) || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
                     ${broker ? `<div class="info-row"><span class="info-label">TLS</span><span class="info-value">${document.getElementById('appState.mqttUseTls').checked ? 'Enabled' : 'Off'}</span></div>` : ''}
                 `;
@@ -41,7 +41,7 @@ function updateMqttConnectionStatus(connected, broker, port, baseTopic) {
     } else if (enabled) {
         html = `
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Disconnected</span></div>
-                    <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Not configured'}</span></div>
+                    <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${escapeHtml(broker) || 'Not configured'}</span></div>
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
                 `;
         currentMqttConnected = false;
