@@ -2987,6 +2987,44 @@
     background: rgba(244, 67, 54, 0.25);
 }
 
+/* ===== PEQ A/B Compare + Copy from Channel ===== */
+.peq-overlay-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    margin-right: 8px;
+}
+.peq-ab-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.peq-ab-btn {
+    padding: 3px 10px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.peq-ab-btn.active {
+    background: var(--accent);
+    color: #000;
+}
+.peq-copy-select {
+    font-size: 11px;
+    padding: 3px 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    max-width: 160px;
+}
+
 /* ===== Audio Subnav Presets Button ===== */
 .audio-subnav-presets {
     margin-left: auto;

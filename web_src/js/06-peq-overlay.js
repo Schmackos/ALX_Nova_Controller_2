@@ -47,6 +47,14 @@
         let peqOverlayBands = [];     // [{type, freq, gain, Q, enabled}]
         let peqOverlayFs = 48000;
 
+        // ===== A/B Compare State =====
+        // _peqAbSlot: 'A' or 'B' — which set is currently active (being edited)
+        // _peqBandsA: bands stored as slot A (populated when A/B is first activated)
+        // _peqBandsB: bands stored as slot B (starts empty)
+        var _peqAbSlot = 'A';
+        var _peqBandsA = null;   // null = A/B not yet activated
+        var _peqBandsB = [];
+
         // Graph coordinate constants — shared between draw and pointer handlers
         var PEQ_F_MIN = 5;
         var PEQ_F_MAX = 20000;
@@ -143,8 +151,36 @@
             var title = target.type === 'input' ? 'Input PEQ — Lane ' + target.channel : 'Output PEQ — Ch ' + target.channel;
             var maxBands = target.type === 'input' ? 6 : 10;
 
+            // Reset A/B state when opening overlay fresh
+            _peqAbSlot = 'A';
+            _peqBandsA = null;
+            _peqBandsB = [];
+
+            // Build copy-from-channel options from audioChannelMap
+            var copyOptions = '<option value="">-- Select channel --</option>';
+            if (audioChannelMap) {
+                var srcList = target.type === 'input' ? (audioChannelMap.inputs || []) : (audioChannelMap.outputs || []);
+                for (var ci = 0; ci < srcList.length; ci++) {
+                    var srcChan = target.type === 'input' ? srcList[ci].lane : srcList[ci].firstChannel;
+                    if (srcChan === target.channel) continue;
+                    var srcLabel = target.type === 'input'
+                        ? 'Lane ' + srcChan + ' (' + escapeHtml(srcList[ci].deviceName || 'Input') + ')'
+                        : 'Ch ' + srcChan + ' (' + escapeHtml(srcList[ci].name || 'Output') + ')';
+                    copyOptions += '<option value="' + srcChan + '">' + srcLabel + '</option>';
+                }
+            }
+
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">' + title + '</span>';
+            html += '  <div class="peq-overlay-header-tools">';
+            html += '    <div class="peq-ab-toggle" title="A/B compare: store two EQ curves and switch between them">';
+            html += '      <button class="peq-ab-btn active" id="peqAbBtnA" data-action="peq-ab-select" data-slot="A">A</button>';
+            html += '      <button class="peq-ab-btn" id="peqAbBtnB" data-action="peq-ab-select" data-slot="B">B</button>';
+            html += '    </div>';
+            html += '    <select class="peq-copy-select" id="peqCopySelect" data-action="peq-copy-channel" title="Copy EQ bands from another channel">';
+            html += '      ' + copyOptions;
+            html += '    </select>';
+            html += '  </div>';
             html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
@@ -261,8 +297,104 @@
         function closePeqOverlay() {
             peqOverlayActive = false;
             _peqDragBand = -1;
+            _peqBandsA = null;
+            _peqBandsB = [];
+            _peqAbSlot = 'A';
             var overlay = document.getElementById('peqOverlay');
             if (overlay) overlay.style.display = 'none';
+        }
+
+        // ===== A/B Compare =====
+        // On first activation: saves current bands as A, initialises B as empty.
+        // Subsequent clicks swap the active slot and reload bands.
+
+        function peqAbSelect(slot) {
+            if (!peqOverlayActive) return;
+
+            if (_peqBandsA === null) {
+                // First time activating A/B — capture current bands into A
+                _peqBandsA = peqOverlayBands.slice();
+                _peqBandsB = [];
+            }
+
+            // Save current editing set into the slot we are leaving
+            if (_peqAbSlot === 'A') {
+                _peqBandsA = peqOverlayBands.slice();
+            } else {
+                _peqBandsB = peqOverlayBands.slice();
+            }
+
+            _peqAbSlot = slot;
+
+            // Load the new slot
+            peqOverlayBands = (slot === 'A' ? _peqBandsA : _peqBandsB).slice();
+
+            // Update button styles
+            var btnA = document.getElementById('peqAbBtnA');
+            var btnB = document.getElementById('peqAbBtnB');
+            if (btnA) btnA.classList.toggle('active', slot === 'A');
+            if (btnB) btnB.classList.toggle('active', slot === 'B');
+
+            // Re-render table and graph
+            var tbody = document.getElementById('peqBandRows');
+            if (tbody) {
+                var html = '';
+                for (var i = 0; i < peqOverlayBands.length; i++) html += peqBandRowHtml(i);
+                tbody.innerHTML = html;
+            }
+            peqDrawGraph();
+        }
+
+        // ===== Copy from Channel =====
+        // Fetches the DSP channel config from the firmware and loads its PEQ bands.
+
+        function peqCopyFromChannel(srcChannel) {
+            if (srcChannel === '' || srcChannel === null || srcChannel === undefined) return;
+            var ch = parseInt(srcChannel, 10);
+            if (isNaN(ch)) return;
+
+            apiFetch('/api/dsp/channel?channel=' + ch)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) { showToast('Copy failed: ' + (data.message || 'error'), 'error'); return; }
+                    // Extract biquad (PEQ) stages from the stage list
+                    var stages = data.stages || [];
+                    var bands = [];
+                    for (var s = 0; s < stages.length; s++) {
+                        var st = stages[s];
+                        // Include all biquad types (0-10, 19, 20) as bands
+                        var typeId = typeof st.type === 'number' ? st.type : parseInt(st.type, 10);
+                        if (typeId >= 0 && typeId <= 10 || typeId === 19 || typeId === 20) {
+                            bands.push({
+                                type: typeId,
+                                freq: (st.params && st.params.frequency) || 1000,
+                                gain: (st.params && st.params.gain) || 0,
+                                Q: (st.params && st.params.Q) || 0.707,
+                                enabled: st.enabled !== false
+                            });
+                        }
+                    }
+
+                    if (bands.length === 0) {
+                        showToast('No PEQ bands found on channel ' + ch, 'info');
+                        return;
+                    }
+
+                    peqOverlayBands = bands;
+                    var tbody = document.getElementById('peqBandRows');
+                    if (tbody) {
+                        var html = '';
+                        for (var i = 0; i < peqOverlayBands.length; i++) html += peqBandRowHtml(i);
+                        tbody.innerHTML = html;
+                    }
+                    peqDrawGraph();
+                    showToast('Copied ' + bands.length + ' band(s) from Ch ' + ch, 'success');
+
+                    // Reset copy dropdown
+                    var sel = document.getElementById('peqCopySelect');
+                    if (sel) sel.value = '';
+                })
+                .catch(function() { showToast('Copy failed', 'error'); });
         }
 
         // ===== Drag-on-graph interaction =====
@@ -984,6 +1116,8 @@
                     peqOverlayQuickSave();
                 } else if (action === 'peq-preset-load') {
                     peqOverlayQuickLoad();
+                } else if (action === 'peq-ab-select') {
+                    peqAbSelect(el.dataset.slot);
                 } else if (action === 'xover-apply') {
                     applyXover(parseInt(el.dataset.channel));
                 } else if (action === 'compressor-apply') {
@@ -1018,7 +1152,9 @@
                 if (!el) return;
                 var action = el.dataset.action;
 
-                if (action === 'peq-rew-import') {
+                if (action === 'peq-copy-channel') {
+                    peqCopyFromChannel(el.value);
+                } else if (action === 'peq-rew-import') {
                     peqHandleRewImport(el.files && el.files[0]);
                     el.value = '';  // allow re-import of same file
                 } else if (action === 'fir-file-select') {
