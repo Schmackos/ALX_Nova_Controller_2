@@ -301,6 +301,16 @@ router.post('/dsp/import/fir', (req, res) => {
   res.json({ success: true });
 });
 
+// POST /dsp/convolution/upload?ch=N — upload WAV IR for convolution stage
+// Accepts raw binary body (WAV file). Mock validates ch query param only.
+router.post('/dsp/convolution/upload', (req, res) => {
+  const ch = parseInt(req.query.ch, 10);
+  if (isNaN(ch) || ch < 0 || ch > 3) {
+    return res.status(400).json({ success: false, message: 'Invalid channel' });
+  }
+  res.json({ success: true, channel: ch, tapsLoaded: 128 });
+});
+
 // GET /dsp/export/apo — export Equalizer APO format
 router.get('/dsp/export/apo', (req, res) => {
   res.type('text/plain').send('# ALX Nova DSP export (APO format)\n');
@@ -334,14 +344,22 @@ router.put('/output/dsp', (req, res) => {
 });
 
 // POST /output/dsp/stage — add an output DSP stage
+// Accepts both 'ch' and 'channel' for the channel field.
+// Flat DSP params (thresholdDb, ratio, attackMs, etc.) are stored under params.
 router.post('/output/dsp/stage', (req, res) => {
-  const { channel, type, params } = req.body || {};
-  const ch = parseInt(channel, 10);
-  if (!_outputStages[ch]) {
+  const body = req.body || {};
+  // Frontend sends 'ch'; fallback to 'channel' for API compatibility
+  const ch = parseInt(body.ch !== undefined ? body.ch : body.channel, 10);
+  const { type, params } = body;
+  if (!_outputStages[ch] || ch === undefined || isNaN(ch)) {
     return res.status(400).json({ success: false, message: 'Invalid channel' });
   }
+  // Collect flat DSP params from body (compressor/limiter send them flat)
+  const flatParams = Object.assign({}, params || {});
+  const paramKeys = ['thresholdDb', 'ratio', 'attackMs', 'releaseMs', 'kneeDb', 'makeupGainDb'];
+  paramKeys.forEach(k => { if (body[k] !== undefined) flatParams[k] = body[k]; });
   const id = _stageIdCounter++;
-  _outputStages[ch].push({ id, type, enabled: true, params: params || {} });
+  _outputStages[ch].push({ id, type, enabled: true, params: flatParams });
   res.json({ success: true, id, channel: ch });
 });
 

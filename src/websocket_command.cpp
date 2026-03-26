@@ -5,6 +5,7 @@
 // CPU monitoring lives in websocket_cpu_monitor.cpp.
 // Public API declared in websocket_handler.h.
 
+#include <cmath>
 #include "websocket_handler.h"
 #include "websocket_internal.h"
 #include "auth_handler.h"
@@ -519,6 +520,69 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();
+            }
+          }
+        }
+        else if (msgType == "setMultibandComp") {
+          // Update multiband compressor per-band params and/or crossover frequencies.
+          // Message fields:
+          //   ch (int)         — DSP channel index (0-3)
+          //   stage (int)      — Stage index of the DSP_MULTIBAND_COMP stage
+          //   numBands (int)   — Optional: set number of active bands (2-4)
+          //   bands (array)    — Optional: per-band objects with thresholdDb, ratio, attackMs,
+          //                      releaseMs, kneeDb, makeupGainDb
+          //   crossoverFreqs (array) — Optional: crossover boundary frequencies in Hz (up to 3)
+          int ch = doc["ch"] | -1;
+          int si = doc["stage"] | -1;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            bool changed = false;
+            if (si >= 0 && si < cfg->channels[ch].stageCount) {
+              DspStage &s = cfg->channels[ch].stages[si];
+              if (s.type == DSP_MULTIBAND_COMP) {
+                // Update numBands in the stage struct (double-buffered)
+                if (doc["numBands"].is<int>()) {
+                  uint8_t nb = doc["numBands"].as<uint8_t>();
+                  if (nb >= 2 && nb <= 4) { s.multibandComp.numBands = nb; changed = true; }
+                }
+                int mbSlot = s.multibandComp.mbSlot;
+                // Update per-band params in the pool (not double-buffered — direct write)
+                if (mbSlot >= 0 && doc["bands"].is<JsonArray>()) {
+                  JsonArray bands = doc["bands"].as<JsonArray>();
+                  int bIdx = 0;
+                  for (JsonObject band : bands) {
+                    if (bIdx >= 4) break;
+                    float thresh = band["thresholdDb"] | -12.0f;
+                    float attack = band["attackMs"] | 10.0f;
+                    float release = band["releaseMs"] | 100.0f;
+                    float ratio   = band["ratio"] | 4.0f;
+                    float knee    = band["kneeDb"] | 6.0f;
+                    float makeup  = band["makeupGainDb"] | 0.0f;
+                    dsp_mb_set_band_params(mbSlot, bIdx, thresh, attack, release, ratio, knee, makeup);
+                    bIdx++;
+                    changed = true;
+                  }
+                }
+                // Update crossover frequencies in the pool
+                if (mbSlot >= 0 && doc["crossoverFreqs"].is<JsonArray>()) {
+                  JsonArray freqs = doc["crossoverFreqs"].as<JsonArray>();
+                  int fIdx = 0;
+                  for (JsonVariant freq : freqs) {
+                    if (fIdx >= 3) break;
+                    dsp_mb_set_crossover_freq(mbSlot, fIdx, freq.as<float>(), cfg->sampleRate);
+                    fIdx++;
+                    changed = true;
+                  }
+                }
+              }
+            }
+            if (changed) {
+              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
+              extern void saveDspSettingsDebounced();
+              saveDspSettingsDebounced();
+              appState.markDspConfigDirty();
+              LOG_I("[WebSocket] setMultibandComp ch=%d stage=%d", ch, si);
             }
           }
         }
@@ -1060,8 +1124,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           int lane = doc["lane"] | -1;
           float db = doc["db"] | 0.0f;
           if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
-            audio_pipeline_bypass_input(lane, false);
-            LOG_I("[WebSocket] Input gain lane=%d db=%.1f (gain not yet applied)", lane, db);
+            if (db < -60.0f) db = -60.0f;
+            if (db > 12.0f)  db = 12.0f;
+            float gainLinear = powf(10.0f, db / 20.0f);
+            audio_pipeline_set_source_gain(lane, gainLinear);
+            LOG_I("[WebSocket] Input gain lane=%d db=%.1f gainLinear=%.4f", lane, db, gainLinear);
           }
         }
         else if (msgType == "setInputMute") {
@@ -1075,10 +1142,41 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setInputPhase") {
           int lane = doc["lane"] | -1;
           bool inverted = doc["inverted"] | false;
-          if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
-            // Per-input polarity — set via DSP polarity stage
+#ifdef DSP_ENABLED
+          int chL = lane * 2;
+          int chR = lane * 2 + 1;
+          if (lane >= 0 && chR < DSP_MAX_CHANNELS) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            // Find-or-create DSP_POLARITY stage in chain region for both L and R channels
+            for (int ch = chL; ch <= chR; ch++) {
+              DspChannelConfig &chCfg = cfg->channels[ch];
+              bool found = false;
+              for (int s = DSP_PEQ_BANDS; s < chCfg.stageCount; s++) {
+                if (chCfg.stages[s].type == DSP_POLARITY) {
+                  chCfg.stages[s].polarity.inverted = inverted;
+                  chCfg.stages[s].enabled = true;
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                int idx = dsp_add_chain_stage(ch, DSP_POLARITY);
+                if (idx >= 0) {
+                  cfg->channels[ch].stages[idx].polarity.inverted = inverted;
+                  cfg->channels[ch].stages[idx].enabled = true;
+                }
+              }
+            }
+            if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
+            extern void saveDspSettingsDebounced();
+            saveDspSettingsDebounced();
+            appState.markDspConfigDirty();
             LOG_I("[WebSocket] Input phase lane=%d inverted=%d", lane, inverted);
           }
+#else
+          LOG_I("[WebSocket] Input phase lane=%d inverted=%d (DSP not enabled)", lane, inverted);
+#endif
         }
 #ifdef DAC_ENABLED
         else if (msgType == "setOutputMute") {
@@ -1162,8 +1260,52 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           int ch = doc["channel"] | -1;
           float ms = doc["ms"] | 0.0f;
           if (ch >= 0 && ch < AUDIO_PIPELINE_MATRIX_SIZE) {
-            // Delay in ms → samples: delay = ms * sampleRate / 1000
-            LOG_I("[WebSocket] Output delay ch=%d ms=%.2f", ch, ms);
+            output_dsp_copy_active_to_inactive();
+            OutputDspState *cfg = output_dsp_get_inactive_config();
+            uint32_t sampleRate = cfg->sampleRate > 0 ? cfg->sampleRate : 48000;
+            uint16_t delaySamples = (uint16_t)((ms * sampleRate) / 1000.0f);
+            if (delaySamples > OUTPUT_DSP_MAX_DELAY_SAMPLES)
+              delaySamples = OUTPUT_DSP_MAX_DELAY_SAMPLES;
+            OutputDspChannelConfig &chCfg = cfg->channels[ch];
+            bool found = false;
+            for (int s = 0; s < chCfg.stageCount; s++) {
+              if (chCfg.stages[s].type == DSP_DELAY) {
+                chCfg.stages[s].delay.delaySamples = delaySamples;
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              int idx = output_dsp_add_stage(ch, DSP_DELAY);
+              if (idx >= 0) {
+                cfg->channels[ch].stages[idx].delay.delaySamples = delaySamples;
+              }
+            }
+            output_dsp_swap_config();
+            output_dsp_save_channel(ch);
+            LOG_I("[WebSocket] Output delay ch=%d ms=%.2f samples=%u", ch, ms, delaySamples);
+          }
+        }
+        else if (msgType == "setOutputCrossover") {
+          int subCh = doc["subCh"] | -1;
+          int mainCh = doc["mainCh"] | -1;
+          float freqHz = doc["freqHz"] | 80.0f;
+          int order = doc["order"] | 4;
+          if (subCh >= 0 && subCh < OUTPUT_DSP_MAX_CHANNELS &&
+              mainCh >= 0 && mainCh < OUTPUT_DSP_MAX_CHANNELS &&
+              freqHz > 0.0f) {
+            output_dsp_copy_active_to_inactive();
+            int result = output_dsp_setup_crossover(subCh, mainCh, freqHz, order);
+            if (result >= 0) {
+              output_dsp_swap_config();
+              output_dsp_save_channel(subCh);
+              output_dsp_save_channel(mainCh);
+              LOG_I("[WebSocket] Output crossover: LR%d %.0fHz sub=ch%d main=ch%d stagesAdded=%d",
+                    order, freqHz, subCh, mainCh, result);
+            } else {
+              LOG_I("[WebSocket] Output crossover failed: invalid params subCh=%d mainCh=%d freqHz=%.0f order=%d",
+                    subCh, mainCh, freqHz, order);
+            }
           }
         }
 #endif

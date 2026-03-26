@@ -451,8 +451,12 @@
             var label = document.getElementById('outputHwVolVal' + sinkIdx);
             if (label) label.textContent = val + '%';
             var out = audioChannelMap && audioChannelMap.outputs ? audioChannelMap.outputs[sinkIdx] : null;
-            if (out && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'setOutputHwVolume', channel: out.firstChannel, volume: parseInt(val) }));
+            if (out && out.halSlot !== undefined && out.halSlot !== 255) {
+                apiFetch('/api/hal/devices', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slot: out.halSlot, volume: parseInt(val) })
+                }).catch(function() { showToast('HW volume update failed', 'error'); });
             }
         }
 

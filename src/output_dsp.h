@@ -21,7 +21,12 @@
 #define OUTPUT_DSP_MAX_STAGES 12    // Crossover + EQ + limiter + gain per channel
 #endif
 
-// ===== Output DSP Stage (subset of DspStage — biquad, gain, limiter, mute, polarity) =====
+// Max delay per output channel (100ms @ 48kHz). Buffers are PSRAM-allocated on demand.
+#ifndef OUTPUT_DSP_MAX_DELAY_SAMPLES
+#define OUTPUT_DSP_MAX_DELAY_SAMPLES 4800
+#endif
+
+// ===== Output DSP Stage (subset of DspStage — biquad, gain, limiter, mute, polarity, delay) =====
 struct OutputDspStage {
     bool enabled;
     DspStageType type;
@@ -34,6 +39,7 @@ struct OutputDspStage {
         DspPolarityParams polarity;
         DspMuteParams mute;
         DspCompressorParams compressor;
+        DspDelayParams delay;
     };
 };
 
@@ -66,6 +72,8 @@ inline void output_dsp_init_stage(OutputDspStage &s, DspStageType t = DSP_BIQUAD
         dsp_init_mute_params(s.mute);
     } else if (t == DSP_COMPRESSOR) {
         dsp_init_compressor_params(s.compressor);
+    } else if (t == DSP_DELAY) {
+        dsp_init_delay_params(s.delay);
     } else if (dsp_is_biquad_type(t)) {
         dsp_init_biquad_params(s.biquad);
     } else {

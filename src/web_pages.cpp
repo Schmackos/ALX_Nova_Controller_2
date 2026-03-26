@@ -6595,8 +6595,12 @@ body.night-mode {
             var label = document.getElementById('outputHwVolVal' + sinkIdx);
             if (label) label.textContent = val + '%';
             var out = audioChannelMap && audioChannelMap.outputs ? audioChannelMap.outputs[sinkIdx] : null;
-            if (out && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'setOutputHwVolume', channel: out.firstChannel, volume: parseInt(val) }));
+            if (out && out.halSlot !== undefined && out.halSlot !== 255) {
+                apiFetch('/api/hal/devices', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slot: out.halSlot, volume: parseInt(val) })
+                }).catch(function() { showToast('HW volume update failed', 'error'); });
             }
         }
 
@@ -7345,7 +7349,7 @@ body.night-mode {
             apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ch: channel, type: 14 })  // DSP_COMPRESSOR = 14
+                body: JSON.stringify({ ch: channel, type: 'COMPRESSOR', thresholdDb: params.thresholdDb, ratio: params.ratio, attackMs: params.attackMs, releaseMs: params.releaseMs, kneeDb: params.kneeDb, makeupGainDb: params.makeupGainDb })
             })
             .then(function() {
                 showToast('Compressor applied to Ch ' + channel, 'success');
@@ -7386,10 +7390,15 @@ body.night-mode {
         }
 
         function applyLimiter(channel) {
+            var params = {
+                thresholdDb: parseFloat(document.getElementById('limThreshold').value),
+                attackMs: parseFloat(document.getElementById('limAttack').value),
+                releaseMs: parseFloat(document.getElementById('limRelease').value)
+            };
             apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ch: channel, type: 11 })  // DSP_LIMITER = 11
+                body: JSON.stringify({ ch: channel, type: 'LIMITER', thresholdDb: params.thresholdDb, attackMs: params.attackMs, releaseMs: params.releaseMs })
             })
             .then(function() {
                 showToast('Limiter applied to Ch ' + channel, 'success');

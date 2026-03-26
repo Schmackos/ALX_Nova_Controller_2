@@ -33,5 +33,6 @@ EventBits_t app_events_wait(uint32_t timeout_ms);
 #define EVT_HEAP_PRESSURE (1UL << 16)
 #define EVT_HEALTH       (1UL << 17)
 #define EVT_FORMAT_CHANGE (1UL << 18)  // Source/sink sample rate mismatch or DSD detection change
+#define EVT_THD          (1UL << 19)   // THD+N measurement completed
 // EVT_ANY covers all 24 usable FreeRTOS event group bits (bits 24-31 reserved by FreeRTOS)
 #define EVT_ANY          (0x00FFFFFFUL)

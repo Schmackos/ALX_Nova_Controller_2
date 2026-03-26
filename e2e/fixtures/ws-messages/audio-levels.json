@@ -29,6 +29,8 @@
   ],
   "adcStatus": ["OK", "OK"],
   "adcNoiseFloor": [-72.5, -71.8],
+  "adcSnrDb": [85.2, 84.7],
+  "adcSfdrDb": [92.1, 91.4],
   "sinks": [
     { "vuL": 0.0, "vuR": 0.0, "name": "PCM5102A", "ch": 0 },
     { "vuL": 0.0, "vuR": 0.0, "name": "ES8311", "ch": 2 }

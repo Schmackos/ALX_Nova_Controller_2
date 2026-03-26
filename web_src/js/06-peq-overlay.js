@@ -513,7 +513,7 @@
             apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ch: channel, type: 14 })  // DSP_COMPRESSOR = 14
+                body: JSON.stringify({ ch: channel, type: 'COMPRESSOR', thresholdDb: params.thresholdDb, ratio: params.ratio, attackMs: params.attackMs, releaseMs: params.releaseMs, kneeDb: params.kneeDb, makeupGainDb: params.makeupGainDb })
             })
             .then(function() {
                 showToast('Compressor applied to Ch ' + channel, 'success');
@@ -554,10 +554,15 @@
         }
 
         function applyLimiter(channel) {
+            var params = {
+                thresholdDb: parseFloat(document.getElementById('limThreshold').value),
+                attackMs: parseFloat(document.getElementById('limAttack').value),
+                releaseMs: parseFloat(document.getElementById('limRelease').value)
+            };
             apiFetch('/api/output/dsp/stage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ch: channel, type: 11 })  // DSP_LIMITER = 11
+                body: JSON.stringify({ ch: channel, type: 'LIMITER', thresholdDb: params.thresholdDb, attackMs: params.attackMs, releaseMs: params.releaseMs })
             })
             .then(function() {
                 showToast('Limiter applied to Ch ' + channel, 'success');

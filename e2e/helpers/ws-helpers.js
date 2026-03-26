@@ -90,6 +90,11 @@ function handleCommand(type, data) {
     case 'setDeviceEnabled':
       return [loadFixture('hal-device-state')];
 
+    // ===== Server-push broadcasts (not client commands — handled gracefully) =====
+    case 'thdResult':
+      // thdResult is a server-push event; tests that need it send it explicitly.
+      return [];
+
     // ===== Input pipeline commands =====
     case 'setInputGain':
       return [];
@@ -102,9 +107,6 @@ function handleCommand(type, data) {
 
     // ===== Output pipeline commands =====
     case 'setOutputGain':
-      return [];
-
-    case 'setOutputHwVolume':
       return [];
 
     case 'setOutputMute':
