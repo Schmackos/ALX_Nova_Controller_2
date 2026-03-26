@@ -34,6 +34,42 @@ MANIFEST_FILE = VOICE_NOTES_DIR / "processed.json"
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".ogg", ".flac"}
 
 # --- Concept doc template ---
+MAX_RETRIES = 3
+MIN_CONCEPT_DOC_LENGTH = 500
+
+REQUIRED_SECTIONS = [
+    "# Concept:",
+    "## Problem / Opportunity",
+    "## Sub-topics",
+    "## Action Items",
+    "## Original Transcripts",
+]
+
+
+def validate_concept_doc(content, slug):
+    """Validate that a concept doc response contains all required sections.
+
+    Returns (is_valid, list_of_errors).
+    """
+    errors = []
+
+    if not content or len(content.strip()) < MIN_CONCEPT_DOC_LENGTH:
+        errors.append(f"Too short ({len(content.strip())} chars, min {MIN_CONCEPT_DOC_LENGTH})")
+        return False, errors
+
+    for section in REQUIRED_SECTIONS:
+        if section not in content:
+            errors.append(f"Missing section: {section}")
+
+    if "- [ ]" not in content:
+        errors.append("No action item checkboxes found (expected '- [ ]')")
+
+    if "<details>" not in content:
+        errors.append("No collapsed transcript sections found (expected '<details>')")
+
+    return len(errors) == 0, errors
+
+
 CONCEPT_TEMPLATE = """# Concept: {title}
 
 | Field | Value |
@@ -506,9 +542,40 @@ Rules:
 - Keep Problem/Opportunity to 2-4 sentences
 - Output ONLY the markdown document, no explanations"""
 
-        response = run_claude(prompt, verbose=verbose)
+        response = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            retry_hint = ""
+            if attempt > 1:
+                retry_hint = (
+                    "\n\nCRITICAL: Your previous response failed validation. "
+                    "You MUST output ONLY the raw markdown document starting with '# Concept:'. "
+                    "Do NOT include any preamble, summary, explanation, or commentary. "
+                    "Do NOT say 'here is the document' or similar — just output the markdown."
+                )
+
+            raw = run_claude(prompt + retry_hint, verbose=verbose)
+            if raw is None:
+                log(f"  [Attempt {attempt}/{MAX_RETRIES}] Claude call failed")
+                continue
+
+            # Strip any preamble before the actual markdown
+            idx = raw.find("# Concept:")
+            if idx > 0:
+                raw = raw[idx:]
+
+            is_valid, errors = validate_concept_doc(raw, slug)
+            if is_valid:
+                response = raw
+                if attempt > 1:
+                    log(f"  [Attempt {attempt}/{MAX_RETRIES}] Passed validation")
+                break
+            else:
+                log(f"  [Attempt {attempt}/{MAX_RETRIES}] Validation failed:")
+                for err in errors:
+                    log(f"    - {err}")
+
         if response is None:
-            log(f"  [WARN] Skipping concept-{slug}.md — Claude failed")
+            log(f"  [FAIL] Skipping concept-{slug}.md after {MAX_RETRIES} attempts")
             continue
 
         # Atomic write: temp file then replace
