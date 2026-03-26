@@ -165,8 +165,8 @@ public:
 
     // DSD mode switching — mute → write DSD regs → unmute sequence.
     // Returns false immediately if chip has no DSD support (regDsdPath == 0xFFFF).
-    bool setDsdMode(bool enable);
-    bool isDsdMode() const;
+    bool setDsdMode(bool enable) override;
+    bool isDsdMode() const override;
 
 private:
     const CirrusDac2chDescriptor& _desc;

@@ -14,6 +14,9 @@ public:
     virtual bool setMute(bool mute) = 0;
     virtual bool setFilterMode(uint8_t mode) { (void)mode; return false; }
 
+    virtual bool setDsdMode(bool enable) { (void)enable; return false; }
+    virtual bool isDsdMode() const { return false; }
+
     // Any device with HAL_CAP_DAC_PATH should override this.
     // Populates an AudioOutputSink with device-specific write/isReady callbacks.
     // Returns true if sink was populated successfully.

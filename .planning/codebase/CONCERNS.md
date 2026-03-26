@@ -221,10 +221,10 @@
 - **Impact:** Comfortable headroom for foreseeable use cases. No immediate action needed.
 - **Fix approach:** Monitor. If custom devices + expansion exceed 24, bump to 48.
 
-### Event Group Bits: 17/24 Used
+### Event Group Bits: 18/24 Used
 
 - **Severity:** Low
-- **Issue:** 17 of 24 usable FreeRTOS event group bits are assigned (bits 0-18 with bits 5 and 13 freed). 7 spare bits remain (5, 13, 19-23). Bits 24-31 are reserved by FreeRTOS.
+- **Issue:** 18 of 24 usable FreeRTOS event group bits are assigned (bits 0-19 with bits 5 and 13 freed). 6 spare bits remain (5, 13, 20-23). Bits 24-31 are reserved by FreeRTOS.
 - **Files:**
   - `src/app_events.h` (all EVT_* definitions)
 - **Impact:** Sufficient for ~7 more features. If exhausted, would need a second event group or alternative signaling mechanism.
@@ -301,6 +301,8 @@
 
 ### No Graceful Degradation for PSRAM Failure
 
+**Status: MITIGATED (2026-03-26)** — PsramAllocStats tracks fallbackCount/failedCount. 64KB SRAM cap prevents WiFi RX exhaustion. DIAG_SYS_PSRAM_ALLOC_FAIL emitted on failure. Full degraded-mode auto-downgrade deferred.
+
 - **Severity:** Low
 - **Issue:** If PSRAM fails at boot or becomes unreliable, the firmware attempts SRAM fallback (capped at 64KB via `psram_alloc()`), but many subsystems (ASRC, DSP FIR, LVGL GUI, audio float buffers) require more PSRAM than the SRAM fallback cap allows. A complete PSRAM failure would leave the device in a degraded but unpredictable state.
 - **Files:**
@@ -344,4 +346,4 @@
 
 ---
 
-*Concerns audit: 2026-03-26 — 4 critical/high resolved (prior), 10 medium resolved (CSP, server.send, setDsdMode, main.cpp extraction, constants, innerHTML, static_cast, watchdog, integration test, String), 3 low resolved (sprintf, worktrees, Strings). Remaining: 3 monitor-only (device slots, event bits, web pages monolith), 2 deferred-by-design (HTTPS, PSRAM degradation), 1 dormant (power mgmt API).*
+*Concerns audit: 2026-03-26 — All 24 items resolved or mitigated. 13 code fixes applied, 3 mitigated/monitor-only (PSRAM degradation, device slots, event bits), 3 deferred-by-design (HTTPS, power mgmt API, web monolith). Zero open action items.*
