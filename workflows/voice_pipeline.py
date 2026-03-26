@@ -647,7 +647,8 @@ def stage_archive(manifest, dry_run=False, verbose=False):
 
 
 # --- Shared concept listing ---
-WORKFLOW_ORDER = ["raw", "draft", "ready", "in-progress", "done"]
+WORKFLOW_ORDER = ["raw", "draft", "ready", "in-progress", "done", "archived"]
+ARCHIVE_DIR = BACKLOG_DIR / "archive"
 
 
 def list_concepts():
@@ -749,8 +750,16 @@ def command_promote():
         r"\g<1>`" + next_stage + "`",
         content,
     )
-    picked["file"].write_text(updated, encoding="utf-8")
-    log(f"\n  {picked['title']}: `{current}` -> `{next_stage}`")
+
+    if next_stage == "archived":
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        dest = ARCHIVE_DIR / picked["file"].name
+        picked["file"].write_text(updated, encoding="utf-8")
+        shutil.move(str(picked["file"]), str(dest))
+        log(f"\n  {picked['title']}: `{current}` -> `{next_stage}` (moved to archive/)")
+    else:
+        picked["file"].write_text(updated, encoding="utf-8")
+        log(f"\n  {picked['title']}: `{current}` -> `{next_stage}`")
 
 
 # --- Main ---

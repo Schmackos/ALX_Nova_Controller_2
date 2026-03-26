@@ -99,6 +99,7 @@ Each concept doc has a `Workflow` field tracking its lifecycle:
 | `ready` | Action items refined, ready for brainstorming |
 | `in-progress` | Being worked on (PRD, plan, execution) |
 | `done` | Fully executed and delivered |
+| `archived` | Completed and moved to `archive/` for reference |
 
 The generate stage only overwrites `raw` docs — once you edit a concept and change its workflow to `draft` or beyond, the pipeline will skip it.
 
