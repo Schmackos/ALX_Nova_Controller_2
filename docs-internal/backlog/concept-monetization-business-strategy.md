@@ -1,15 +1,15 @@
 # Concept: Monetization & Business Strategy
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Monetisation open source.m4a, Monitisation Scaling.m4a, Monetisation devices.m4a |
-| Transcripts | [monetization-business-strategy-transcripts.md](transcripts/monetization-business-strategy-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Monetisation open source.m4a, Monitisation Scaling.m4a, Monetisation devices.m4a | Auto-populated by pipeline |
+| Transcripts | [monetization-business-strategy-transcripts.md](transcripts/monetization-business-strategy-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 

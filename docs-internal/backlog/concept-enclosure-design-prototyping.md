@@ -1,15 +1,15 @@
 # Concept: Enclosure Design & Prototyping
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Enclosure creation.m4a |
-| Transcripts | [enclosure-design-prototyping-transcripts.md](transcripts/enclosure-design-prototyping-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Enclosure creation.m4a | Auto-populated by pipeline |
+| Transcripts | [enclosure-design-prototyping-transcripts.md](transcripts/enclosure-design-prototyping-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 

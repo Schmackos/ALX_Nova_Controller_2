@@ -1,15 +1,15 @@
 # Concept: Mezzanine Detection & Device Registry
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Mezzanine Detection Setup Methods.m4a, Carrier Board Mezzanine Setup online.m4a |
-| Transcripts | [mezzanine-detection-device-registry-transcripts.md](transcripts/mezzanine-detection-device-registry-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Mezzanine Detection Setup Methods.m4a, Carrier Board Mezzanine Setup online.m4a | Auto-populated by pipeline |
+| Transcripts | [mezzanine-detection-device-registry-transcripts.md](transcripts/mezzanine-detection-device-registry-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 

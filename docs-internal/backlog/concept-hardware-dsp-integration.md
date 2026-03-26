@@ -1,15 +1,15 @@
 # Concept: Hardware DSP Integration
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Hardware DSP.m4a, Analog devices adc and dac proprietary tooling needed.m4a, Lower bar for Analog Devices DSP.m4a |
-| Transcripts | [hardware-dsp-integration-transcripts.md](transcripts/hardware-dsp-integration-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Hardware DSP.m4a, Analog devices adc and dac proprietary tooling needed.m4a, Lower bar for Analog Devices DSP.m4a | Auto-populated by pipeline |
+| Transcripts | [hardware-dsp-integration-transcripts.md](transcripts/hardware-dsp-integration-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 

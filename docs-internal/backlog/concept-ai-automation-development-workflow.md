@@ -1,15 +1,15 @@
 # Concept: AI Automation & Development Workflow
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Aitomatic roadmap exexution.m4a, Github managing Issue, auto close and himan intervention.m4a, What are we missing in lroject structure.m4a |
-| Transcripts | [ai-automation-development-workflow-transcripts.md](transcripts/ai-automation-development-workflow-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Aitomatic roadmap exexution.m4a, Github managing Issue, auto close and himan intervention.m4a, What are we missing in lroject structure.m4a | Auto-populated by pipeline |
+| Transcripts | [ai-automation-development-workflow-transcripts.md](transcripts/ai-automation-development-workflow-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 

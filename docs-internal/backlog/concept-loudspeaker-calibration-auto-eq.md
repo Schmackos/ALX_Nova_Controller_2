@@ -1,15 +1,15 @@
 # Concept: Loudspeaker Calibration & Auto-EQ Platform
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Loudspeaker Calibration Platform.m4a, Auto EQ Software Feature Part 2 Basic and advacned.m4a |
-| Transcripts | [loudspeaker-calibration-auto-eq-transcripts.md](transcripts/loudspeaker-calibration-auto-eq-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Loudspeaker Calibration Platform.m4a, Auto EQ Software Feature Part 2 Basic and advacned.m4a | Auto-populated by pipeline |
+| Transcripts | [loudspeaker-calibration-auto-eq-transcripts.md](transcripts/loudspeaker-calibration-auto-eq-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 

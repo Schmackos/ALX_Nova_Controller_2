@@ -1,15 +1,15 @@
 # Concept: Mezzanine Expansion Hardware & Interfaces
 
-| Field | Value |
-|---|---|
-| Workflow | `raw` |
-| Priority | `---` |
-| Effort | `---` |
-| Success KPI | `---` |
-| Sources | Addon caed Amplifer Interfaces like pascal.m4a, Dante addon interface.m4a, New markets and missing add on cards.m4a |
-| Transcripts | [mezzanine-expansion-hardware-transcripts.md](transcripts/mezzanine-expansion-hardware-transcripts.md) |
-| Audio | [`inbox/processed/`](inbox/processed/) |
-| Last updated | 2026-03-26 |
+| Field | Value | Description |
+|---|---|---|
+| Workflow | `raw` | raw / draft / ready / in-progress / done / archived |
+| Priority | `---` | high / medium / low |
+| Effort | `---` | S / M / L / XL |
+| Success KPI | `---` | Measurable outcome, e.g. "3 boards detected in <2s" |
+| Sources | Addon caed Amplifer Interfaces like pascal.m4a, Dante addon interface.m4a, New markets and missing add on cards.m4a | Auto-populated by pipeline |
+| Transcripts | [mezzanine-expansion-hardware-transcripts.md](transcripts/mezzanine-expansion-hardware-transcripts.md) | Auto-populated by pipeline |
+| Audio | [`inbox/processed/`](inbox/processed/) | Auto-populated by pipeline |
+| Last updated | 2026-03-26 | YYYY-MM-DD |
 
 ## Problem / Opportunity
 
