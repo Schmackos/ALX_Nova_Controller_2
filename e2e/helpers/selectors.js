@@ -139,6 +139,47 @@ const SELECTORS = {
   siggenOutputMode: '#siggenOutputMode',
   siggenTargetAdc: '#siggenTargetAdc',
 
+  // THD measurement (Phase 7)
+  thdMeasureBtn: '#thdMeasureBtn',
+  thdStopBtn: '#thdStopBtn',
+  thdProgress: '#thdProgress',
+  thdProgressBar: '#thdProgressBar',
+  thdResults: '#thdResults',
+  thdResultPct: '#thdResultPct',
+  thdResultDb: '#thdResultDb',
+  thdHarmonicsTable: '#thdHarmonicsTable',
+
+  // DSP Presets panel (Phase 7)
+  dspPresetsPanel: '#dspPresetsPanel',
+  dspPresetSaveBtn: '[data-action="dsp-preset-save"]',
+  dspPresetLoadBtn: '[data-action="dsp-preset-load"]',
+  dspPresetDeleteBtn: '[data-action="dsp-preset-delete"]',
+  dspPresetNameInput: '#dspPresetNameInput',
+  dspPresetList: '#dspPresetList',
+  dspPresetItem: '.dsp-preset-item',
+
+  // PEQ Preset controls in PEQ overlay (Phase 7)
+  peqPresetSaveBtn: '[data-action="peq-preset-save"]',
+  peqPresetLoadBtn: '[data-action="peq-preset-load"]',
+  peqPresetDeleteBtn: '[data-action="peq-preset-delete"]',
+  peqPresetNameInput: '#peqPresetNameInput',
+  peqPresetList: '#peqPresetList',
+  peqPresetItem: '.peq-preset-item',
+
+  // A/B compare in PEQ overlay (Deferred)
+  peqAbToggle: '[data-action="peq-ab-toggle"]',
+  peqAbLabel: '#peqAbLabel',
+
+  // Copy from channel in PEQ overlay (Deferred)
+  peqCopyChannelSelect: '#peqCopyChannelSelect',
+  peqCopyChannelBtn: '[data-action="peq-copy-channel"]',
+
+  // Visualization panel (Phase 8)
+  vizPanel: '#vizPanel',
+  vizPanelToggle: '[data-action="toggle-viz-panel"]',
+  vizSnrReadout: (adcIdx) => `#snrReadout${adcIdx}`,
+  vizSfdrReadout: (adcIdx) => `#sfdrReadout${adcIdx}`,
+
   // ===== Devices (HAL) tab =====
   devicesPanel: '#devices',
   halDeviceList: '#hal-device-list',

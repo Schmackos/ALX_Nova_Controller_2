@@ -155,6 +155,40 @@ function handleCommand(type, data) {
     case 'setFftWindowType':
       return [];
 
+    // ===== THD Measurement =====
+    case 'startThdMeasurement':
+      // thdResult is a server-push event; tests that need it send it explicitly via wsRoute.send()
+      return [];
+
+    case 'stopThdMeasurement':
+      return [];
+
+    // ===== DSP Full Presets (WS path) =====
+    case 'saveDspPreset':
+      return [{ type: 'dspPresetList', presets: [{ name: data.name || 'Preset', slot: data.slot !== undefined ? data.slot : 0 }] }];
+
+    case 'loadDspPreset':
+      return [{ type: 'dspPresetLoaded', slot: data.slot !== undefined ? data.slot : 0, name: data.name || 'Preset' }];
+
+    case 'deleteDspPreset':
+      return [{ type: 'dspPresetList', presets: [] }];
+
+    case 'renameDspPreset':
+      return [{ type: 'dspPresetList', presets: [{ name: data.newName || 'Renamed', slot: data.slot !== undefined ? data.slot : 0 }] }];
+
+    // ===== PEQ Named Presets (WS path) =====
+    case 'savePeqPreset':
+      return [{ type: 'peqPresetList', presets: [{ name: data.name || 'PEQ Preset' }] }];
+
+    case 'loadPeqPreset':
+      return [{ type: 'peqPresetLoaded', name: data.name || 'PEQ Preset', bands: [] }];
+
+    case 'deletePeqPreset':
+      return [{ type: 'peqPresetList', presets: [] }];
+
+    case 'listPeqPresets':
+      return [{ type: 'peqPresetList', presets: [] }];
+
     default:
       return [];
   }
