@@ -64,6 +64,44 @@ const SELECTORS = {
   deviceGroupHeader: '.device-group-header',
   deviceGroupStatus: '.device-group-status',
 
+  // Matrix grid (Phase 4)
+  matrixTable: '.matrix-table',
+  matrixCell: (outCh, inCh) => `.matrix-cell[data-out="${outCh}"][data-in="${inCh}"]`,
+  matrixActiveCell: '.matrix-cell.matrix-active',
+  matrixRowHdr: '.matrix-row-hdr',
+  matrixRowDevHdr: '.matrix-row-dev-hdr',
+  matrixColHdr: '.matrix-table thead th.matrix-col-hdr',
+  matrixDevHdr: '.matrix-table thead th.matrix-dev-hdr',
+  matrixCorner: '.matrix-corner',
+  matrixGainPopup: '#matrixGainPopup',
+  matrixGainSlider: '#matrixGainSlider',
+  matrixGainDbVal: '#matrixGainDbVal',
+
+  // PEQ overlay (Phase 5)
+  peqOverlay: '#peqOverlay',
+  peqCanvas: '#peqOverlayCanvas',
+  peqBandRows: '#peqBandRows',
+  peqOverlayTitle: '.peq-overlay-title',
+  peqOverlayClose: '.peq-overlay-close',
+
+  // DSP overlay actions (Phase 6)
+  dspOpenInputPeq: (lane) => `[data-action="open-input-peq"][data-lane="${lane}"]`,
+  dspOpenOutputPeq: (ch) => `[data-action="open-output-peq"][data-channel="${ch}"]`,
+  dspOpenCrossover: (ch) => `[data-action="open-output-crossover"][data-channel="${ch}"]`,
+  dspOpenCompressor: (ch) => `[data-action="open-output-compressor"][data-channel="${ch}"]`,
+  dspOpenLimiter: (ch) => `[data-action="open-output-limiter"][data-channel="${ch}"]`,
+  xoverType: '#xoverType',
+  xoverFreq: '#xoverFreq',
+  compThreshold: '#compThreshold',
+  compRatio: '#compRatio',
+  compAttack: '#compAttack',
+  compRelease: '#compRelease',
+  compKnee: '#compKnee',
+  compMakeup: '#compMakeup',
+  limThreshold: '#limThreshold',
+  limAttack: '#limAttack',
+  limRelease: '#limRelease',
+
   // Channel labels (inline edit)
   channelLabel: (lane) => `.channel-label[data-lane="${lane}"]`,
 

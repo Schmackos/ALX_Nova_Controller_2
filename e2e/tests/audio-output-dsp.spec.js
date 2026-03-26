@@ -13,6 +13,11 @@ test.describe('@audio Audio Output DSP', () => {
     await page.locator('.audio-subnav-btn[data-view="outputs"]').click();
     await expect(page.locator('#audio-sv-outputs')).toHaveClass(/active/);
     await expect(page.locator('#audio-outputs-container')).not.toContainText('Waiting for device data...', { timeout: 5000 });
+    // DSP buttons are inside the collapsible drawer — open the first one
+    const drawerToggle = page.locator('#audio-outputs-container [data-action="toggle-output-dsp-drawer"]').first();
+    if (await drawerToggle.count() > 0) {
+      await drawerToggle.click();
+    }
   });
 
   test('output DSP PEQ button opens overlay', async ({ connectedPage: page }) => {

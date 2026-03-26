@@ -298,7 +298,11 @@
     "src/drivers/es9017_regs.h",
     "src/rate_limiter.h",
     "src/rate_limiter.cpp",
-    "src/state/health_check_state.h"
+    "src/state/health_check_state.h",
+    "src/diagnostics_loop.h",
+    "src/diagnostics_loop.cpp",
+    "src/routes.h",
+    "src/routes.cpp"
   ],
   "sectionToPromptType": {
     "api/rest-main": "api-reference",

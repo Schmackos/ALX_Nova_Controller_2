@@ -19,6 +19,7 @@
 #include "eth_manager.h"
 #include "websocket_handler.h"
 #include "audio_pipeline.h"
+#include "audio_output_sink.h"
 #ifdef DSP_ENABLED
 #include "dsp_api.h"
 #include "dsp_pipeline.h"

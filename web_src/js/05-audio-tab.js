@@ -256,12 +256,45 @@
                 html += '  </div>';
             }
 
-            // DSP placeholder button
-            html += '  <div class="channel-dsp-row">';
-            html += '    <button class="channel-btn channel-btn-wide" data-action="open-input-peq" data-lane="' + lane + '">';
-            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
-            html += '      DSP';
-            html += '    </button>';
+            // DSP section: summary line + expandable drawer
+            html += '  <div class="channel-dsp-section" id="inputDspSection' + lane + '">';
+            html += '    <div class="channel-dsp-summary" data-action="toggle-input-dsp-drawer" data-lane="' + lane + '">';
+            html += '      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+            html += '      <span class="dsp-summary-text" id="inputDspSummary' + lane + '">DSP</span>';
+            html += '      <svg class="dsp-drawer-chevron" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
+            html += '    </div>';
+            html += '    <div class="channel-dsp-drawer" id="inputDspDrawer' + lane + '" style="display:none">';
+            // PEQ region
+            html += '      <div class="dsp-drawer-region">';
+            html += '        <div class="dsp-drawer-region-label">PEQ</div>';
+            html += '        <button class="channel-btn channel-btn-wide" data-action="open-input-peq" data-lane="' + lane + '">';
+            html += '          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+            html += '          Edit PEQ</button>';
+            html += '      </div>';
+            // Chain region
+            html += '      <div class="dsp-drawer-region">';
+            html += '        <div class="dsp-drawer-region-label">Chain</div>';
+            html += '        <div class="dsp-stage-list" id="inputStageList' + lane + '"></div>';
+            html += '        <div class="dsp-add-stage-row">';
+            html += '          <div class="dsp-add-stage-wrap" style="position:relative">';
+            html += '            <button class="channel-btn" data-action="toggle-input-add-stage" data-lane="' + lane + '" title="Add DSP stage">';
+            html += '              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg> Add</button>';
+            html += '            <div class="dsp-add-stage-menu" id="inputAddStageMenu' + lane + '" style="display:none">';
+            html += '              <div class="dsp-add-stage-group-label">Common</div>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="compressor">Compressor</button>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="limiter">Limiter</button>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="noise-gate">Noise Gate</button>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="fir">FIR Filter</button>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="wav-ir">WAV IR (Convolution)</button>';
+            html += '              <div class="dsp-add-stage-group-label">Advanced</div>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="linkwitz">Linkwitz Transform</button>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="multiband">Multi-band Comp</button>';
+            html += '              <button class="dsp-add-stage-item" data-action="add-input-stage" data-lane="' + lane + '" data-type="biquad">Custom Biquad</button>';
+            html += '            </div>';
+            html += '          </div>';
+            html += '        </div>';
+            html += '      </div>';
+            html += '    </div>';
             html += '  </div>';
 
             html += '</div>';
@@ -385,105 +418,201 @@
             html += '    <button class="channel-btn" id="outputPhase' + idx + '" data-action="toggle-output-phase" data-sink="' + idx + '">\u00d8</button>';
             html += '  </div>';
 
-            // DSP section
-            html += '  <div class="channel-dsp-section">';
-
-            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-peq" data-channel="' + out.firstChannel + '">';
-            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
-            html += '      PEQ 10-band</button>';
-
-            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-crossover" data-channel="' + out.firstChannel + '">';
-            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>';
-            html += '      Crossover</button>';
-
-            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-compressor" data-channel="' + out.firstChannel + '">';
-            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M5,4V7H10.5V19H13.5V7H19V4H5Z"/></svg>';
-            html += '      Compressor</button>';
-
-            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-limiter" data-channel="' + out.firstChannel + '">';
-            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2,12A10,10 0 0,1 12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12M4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12M7,12L12,7V17L7,12Z"/></svg>';
-            html += '      Limiter</button>';
-
-            // Delay input
-            html += '    <div class="channel-control-row" style="margin-top:6px;">';
-            html += '      <label class="channel-control-label">Delay</label>';
-            html += '      <input type="number" class="channel-delay-input" id="outputDelay' + out.firstChannel + '" min="0" max="10" step="0.01" value="0.00"';
-            html += '        data-action="output-delay" data-channel="' + out.firstChannel + '">';
-            html += '      <span class="channel-gain-value">ms</span>';
+            // DSP section: summary line + expandable drawer
+            html += '  <div class="channel-dsp-section" id="outputDspSection' + idx + '">';
+            html += '    <div class="channel-dsp-summary" data-action="toggle-output-dsp-drawer" data-sink="' + idx + '">';
+            html += '      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+            html += '      <span class="dsp-summary-text" id="outputDspSummary' + idx + '">DSP</span>';
+            html += '      <svg class="dsp-drawer-chevron" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
             html += '    </div>';
-
+            html += '    <div class="channel-dsp-drawer" id="outputDspDrawer' + idx + '" style="display:none">';
+            html += '      <div class="dsp-drawer-region">';
+            html += '        <button class="channel-btn channel-btn-wide" data-action="open-output-peq" data-channel="' + out.firstChannel + '">';
+            html += '          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+            html += '          PEQ</button>';
+            html += '        <button class="channel-btn channel-btn-wide" data-action="open-output-crossover" data-channel="' + out.firstChannel + '">';
+            html += '          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>';
+            html += '          Crossover</button>';
+            html += '        <button class="channel-btn channel-btn-wide" data-action="open-output-compressor" data-channel="' + out.firstChannel + '">';
+            html += '          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M5,4V7H10.5V19H13.5V7H19V4H5Z"/></svg>';
+            html += '          Compressor</button>';
+            html += '        <button class="channel-btn channel-btn-wide" data-action="open-output-limiter" data-channel="' + out.firstChannel + '">';
+            html += '          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M2,12A10,10 0 0,1 12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12M4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12M7,12L12,7V17L7,12Z"/></svg>';
+            html += '          Limiter</button>';
+            html += '      </div>';
+            html += '    </div>';
             html += '  </div>';
+
+            // Delay input (always visible below DSP section)
+            html += '  <div class="channel-control-row" style="margin-top:6px;">';
+            html += '    <label class="channel-control-label">Delay</label>';
+            html += '    <input type="number" class="channel-delay-input" id="outputDelay' + out.firstChannel + '" min="0" max="10" step="0.01" value="0.00"';
+            html += '      data-action="output-delay" data-channel="' + out.firstChannel + '">';
+            html += '    <span class="channel-gain-value">ms</span>';
+            html += '  </div>';
+
             html += '</div>';
             return html;
         }
 
         // ===== Matrix Grid =====
+        // Builds per-column metadata: { label, deviceName, deviceSpanStart, deviceSpanLen }
+        function _buildMatrixColMeta(matSize, outputs) {
+            var cols = [];
+            for (var o = 0; o < matSize; o++) {
+                var label = 'OUT ' + (o + 1);
+                var deviceName = '';
+                for (var si = 0; si < outputs.length; si++) {
+                    var sk = outputs[si];
+                    if (o >= sk.firstChannel && o < sk.firstChannel + sk.channels) {
+                        var chOff = o - sk.firstChannel;
+                        label = (sk.channels > 1 ? (chOff === 0 ? 'L' : 'R') : 'Ch');
+                        deviceName = sk.name || '';
+                        break;
+                    }
+                }
+                cols.push({ label: label, deviceName: deviceName });
+            }
+            // Annotate device span boundaries
+            var lastDev = null;
+            for (var i = 0; i < cols.length; i++) {
+                if (cols[i].deviceName !== lastDev) {
+                    cols[i].spanStart = true;
+                    // Count span length
+                    var spanLen = 1;
+                    while (i + spanLen < cols.length && cols[i + spanLen].deviceName === cols[i].deviceName) spanLen++;
+                    cols[i].spanLen = spanLen;
+                    lastDev = cols[i].deviceName;
+                } else {
+                    cols[i].spanStart = false;
+                    cols[i].spanLen = 0;
+                }
+            }
+            return cols;
+        }
+
+        // Builds per-row metadata: { label, deviceName, matrixCh }
+        function _buildMatrixRowMeta(matSize, inputs) {
+            // Build a mapping from matrixCh -> input lane info
+            var chToInput = {};
+            for (var li = 0; li < inputs.length; li++) {
+                var inp = inputs[li];
+                var baseCh = inp.matrixCh !== undefined ? inp.matrixCh : li * 2;
+                var numCh = inp.channels || 2;
+                for (var c = 0; c < numCh; c++) {
+                    chToInput[baseCh + c] = { inp: inp, chOffset: c };
+                }
+            }
+            var rows = [];
+            for (var r = 0; r < matSize; r++) {
+                var info = chToInput[r];
+                if (info) {
+                    var chLabel = info.inp.channels > 1 ? (info.chOffset === 0 ? 'L' : 'R') : '';
+                    rows.push({ label: chLabel, deviceName: info.inp.deviceName || ('IN ' + (r + 1)), matrixCh: r });
+                } else {
+                    rows.push({ label: '', deviceName: 'IN ' + (r + 1), matrixCh: r });
+                }
+            }
+            // Annotate device span boundaries for row group headers
+            var lastRowDev = null;
+            for (var j = 0; j < rows.length; j++) {
+                if (rows[j].deviceName !== lastRowDev) {
+                    rows[j].groupStart = true;
+                    var rowSpanLen = 1;
+                    while (j + rowSpanLen < rows.length && rows[j + rowSpanLen].deviceName === rows[j].deviceName) rowSpanLen++;
+                    rows[j].groupSpan = rowSpanLen;
+                    lastRowDev = rows[j].deviceName;
+                } else {
+                    rows[j].groupStart = false;
+                    rows[j].groupSpan = 0;
+                }
+            }
+            return rows;
+        }
+
         function renderMatrixGrid() {
             var container = document.getElementById('audio-matrix-container');
             if (!container || !audioChannelMap) return;
+
+            // Re-render guard
+            var hash = _audioChannelHash(audioChannelMap) + '|matrix';
+            if (container.dataset.rendered === hash) return;
 
             var matSize = audioChannelMap.matrixInputs || 8;
             var inputs = audioChannelMap.inputs || [];
             var outputs = audioChannelMap.outputs || [];
             var matrixGains = audioChannelMap.matrix || [];
 
-            // Build column headers from output sinks
-            var colLabels = [];
-            for (var o = 0; o < matSize; o++) {
-                var label = 'OUT ' + (o + 1);
-                for (var si = 0; si < outputs.length; si++) {
-                    var sk = outputs[si];
-                    if (o >= sk.firstChannel && o < sk.firstChannel + sk.channels) {
-                        var chOff = o - sk.firstChannel;
-                        label = sk.name + (sk.channels > 1 ? (chOff === 0 ? ' L' : ' R') : '');
-                        break;
-                    }
-                }
-                colLabels.push(label);
-            }
+            var cols = _buildMatrixColMeta(matSize, outputs);
+            var rows = _buildMatrixRowMeta(matSize, inputs);
 
-            // Build row labels from input lanes
-            var rowLabels = [];
-            for (var r = 0; r < matSize; r++) {
-                var laneIdx = Math.floor(r / 2);
-                var ch = r % 2;
-                if (laneIdx < inputs.length) {
-                    rowLabels.push(inputs[laneIdx].deviceName + (ch === 0 ? ' L' : ' R'));
-                } else {
-                    rowLabels.push('IN ' + (r + 1));
-                }
-            }
+            var html = '<div class="matrix-scroll-wrap"><table class="matrix-table">';
 
-            var html = '<table class="matrix-table"><thead><tr><th></th>';
+            // thead: two header rows — device group row + channel label row
+            html += '<thead>';
+
+            // Row 1: corner + OUTPUTS axis label + device group spans
+            html += '<tr>';
+            html += '<th class="matrix-corner" rowspan="2">INPUTS \\ OUTPUTS</th>';
             for (var c = 0; c < matSize; c++) {
-                html += '<th class="matrix-col-hdr">' + escapeHtml(colLabels[c]) + '</th>';
+                if (cols[c].spanStart) {
+                    html += '<th class="matrix-dev-hdr" colspan="' + cols[c].spanLen + '">' + escapeHtml(cols[c].deviceName || 'OUT') + '</th>';
+                }
             }
-            html += '</tr></thead><tbody>';
+            html += '</tr>';
 
+            // Row 2: per-channel labels (L/R/Ch)
+            html += '<tr>';
+            for (var c2 = 0; c2 < matSize; c2++) {
+                html += '<th class="matrix-col-hdr" title="' + escapeHtml(cols[c2].deviceName + ' ' + cols[c2].label) + '">' + escapeHtml(cols[c2].label) + '</th>';
+            }
+            html += '</tr>';
+
+            html += '</thead>';
+
+            // tbody: one row per matrix input channel
+            html += '<tbody>';
             for (var row = 0; row < matSize; row++) {
-                html += '<tr><td class="matrix-row-hdr">' + escapeHtml(rowLabels[row]) + '</td>';
+                var rowMeta = rows[row];
+                html += '<tr>';
+
+                // Device group cell (merged rows)
+                if (rowMeta.groupStart) {
+                    html += '<td class="matrix-row-dev-hdr" rowspan="' + rowMeta.groupSpan + '">' + escapeHtml(rowMeta.deviceName) + '</td>';
+                }
+                // Channel label cell (always)
+                // We use a separate <td> for channel L/R label alongside group cell
+                // but only if this row's group started — otherwise we only have channel cell
+                // Actually: group cell takes one column, channel label takes another
+                // Structure: [group-dev] [chan-label] [cells...]
+                // But rowspan means we can't nest. Use class approach:
+                // When groupStart: td.matrix-row-dev-hdr rowspan=N, then td.matrix-row-ch
+                // When not groupStart: td.matrix-row-ch only
+                html += '<td class="matrix-row-hdr">' + escapeHtml(rowMeta.label) + '</td>';
+
                 for (var col = 0; col < matSize; col++) {
                     var gain = (matrixGains[col] && matrixGains[col][row] !== undefined) ? parseFloat(matrixGains[col][row]) : 0;
                     var active = gain > 0.0001 || gain < -0.0001;
                     var displayVal = active ? (gain >= 1.0 ? '+' + (20 * Math.log10(gain)).toFixed(1) : (20 * Math.log10(Math.max(gain, 0.0001))).toFixed(1)) : '--';
                     var cellClass = 'matrix-cell' + (active ? ' matrix-active' : '');
-                    html += '<td class="' + cellClass + '" data-out="' + col + '" data-in="' + row + '" data-action="matrix-cell">';
-                    html += displayVal;
-                    html += '</td>';
+                    html += '<td class="' + cellClass + '" data-out="' + col + '" data-in="' + row + '" data-action="matrix-cell" tabindex="0" role="button" aria-label="Route IN ' + (row + 1) + ' to OUT ' + (col + 1) + ': ' + (active ? displayVal + ' dB' : 'off') + '">' + displayVal + '</td>';
                 }
                 html += '</tr>';
             }
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
 
             // Quick presets
             html += '<div class="matrix-presets">';
             html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-preset-1to1">1:1 Pass</button>';
+            html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-preset-stereo-all">Stereo\u2192All</button>';
             html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-preset-clear">Clear All</button>';
             html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-save">Save</button>';
             html += '  <button class="btn btn-secondary btn-sm" data-action="matrix-load">Load</button>';
             html += '</div>';
 
             container.innerHTML = html;
+            container.dataset.rendered = hash;
+            delete container.dataset.emptyRendered;
         }
 
         // ===== Matrix Cell Click — Popup Gain Slider =====
@@ -573,6 +702,17 @@
         function matrixPreset1to1() {
             var size = (audioChannelMap && audioChannelMap.matrixInputs) || 8;
             for (var i = 0; i < size; i++) setMatrixGainDb(i, i, 0);
+        }
+        // Stereo->All: routes stereo pair (IN 0/1) to every output pair at 0 dB.
+        // Each output pair gets IN0->L and IN1->R.
+        function matrixPresetStereoAll() {
+            var size = (audioChannelMap && audioChannelMap.matrixInputs) || 8;
+            for (var o = 0; o < size; o++) {
+                // Clear entire column first
+                for (var i = 0; i < size; i++) setMatrixGainDb(o, i, -96);
+                // Route IN0 to even outputs, IN1 to odd outputs
+                setMatrixGainDb(o, o % 2, 0);
+            }
         }
         function matrixPresetClear() {
             var size = (audioChannelMap && audioChannelMap.matrixInputs) || 8;
@@ -792,8 +932,73 @@
             }
         }
 
+        // ===== DSP Drawer Toggle =====
+        function toggleInputDspDrawer(lane) {
+            var drawer = document.getElementById('inputDspDrawer' + lane);
+            if (!drawer) return;
+            var open = drawer.style.display === 'none' || drawer.style.display === '';
+            drawer.style.display = open ? 'block' : 'none';
+            var section = document.getElementById('inputDspSection' + lane);
+            if (section) section.classList.toggle('dsp-drawer-open', open);
+        }
+
+        function toggleOutputDspDrawer(sinkIdx) {
+            var drawer = document.getElementById('outputDspDrawer' + sinkIdx);
+            if (!drawer) return;
+            var open = drawer.style.display === 'none' || drawer.style.display === '';
+            drawer.style.display = open ? 'block' : 'none';
+            var section = document.getElementById('outputDspSection' + sinkIdx);
+            if (section) section.classList.toggle('dsp-drawer-open', open);
+        }
+
+        function toggleInputAddStageMenu(lane) {
+            var menu = document.getElementById('inputAddStageMenu' + lane);
+            if (!menu) return;
+            var open = menu.style.display === 'none' || menu.style.display === '';
+            menu.style.display = open ? 'block' : 'none';
+
+            if (open) {
+                // Close menu when clicking outside
+                function onOutsideClick(e) {
+                    if (!menu.contains(e.target)) {
+                        menu.style.display = 'none';
+                        document.removeEventListener('click', onOutsideClick);
+                    }
+                }
+                setTimeout(function() {
+                    document.addEventListener('click', onOutsideClick);
+                }, 10);
+            }
+        }
+
+        // Called when user picks a stage type from the add-stage dropdown
+        function onAddInputStage(lane, type) {
+            var menu = document.getElementById('inputAddStageMenu' + lane);
+            if (menu) menu.style.display = 'none';
+
+            if (type === 'compressor') {
+                openInputCompressor(lane);
+            } else if (type === 'limiter') {
+                openInputLimiter(lane);
+            } else if (type === 'noise-gate') {
+                openInputNoiseGate(lane);
+            } else if (type === 'fir') {
+                openInputFirUpload(lane);
+            } else if (type === 'wav-ir') {
+                openInputWavIr(lane);
+            } else if (type === 'linkwitz') {
+                openInputLinkwitz(lane);
+            } else if (type === 'multiband') {
+                openInputMultibandComp(lane);
+            } else if (type === 'biquad') {
+                openInputCustomBiquad(lane);
+            }
+        }
+
         // PEQ / DSP overlay openers defined in 06-peq-overlay.js:
         // openInputPeq, openOutputPeq, openOutputCrossover, openOutputCompressor, openOutputLimiter
+        // openInputCompressor, openInputLimiter, openInputNoiseGate, openInputFirUpload,
+        // openInputWavIr, openInputLinkwitz, openInputMultibandComp, openInputCustomBiquad
 
         // ===== VU Meter Drawing for Channel Strips =====
         function drawChannelVu(canvasId, value) {
@@ -892,6 +1097,14 @@
                     startChannelLabelEdit(parseInt(el.dataset.lane));
                 } else if (action === 'open-input-peq') {
                     openInputPeq(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-input-dsp-drawer') {
+                    toggleInputDspDrawer(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-output-dsp-drawer') {
+                    toggleOutputDspDrawer(parseInt(el.dataset.sink));
+                } else if (action === 'toggle-input-add-stage') {
+                    toggleInputAddStageMenu(parseInt(el.dataset.lane));
+                } else if (action === 'add-input-stage') {
+                    onAddInputStage(parseInt(el.dataset.lane), el.dataset.type);
                 } else if (action === 'toggle-output-mute') {
                     toggleOutputMute(parseInt(el.dataset.sink));
                 } else if (action === 'toggle-output-phase') {
@@ -908,6 +1121,8 @@
                     onMatrixCellClick(parseInt(el.dataset.out), parseInt(el.dataset.in));
                 } else if (action === 'matrix-preset-1to1') {
                     matrixPreset1to1();
+                } else if (action === 'matrix-preset-stereo-all') {
+                    matrixPresetStereoAll();
                 } else if (action === 'matrix-preset-clear') {
                     matrixPresetClear();
                 } else if (action === 'matrix-save') {

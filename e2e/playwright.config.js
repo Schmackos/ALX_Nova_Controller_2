@@ -20,7 +20,7 @@ module.exports = defineConfig({
   },
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     actionTimeout: 10000,
@@ -39,7 +39,7 @@ module.exports = defineConfig({
 
   webServer: {
     command: 'node mock-server/server.js',
-    url: 'http://localhost:3000',
+    url: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 10000,
   },

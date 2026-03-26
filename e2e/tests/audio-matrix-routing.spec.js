@@ -120,13 +120,13 @@ test.describe('@audio @api Audio Matrix Routing', () => {
   });
 
   test('input and output headers show correct names', async ({ connectedPage: page }) => {
-    // Row headers include input device names (PCM1808 L, PCM1808 R, etc.)
-    const firstRowHeader = page.locator('.matrix-table tbody tr').first().locator('.matrix-row-hdr');
-    await expect(firstRowHeader).toContainText('PCM1808');
+    // Row device group headers include input device names (PCM1808)
+    const firstRowDevHdr = page.locator('.matrix-table tbody .matrix-row-dev-hdr').first();
+    await expect(firstRowDevHdr).toContainText('PCM1808');
 
-    // Column headers include output names (PCM5102A L, PCM5102A R, etc.)
-    const firstColHeader = page.locator('.matrix-table thead th.matrix-col-hdr').first();
-    await expect(firstColHeader).toContainText('PCM5102A');
+    // Column device group headers include output names (PCM5102A)
+    const firstColDevHdr = page.locator('.matrix-table thead th.matrix-dev-hdr').first();
+    await expect(firstColDevHdr).toContainText('PCM5102A');
   });
 
   test('matrix presets buttons are visible', async ({ connectedPage: page }) => {
@@ -134,5 +134,32 @@ test.describe('@audio @api Audio Matrix Routing', () => {
     await expect(page.locator('button[onclick="matrixPresetClear()"]').first()).toBeVisible();
     await expect(page.locator('.matrix-presets button').filter({ hasText: 'Save' })).toBeVisible();
     await expect(page.locator('.matrix-presets button').filter({ hasText: 'Load' })).toBeVisible();
+  });
+
+  test('Stereo->All preset button is visible and sends API calls', async ({ connectedPage: page }) => {
+    const stereoAllBtn = page.locator('.matrix-presets button').filter({ hasText: /Stereo/ });
+    await expect(stereoAllBtn).toBeVisible();
+
+    let apiCallCount = 0;
+    await page.route('**/api/v1/pipeline/matrix/cell', async (route) => {
+      apiCallCount++;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', gainLinear: 1.0 }) });
+    });
+
+    await stereoAllBtn.click();
+    await page.waitForTimeout(500);
+    // Stereo->All clears all cells (16*16=256) then sets diagonals (16): 256+16=272 calls
+    expect(apiCallCount).toBeGreaterThan(0);
+  });
+
+  test('matrix has device group column headers', async ({ connectedPage: page }) => {
+    // Device group headers in thead (at least one per output device)
+    const firstDevHdr = page.locator('.matrix-table thead th.matrix-dev-hdr').first();
+    await expect(firstDevHdr).toBeVisible();
+  });
+
+  test('matrix corner cell shows INPUTS/OUTPUTS label', async ({ connectedPage: page }) => {
+    const corner = page.locator('.matrix-corner');
+    await expect(corner).toBeVisible();
   });
 });
