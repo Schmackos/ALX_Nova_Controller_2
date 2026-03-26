@@ -11,7 +11,7 @@
 #ifdef DAC_ENABLED
 #include "hal/hal_device_manager.h"
 #include "hal/hal_audio_health_bridge.h"
-#include "hal/hal_cirrus_dac_2ch.h"
+#include "hal/hal_audio_device.h"
 #endif
 #include <Arduino.h>
 
@@ -108,14 +108,10 @@ void diagnostics_loop_tick() {
         if (!sink || !sink->supportsDsd || sink->halSlot == 0xFF) continue;
         HalDevice* dev = HalDeviceManager::instance().getDevice(sink->halSlot);
         if (!dev) continue;
-        // Only Cirrus 2ch DACs expose setDsdMode() — use capability + compatible
-        // string check instead of dynamic_cast (RTTI disabled with -fno-rtti)
-        const auto& desc = dev->getDescriptor();
-        if ((desc.capabilities & HAL_CAP_DSD) &&
-            strncmp(desc.compatible, "cirrus,", 7) == 0) {
-          // SAFETY: guarded by HAL_CAP_DSD + compatible "cirrus," prefix above;
-          // only HalCirrusDac2ch devices match both conditions.
-          static_cast<HalCirrusDac2ch*>(dev)->setDsdMode(anyDsd);
+        if (!(dev->getDescriptor().capabilities & HAL_CAP_DSD)) continue;
+        // Safe upcast: DSD-capable devices are always HalAudioDevice subclasses
+        if (dev->getType() == HAL_DEV_DAC || dev->getType() == HAL_DEV_CODEC) {
+          static_cast<HalAudioDevice*>(dev)->setDsdMode(anyDsd);
         }
       }
     }
