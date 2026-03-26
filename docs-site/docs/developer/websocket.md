@@ -609,7 +609,7 @@ When `state == 5` and `errorReason` is present, display it in the device card so
 
 ### `audioLevels`
 
-Sent on each audio analysis cycle for all subscribed clients. Contains per-lane per-channel VU, peak, RMS, and Vrms readings plus output sink VU data.
+Sent on each audio analysis cycle for all subscribed clients. Contains per-lane per-channel VU, peak, RMS, and Vrms readings, SNR/SFDR measurements, and output sink VU data.
 
 ```json
 {
@@ -623,7 +623,9 @@ Sent on each audio analysis cycle for all subscribed clients. Contains per-lane 
       "peak1": 0.61, "peak2": 0.58,
       "rms1": 0.31, "rms2": 0.29,
       "vrms1": 0.45, "vrms2": 0.43,
-      "dBFS": -18.5
+      "dBFS": -18.5,
+      "snrDb": 68.2,
+      "sfdrDb": 74.1
     }
   ],
   "adcStatus": ["OK", "NO_DATA"],
@@ -633,6 +635,11 @@ Sent on each audio analysis cycle for all subscribed clients. Contains per-lane 
   ]
 }
 ```
+
+| Field (per `adc[]` entry) | Type | Description |
+|---------------------------|------|-------------|
+| `snrDb` | float | Signal-to-noise ratio in dB. `-1` when no signal is present |
+| `sfdrDb` | float | Spurious-free dynamic range in dB (distance to worst spur). `-1` when unmeasured |
 
 | `adcStatus` value | Meaning |
 |---|---|
@@ -805,6 +812,57 @@ Confirmation after `savePeqPreset`.
   "name": "my-preset"
 }
 ```
+
+### `dspPresetSaved` / `dspPresetLoaded` / `dspPresetDeleted` / `dspPresetRenamed`
+
+Targeted confirmations sent only to the requesting client after DSP preset operations. The `dspState` broadcast is also sent to all clients after a successful load so every tab updates immediately.
+
+```json
+{ "type": "dspPresetSaved",   "slot": 0, "name": "Flat" }
+{ "type": "dspPresetLoaded",  "slot": 0, "name": "Flat" }
+{ "type": "dspPresetDeleted", "slot": 0 }
+{ "type": "dspPresetRenamed", "slot": 0, "name": "New Name" }
+```
+
+| Field | Type | Present in | Description |
+|-------|------|-----------|-------------|
+| `slot` | integer | all | Preset slot index (0–31) |
+| `name` | string | Saved, Loaded, Renamed | Human-readable preset name |
+
+### `thdResult`
+
+Server push emitted when a THD+N measurement completes (or is stopped early with partial results). Not sent to a specific client — broadcast to all authenticated clients so any open Audio tab can display the result.
+
+```json
+{
+  "type": "thdResult",
+  "valid": true,
+  "measuring": false,
+  "testFreq": 1000.0,
+  "thdPlusNPercent": 0.042,
+  "thdPlusNDb": -67.5,
+  "fundamentalDbfs": -12.0,
+  "framesProcessed": 4096,
+  "framesTarget": 4096,
+  "harmonicLevels": [-72.1, -78.4, -85.2, -89.0, -91.5]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `valid` | boolean | `true` if enough frames were captured for a reliable result |
+| `measuring` | boolean | `false` when the measurement has finished |
+| `testFreq` | float | Fundamental frequency that was measured (Hz) |
+| `thdPlusNPercent` | float | THD+N expressed as a percentage |
+| `thdPlusNDb` | float | THD+N expressed in dB relative to fundamental |
+| `fundamentalDbfs` | float | Measured fundamental level (dBFS) |
+| `framesProcessed` | integer | Frames captured when result was computed |
+| `framesTarget` | integer | Target frame count requested (`averages` × DMA buffer size) |
+| `harmonicLevels` | float[] | Per-harmonic levels in dBFS — index 0 = 2nd harmonic, index 4 = 6th harmonic |
+
+:::note
+`harmonicLevels` always contains 5 entries (harmonics 2–6). Entries are `-144.0` (below noise floor) when that harmonic cannot be resolved. The fundamental (1st harmonic) is reported separately as `fundamentalDbfs`.
+:::
 
 ### `dspError`
 

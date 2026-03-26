@@ -42,7 +42,7 @@ cd docs-site && npm install && npm run build && npm run serve
 ## Architecture
 
 ### State Management — AppState Singleton
-15 domain-specific headers under `src/state/`, composed into `AppState` singleton. Access via `appState.domain.field` (e.g., `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.dsp.enabled`). Dirty flags (e.g., `isBuzzerDirty()`) minimize WS/MQTT broadcasts. Every dirty setter also calls `app_events_signal(EVT_XXX)` so the main loop wakes immediately via `app_events_wait(5)`. Event group: 24 usable bits, 17 assigned (bits 0-18, with bits 5 and 13 freed), 7 spare (`src/app_events.h`). `EVT_FORMAT_CHANGE` (bit 18) signals sample rate mismatch or DoP DSD detection.
+15 domain-specific headers under `src/state/`, composed into `AppState` singleton. Access via `appState.domain.field` (e.g., `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.dsp.enabled`). Dirty flags (e.g., `isBuzzerDirty()`) minimize WS/MQTT broadcasts. Every dirty setter also calls `app_events_signal(EVT_XXX)` so the main loop wakes immediately via `app_events_wait(5)`. Event group: 24 usable bits, 18 assigned (bits 0-19, with bits 5 and 13 freed), 6 spare (`src/app_events.h`). `EVT_FORMAT_CHANGE` (bit 18) signals sample rate mismatch or DoP DSD detection. `EVT_THD` (bit 19) signals THD measurement completion.
 
 DAC device state (enabled, volume, mute, filterMode) lives in `HalDeviceConfig` via HAL manager — not in DacState. Device toggles use `appState.halCoord.requestDeviceToggle(halSlot, action)`.
 
@@ -53,7 +53,7 @@ DAC device state (enabled, volume, mute, filterMode) lives in `HalDeviceConfig` 
 
 **Network**: `wifi_manager.cpp` (multi-network, AP mode), `mqtt_handler.cpp` + `mqtt_publish.cpp` + `mqtt_ha_discovery.cpp` (TLS, HA auto-discovery), `mqtt_task.cpp` (Core 0, 20Hz), `ota_updater.cpp` (SHA256 verified)
 
-**Web UI**: `web_pages.cpp`/`web_pages_gz.cpp` (**auto-generated — edit `web_src/` then run `node tools/build_web_assets.js`**). WebSocket: `websocket_command.cpp`, `websocket_broadcast.cpp`, `websocket_auth.cpp` (port 81, token auth, 16 clients max). REST API versioning: all endpoints available at both `/api/<path>` and `/api/v1/<path>`. Frontend `apiFetch()` in `01-core.js` auto-rewrites `/api/` → `/api/v1/` (except `/api/__test__/`). E2E tests use `**/api/v1/...` route patterns.
+**Web UI**: `web_pages.cpp`/`web_pages_gz.cpp` (**auto-generated — edit `web_src/` then run `node tools/build_web_assets.js`**). WebSocket: `websocket_command.cpp`, `websocket_broadcast.cpp`, `websocket_auth.cpp` (port 81, token auth, 16 clients max). REST API versioning: all endpoints available at both `/api/<path>` and `/api/v1/<path>`. Frontend `apiFetch()` in `01-core.js` auto-rewrites `/api/` → `/api/v1/` (except `/api/__test__/`). E2E tests use `**/api/v1/...` route patterns. 26 concatenated JS files including `10-dsp-presets.js` (DSP preset manager overlay, 32 slots, save/load/delete/rename).
 
 **Other**: `settings_manager.cpp` (JSON + NVS), `auth_handler.cpp` (PBKDF2-SHA256, rate limiting), `http_security.h` (`server_send()` wrapper, `sanitize_filename()`), `health_check.h/.cpp` (10 categories, including `clock` health), `psram_alloc.h/.cpp` (PSRAM-first with SRAM fallback, 64KB cap), `smart_sensing.cpp`, `button_handler.cpp`, `buzzer_handler.cpp`, `debug_serial.h` (LOG_D/I/W/E macros)
 
@@ -96,10 +96,10 @@ Defined in `platformio.ini` with fallback defaults in `src/config.h`. Key pins: 
 - Mocks in `test/test_mocks/` (Arduino, WiFi, MQTT, NVS)
 - Compiles with `-D UNIT_TEST -D NATIVE_TEST` (`test_build_src = no`)
 - Each test module in its own directory
-- 3707 tests across 126 modules (includes `test_clock_diagnostics`, `test_device_deps`, `test_hal_remove_device`)
+- 3790 tests across 131 modules (includes `test_clock_diagnostics`, `test_device_deps`, `test_hal_remove_device`, `test_wav_ir`)
 
 ### E2E Tests (Playwright)
-Mock Express server + `routeWebSocket()` interception. Infrastructure: `e2e/helpers/` (fixtures, WS assertions, selectors), `e2e/pages/` (19 POMs), `e2e/fixtures/` (WS + API), `e2e/mock-server/` (Express + WS state). Tags: `@smoke`, `@ws`, `@api`, `@hal`, `@audio`, `@settings`, `@error`.
+Mock Express server + `routeWebSocket()` interception. Infrastructure: `e2e/helpers/` (fixtures, WS assertions, selectors), `e2e/pages/` (19 POMs), `e2e/fixtures/` (WS + API), `e2e/mock-server/` (Express + WS state). Tags: `@smoke`, `@ws`, `@api`, `@hal`, `@audio`, `@settings`, `@error`. **508 tests across 68+ specs** (was 464 / 64+).
 
 Key patterns: WS interception via `page.routeWebSocket(/.*:81/, handler)` (capital `onMessage`/`onClose`). Tab navigation: `page.evaluate(() => switchTab('tabName'))`. CSS-hidden checkboxes: `toBeChecked()` not `toBeVisible()`. POM: `new DevicesPage(page); await devices.open()`.
 
@@ -136,7 +136,7 @@ All 4 must pass: `cpp-tests`, `cpp-lint`, `js-lint`, `e2e-tests`. See `.github/w
   | Feature Added | Constants to Check |
   |---|---|
   | New HAL driver (`HAL_REGISTER()`) | `HAL_MAX_DRIVERS` (64), `HAL_DB_MAX_ENTRIES` (64), `HAL_BUILTIN_DRIVER_COUNT` in `hal_builtin_devices.cpp` |
-  | New event bit | `EVT_*` in `app_events.h` (24 usable bits, 17 assigned, 7 spare) |
+  | New event bit | `EVT_*` in `app_events.h` (24 usable bits, 18 assigned, 6 spare) |
   | New pipeline sink/source | `AUDIO_PIPELINE_MAX_OUTPUTS` (16), `AUDIO_PIPELINE_MATRIX_SIZE` (32) |
   | New HAL device instance at boot | `HAL_MAX_DEVICES` (32, 14 onboard + expansion) |
 

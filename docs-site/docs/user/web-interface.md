@@ -46,7 +46,10 @@ Each active input source appears as a **channel strip** showing:
 - Source name (e.g. PCM1808 Left, Signal Generator, USB Audio)
 - Real-time VU meter and dBFS reading
 - Peak hold indicator
+- SNR and SFDR readouts updated each analysis cycle
 - A **DSP** button that opens the per-input DSP overlay
+
+Below the channel strips, a **collapsible visualisation panel** shows waveform, spectrum analyser, and VU meter graphs for all active input lanes. Click the panel header to expand or collapse it. Individual graph types can be toggled independently inside the panel.
 
 :::info
 The number of input strips shown depends on how many input devices the HAL has initialised. If a device is not listed, check the HAL Devices section in System.
@@ -76,6 +79,29 @@ A built-in test signal source can inject sine waves, square waves, pink noise, o
 - Frequency (Hz) and amplitude (dBFS) sliders
 - Start / Stop toggle
 
+#### THD+N Measurement Tool
+
+The Signal Generator view includes an integrated **THD+N** (Total Harmonic Distortion + Noise) measurement tool for evaluating analogue signal chain quality.
+
+**To run a measurement:**
+
+1. Set the Signal Generator to **Sine** waveform and choose a test frequency (1 kHz is standard).
+2. Set the amplitude to a level representative of normal operating conditions (e.g. -12 dBFS).
+3. Start the Signal Generator.
+4. Click **Measure THD** in the THD panel. A progress indicator shows how many frames have been captured.
+5. When the measurement completes, the panel displays:
+   - THD+N percentage and dB value
+   - Fundamental level (dBFS)
+   - Individual harmonic levels for harmonics 2–6
+
+:::tip
+Use a consistent test frequency and amplitude when comparing measurements before and after DSP changes. The 1 kHz / -12 dBFS combination is a common starting point for loudspeaker or DAC characterisation.
+:::
+
+:::note
+THD+N measurements capture the full noise floor along with harmonic distortion. For best results, measure in a quiet environment and keep the signal path as short as possible. Results labelled "partial" indicate the measurement was stopped before the full averaging window completed.
+:::
+
 ---
 
 ## DSP Overlays
@@ -87,11 +113,15 @@ Pressing a **DSP** button on any input or output channel strip opens a full-scre
 - Up to 10 bands per channel
 - Filter types: peaking, low shelf, high shelf, low-pass, high-pass, notch, all-pass
 - Frequency, gain (dB), and Q controls per band
-- Live frequency response graph updates as you drag handles
+- Live frequency response graph — drag handles directly on the graph to adjust frequency and gain
 
 :::tip
 You can import EQ curves directly from REW (Room EQ Wizard) or miniDSP exports using the **Import** button in the PEQ overlay.
 :::
+
+#### PEQ Presets
+
+The PEQ overlay toolbar includes a **Presets** dropdown (up to 10 named presets). To save the current EQ curve as a preset, enter a name and click **Save**. To restore a preset, select it from the dropdown and click **Load**. Presets are stored on the device and persist across reboots.
 
 ### Crossover
 
@@ -107,6 +137,33 @@ You can import EQ curves directly from REW (Room EQ Wizard) or miniDSP exports u
 ### Additional Processing
 
 Per-channel controls for delay (0–100 ms), gain trim, polarity invert, and mute are available as toggle buttons below the PEQ graph.
+
+---
+
+## DSP Preset Manager
+
+The **DSP Preset Manager** (accessible from the Audio tab toolbar) lets you save and restore the complete DSP configuration for all channels as a named preset. Up to **32 preset slots** are available.
+
+### Saving a preset
+
+1. Configure your DSP chain (PEQ bands, crossovers, dynamics, delays) as desired.
+2. Open the Preset Manager overlay from the toolbar.
+3. Click an empty slot, enter a name, and click **Save**.
+
+### Loading a preset
+
+1. Open the Preset Manager overlay.
+2. Click the slot you want to restore and click **Load**.
+
+All channels update immediately — no reboot required. The previously active configuration is not automatically backed up, so save it to another slot first if you want to keep it.
+
+### Renaming and deleting presets
+
+Right-click (or long-press on mobile) a filled slot to reveal **Rename** and **Delete** options. Deleting a slot is permanent — the firmware does not maintain a recycle bin.
+
+:::tip
+Use presets to switch quickly between different room tuning profiles, speaker configurations, or listening modes. For example, save one preset for near-field monitoring and another for living-room playback.
+:::
 
 ---
 
