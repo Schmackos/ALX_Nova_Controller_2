@@ -65,6 +65,8 @@
 
 ### Raw `server.send()` Bypassing Security Headers (16 calls)
 
+**Status: RESOLVED (2026-03-25)** — All raw server.send()/server.send_P() calls migrated to server_send()/server_send_P() wrappers. Zero raw calls remain outside http_security.h. Also added server_send_P() PROGMEM overloads for gzipped content fallback paths.
+
 - **Severity:** Medium
 - **Issue:** 16 `server.send()` calls in `src/main.cpp` bypass the `server_send()` wrapper from `src/http_security.h`, meaning those responses lack `X-Frame-Options: DENY` and `X-Content-Type-Options: nosniff` headers. These are mostly 404 responses for browser auto-requests (favicon, robots.txt, manifest.json) and captive portal redirects.
 - **Files:**
@@ -73,6 +75,8 @@
 - **Fix approach:** Replace all `server.send()` calls in `main.cpp` with `server_send()`. Grep codebase for remaining `server.send(` outside `http_security.h` and fix. Consider adding a pre-commit check.
 
 ### Content-Security-Policy Header Not Implemented
+
+**Status: RESOLVED (2026-03-25)** — CSP header added to http_add_security_headers() with 9 directives: default-src 'self', script-src (self + unsafe-inline + cdn.jsdelivr.net), style-src (self + unsafe-inline), img-src (self + data:), connect-src (self + ws/wss + CDN + GitHub), frame-src 'none', object-src 'none', base-uri 'self', form-action 'self'. 9 new CSP tests added.
 
 - **Severity:** Medium
 - **Issue:** The previous CONCERNS.md marked CSP as "RESOLVED" but no `Content-Security-Policy` header exists anywhere in the codebase. `http_add_security_headers()` in `src/http_security.h` only sets `X-Frame-Options` and `X-Content-Type-Options`.
@@ -301,11 +305,11 @@
 
 4. **[High] ~~Fix ASRC frame count propagation~~** -- **RESOLVED (2026-03-25).** Lane buffers resized from FRAMES to ASRC_OUTPUT_FRAMES_MAX (fixes heap overflow on upsampling). ASRC return value captured per-lane. Downsampled buffer tails zero-filled (fixes stale data leaking through DSP/matrix). 6 new ASRC frame count tests.
 
-5. **[Medium] ~~Implement Content-Security-Policy header~~** -- **RESOLVED (2026-03-25).** CSP with 9 directives added to http_add_security_headers(). 9 new CSP tests.
+5. **[Medium] ~~Implement Content-Security-Policy header~~** -- **RESOLVED (2026-03-25).** CSP with 9 directives added to http_add_security_headers(). 9 new CSP tests. Covers frame/object blocking, base-uri/form-action restriction, CDN allowlist.
 
 6. **[Medium] Consolidate constant definitions** -- Remove redundant `#define` guards from `audio_pipeline.h`, `audio_input_source.h`, `i2s_audio.h`. Define only in `config.h`. Estimated effort: 1 hour.
 
-7. **[Medium] ~~Migrate raw server.send() to server_send()~~** -- **RESOLVED (2026-03-25).** All raw calls migrated to wrappers.
+7. **[Medium] ~~Migrate raw server.send() to server_send()~~** -- **RESOLVED (2026-03-25).** All 16 raw server.send() + 3 server.send_P() migrated to server_send()/server_send_P() wrappers. Zero raw calls remain outside http_security.h.
 
 8. **[Medium] ~~Add virtual setDsdMode() to HalAudioDevice~~** -- **RESOLVED (2026-03-26).** Virtual dispatch added; strncmp + static_cast removed.
 

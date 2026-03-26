@@ -26,10 +26,9 @@ inline bool sendGzipped(WebServer& server, const uint8_t* gzData, size_t gzLen,
     if (server.hasHeader("Accept-Encoding")) {
         String encoding = server.header("Accept-Encoding");
         if (encoding.indexOf("gzip") >= 0) {
-            http_add_security_headers();
             server.sendHeader("Content-Encoding", "gzip");
             server.sendHeader("Cache-Control", "no-cache");
-            server.send_P(200, contentType, reinterpret_cast<const char*>(gzData), gzLen);
+            server_send_P(200, contentType, reinterpret_cast<const char*>(gzData), gzLen);
             return true;
         }
     }
