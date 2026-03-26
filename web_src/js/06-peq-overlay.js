@@ -364,7 +364,7 @@
                         var st = stages[s];
                         // Include all biquad types (0-10, 19, 20) as bands
                         var typeId = typeof st.type === 'number' ? st.type : parseInt(st.type, 10);
-                        if (typeId >= 0 && typeId <= 10 || typeId === 19 || typeId === 20) {
+                        if ((typeId >= 0 && typeId <= 10) || typeId === 19 || typeId === 20) {
                             bands.push({
                                 type: typeId,
                                 freq: (st.params && st.params.frequency) || 1000,

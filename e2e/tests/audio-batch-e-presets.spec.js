@@ -103,7 +103,7 @@ test.describe('@audio DSP Config + PEQ Presets overlay', () => {
     const resp = await page.evaluate(() => apiFetch('/api/dsp/presets/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot: 2, newName: 'NewName' })
+      body: JSON.stringify({ slot: 2, name: 'NewName' })
     }).then(r => r.json()));
     expect(resp.success).toBe(true);
   });
@@ -127,7 +127,7 @@ test.describe('@audio DSP Config + PEQ Presets overlay', () => {
     const resp = await page.evaluate(() => apiFetch('/api/dsp/peq/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'MyEQ', channel: 0, bands: [] })
+      body: JSON.stringify({ name: 'MyEQ', channel: 0, stages: [] })
     }).then(r => r.json()));
     expect(resp.success).toBe(true);
   });
@@ -137,7 +137,7 @@ test.describe('@audio DSP Config + PEQ Presets overlay', () => {
     await page.evaluate(() => apiFetch('/api/dsp/peq/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'LoadEQ', channel: 0, bands: [] })
+      body: JSON.stringify({ name: 'LoadEQ', channel: 0, stages: [] })
     }));
     const data = await page.evaluate(() => apiFetch('/api/dsp/peq/preset?name=LoadEQ').then(r => r.json()));
     expect(data.success).toBe(true);
@@ -148,7 +148,7 @@ test.describe('@audio DSP Config + PEQ Presets overlay', () => {
     await page.evaluate(() => apiFetch('/api/dsp/peq/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'DelEQ', channel: 0, bands: [] })
+      body: JSON.stringify({ name: 'DelEQ', channel: 0, stages: [] })
     }));
     const resp = await page.evaluate(() => apiFetch('/api/dsp/peq/preset', {
       method: 'DELETE',

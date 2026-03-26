@@ -103,7 +103,7 @@
             container.innerHTML =
                 '<div class="thd-summary">' +
                 '  <span class="thd-metric"><span class="thd-metric-label">THD+N</span><span class="thd-metric-value">' + (data.thdPlusNPercent || 0).toFixed(4) + '%</span></span>' +
-                '  <span class="thd-metric"><span class="thd-metric-label">THD+N</span><span class="thd-metric-value">' + (data.thdPlusNDb || 0).toFixed(1) + ' dB</span></span>' +
+                '  <span class="thd-metric"><span class="thd-metric-label">THD+N (dB)</span><span class="thd-metric-value">' + (data.thdPlusNDb || 0).toFixed(1) + ' dB</span></span>' +
                 '  <span class="thd-metric"><span class="thd-metric-label">Fundamental</span><span class="thd-metric-value">' + (data.fundamentalDbfs || 0).toFixed(1) + ' dBFS</span></span>' +
                 '</div>' +
                 '<table class="thd-harmonics-table"><thead><tr><th>Harmonic</th><th>Level (rel)</th></tr></thead>' +

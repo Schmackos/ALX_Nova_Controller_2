@@ -99,7 +99,7 @@ function handleCommand(type, data) {
     // ===== THD measurement commands =====
     case 'startThdMeasurement':
       // Firmware starts measurement; mock returns a progress broadcast immediately
-      return [{ type: 'thdProgress', framesProcessed: 0, framesTarget: data.averages || 8 }];
+      return [{ type: 'thdResult', valid: false, framesProcessed: 0, framesTarget: data.averages || 8 }];
 
     case 'stopThdMeasurement':
       return [];

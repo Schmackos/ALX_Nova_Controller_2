@@ -262,10 +262,10 @@ router.delete('/dsp/presets', (req, res) => {
 
 // POST /dsp/presets/rename — rename a DSP preset
 router.post('/dsp/presets/rename', (req, res) => {
-  const { slot, newName } = req.body || {};
+  const { slot, name } = req.body || {};
   const s = parseInt(slot);
   if (!isNaN(s) && _dspPresets[s]) {
-    _dspPresets[s].name = newName;
+    _dspPresets[s].name = name;
     return res.json({ success: true });
   }
   res.status(404).json({ success: false, message: 'Preset not found' });

@@ -25,14 +25,16 @@ async function goToAudioInputs(page) {
 }
 
 // Pre-seed a preset via the mock REST API so load/delete/rename tests have data
+let _seedSlot = 0;
 async function seedPreset(page, name) {
-  await page.evaluate(async (presetName) => {
-    await window.apiFetch('/api/dsp/presets/save', {
+  const slot = _seedSlot++;
+  await page.evaluate(async ({ presetName, presetSlot }) => {
+    await window.apiFetch('/api/dsp/presets/save?slot=' + presetSlot, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: presetName })
     });
-  }, name);
+  }, { presetName: name, presetSlot: slot });
 }
 
 test.describe('@audio @api Phase 7: DSP Presets', () => {
@@ -211,7 +213,7 @@ test.describe('@audio @api Phase 7: DSP Presets', () => {
       return data;
     });
     expect(result.success).toBe(true);
-    expect(Array.isArray(result.presets)).toBe(true);
+    expect(Array.isArray(result.slots)).toBe(true);
   });
 
   test('GET /api/dsp/presets includes newly saved preset', async ({ connectedPage: page }) => {
@@ -221,7 +223,7 @@ test.describe('@audio @api Phase 7: DSP Presets', () => {
       const data = await resp.json();
       return data;
     });
-    expect(result.presets.some(p => p.name === 'ListTest')).toBe(true);
+    expect(result.slots.some(p => p.name === 'ListTest')).toBe(true);
   });
 
   // ===== Round-trip =====
@@ -229,7 +231,7 @@ test.describe('@audio @api Phase 7: DSP Presets', () => {
   test('save then load preset round-trip succeeds', async ({ connectedPage: page }) => {
     // Save
     const saveResult = await page.evaluate(async () => {
-      const resp = await window.apiFetch('/api/dsp/presets/save', {
+      const resp = await window.apiFetch('/api/dsp/presets/save?slot=10', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'RoundTrip' })
@@ -240,10 +242,10 @@ test.describe('@audio @api Phase 7: DSP Presets', () => {
 
     // Load it back
     const loadResult = await page.evaluate(async () => {
-      const resp = await window.apiFetch('/api/dsp/presets/load', {
+      const resp = await window.apiFetch('/api/dsp/presets/load?slot=10', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'RoundTrip' })
+        body: JSON.stringify({})
       });
       return { ok: resp.ok };
     });
