@@ -28,9 +28,9 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # --- Paths ---
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-BACKLOG_DIR = PROJECT_ROOT / "docs-internal" / "backlog"
-INBOX_DIR = BACKLOG_DIR / "inbox"
+VAULT_ROOT = Path(r"C:\Users\Necrosis\Documents\GitHub\Vault")
+BACKLOG_DIR = VAULT_ROOT / "backlog"
+INBOX_DIR = VAULT_ROOT / "Inbox"
 PROCESSED_DIR = INBOX_DIR / "processed"
 VOICE_NOTES_DIR = BACKLOG_DIR / "voice-notes"
 RAW_DIR = VOICE_NOTES_DIR / "raw"
@@ -711,7 +711,7 @@ def command_pick():
         return
 
     content = picked["file"].read_text(encoding="utf-8")
-    rel_path = picked["file"].relative_to(PROJECT_ROOT).as_posix()
+    rel_path = picked["file"].relative_to(VAULT_ROOT).as_posix()
 
     log(f"\n{'=' * 60}")
     log(content)
