@@ -10,7 +10,14 @@
   "rules": {
     "no-undef": "error",
     "no-redeclare": ["error", { "builtinGlobals": false }],
-    "eqeqeq": ["error", "smart"]
+    "eqeqeq": ["error", "smart"],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "AssignmentExpression[left.property.name='innerHTML']",
+        "message": "Prefer textContent or escapeHtml() for dynamic content. Only use innerHTML for static template HTML."
+      }
+    ]
   },
   "globals": {
     "ws": "writable",
