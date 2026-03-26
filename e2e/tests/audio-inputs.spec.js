@@ -52,8 +52,8 @@ test.describe('@audio Phase 1 — Device Grouping (Inputs)', () => {
   test('inputs with same deviceName are grouped under one .device-group', async ({ connectedPage: page }) => {
     // The fixture has lanes 0+1 both with deviceName "PCM1808" — they should share a group
     const groups = page.locator('#audio-inputs-container .device-group');
-    // At least PCM1808 group and Signal Generator/USB Audio entries
-    await expect(groups).toHaveCount({ minimum: 1 });
+    const count = await groups.count();
+    expect(count).toBeGreaterThanOrEqual(1);
 
     // PCM1808 group should contain both lane 0 and lane 1 strips
     const pcmGroup = page.locator('#audio-inputs-container .device-group').filter({ hasText: 'PCM1808' });
@@ -70,7 +70,6 @@ test.describe('@audio Phase 1 — Device Grouping (Inputs)', () => {
   });
 
   test('empty state shown when audioChannelMap has empty inputs array', async ({ connectedPage: page }) => {
-    // Push a new audioChannelMap with no inputs
     await page.wsRoute.send({
       type: 'audioChannelMap',
       inputs: [],
@@ -85,8 +84,8 @@ test.describe('@audio Phase 1 — Device Grouping (Inputs)', () => {
     await expect(container.locator('.empty-state')).toBeVisible({ timeout: 3000 });
   });
 
-  test('hot-plug toast appears when device count changes in audioChannelMap', async ({ connectedPage: page }) => {
-    // Push updated audioChannelMap with one fewer input
+  test('hot-plug toast appears when audioChannelMap device list changes', async ({ connectedPage: page }) => {
+    // Push updated audioChannelMap with a different set of inputs — hash changes, toast fires
     await page.wsRoute.send({
       type: 'audioChannelMap',
       inputs: [
@@ -100,7 +99,7 @@ test.describe('@audio Phase 1 — Device Grouping (Inputs)', () => {
           compatible: 'ti,pcm1808',
           manufacturer: 'Texas Instruments',
           capabilities: 8,
-          ready: true
+          ready: false
         }
       ],
       outputs: [],
@@ -110,46 +109,39 @@ test.describe('@audio Phase 1 — Device Grouping (Inputs)', () => {
       matrix: []
     });
 
-    // A toast or notification element should appear indicating a device change
-    await expect(page.locator('.toast, .hotplug-toast, [class*="toast"]')).toBeVisible({ timeout: 3000 });
+    // showToast() sets #toast to class "toast show info" with the message text
+    await expect(page.locator('#toast.show')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('#toast.show')).toContainText('Audio devices changed');
   });
 
-  test('channel label displays the name from inputNames fixture', async ({ connectedPage: page }) => {
-    // The fixture input-names.json has "ADC1 L" at index 0 (lane 0, channel 0)
-    // The label for lane 0 should reflect the name for its first matrix channel
-    const strip0 = page.locator('.channel-strip[data-lane="0"]');
-    await expect(strip0.locator('.channel-label[data-lane="0"]')).toBeAttached();
+  test('channel label shows inputNames value for lane 0', async ({ connectedPage: page }) => {
+    // input-names.json fixture has "ADC1 L" at index 0; lane 0 uses inputNames[lane*2] = inputNames[0]
+    const label0 = page.locator('.channel-label[data-lane="0"]');
+    await expect(label0).toBeAttached();
+    await expect(label0).toContainText('ADC1 L');
   });
 
-  test('stereo link toggle is present for paired lanes', async ({ connectedPage: page }) => {
-    // Lanes 0+1 are PCM1808 stereo pair — stereo link toggle should appear
-    const stereoToggle = page.locator('.stereo-link-toggle[data-lane="0"]');
-    await expect(stereoToggle).toBeAttached();
+  test('stereo link toggle present on every input strip', async ({ connectedPage: page }) => {
+    // Every strip has a button with data-action="toggle-stereo-link" and matching data-lane
+    await expect(page.locator('[data-action="toggle-stereo-link"][data-lane="0"]')).toBeAttached();
+    await expect(page.locator('[data-action="toggle-stereo-link"][data-lane="1"]')).toBeAttached();
   });
 
-  test('stereo link toggle mirrors gain to paired lane when active', async ({ connectedPage: page }) => {
-    const stereoToggle = page.locator('.stereo-link-toggle[data-lane="0"]');
-    // Only attempt if the toggle is visible (capability-dependent)
-    const count = await stereoToggle.count();
-    if (count === 0) {
-      test.skip(true, 'Stereo link toggle not rendered for this fixture');
-      return;
-    }
+  test('stereo link toggle activates and mirrors gain to paired lane', async ({ connectedPage: page }) => {
+    // Click the stereo link toggle on lane 0 (pairs with lane 1)
+    await page.locator('[data-action="toggle-stereo-link"][data-lane="0"]').click();
 
-    // Enable stereo link
-    await stereoToggle.click();
-    await expect(stereoToggle).toHaveClass(/active/);
+    // After re-render (renderInputStrips clears hash and re-renders), toggle should be active
+    await expect(page.locator('.stereo-link-toggle[data-lane="0"]')).toHaveClass(/active/, { timeout: 2000 });
 
-    // Setting gain on lane 0 should also fire a WS command for lane 1
+    // Setting gain on lane 0 should send WS commands for both lane 0 and lane 1
     const slider = page.locator('#inputGain0');
     await slider.fill('6');
     await slider.dispatchEvent('input');
+    await page.waitForTimeout(300);
 
-    // Both lanes should receive the gain command
-    await page.waitForTimeout(200);
-    const captures = page.wsCapture || [];
-    const gainCmds = captures.filter(c => c.type === 'setInputGain');
-    const lane1Cmd = gainCmds.find(c => c.lane === 1 && c.db === 6);
-    expect(lane1Cmd, 'Stereo link should mirror gain to lane 1').toBeDefined();
+    const gainCmds = (page.wsCapture || []).filter(c => c.type === 'setInputGain');
+    expect(gainCmds.find(c => c.lane === 0 && c.db === 6), 'lane 0 gain command').toBeDefined();
+    expect(gainCmds.find(c => c.lane === 1 && c.db === 6), 'lane 1 mirrored gain command').toBeDefined();
   });
 });

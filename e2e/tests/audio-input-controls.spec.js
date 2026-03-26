@@ -110,32 +110,40 @@ test.describe('@audio @ws Phase 2 — Input Channel Label and Capability Control
     await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 5000 });
   });
 
-  test('inline channel label edit: click → type → blur → sends setInputNames WS', async ({ connectedPage: page }) => {
+  test('channel label is rendered with data-action="edit-channel-label"', async ({ connectedPage: page }) => {
+    // _buildInputStrip() always renders a .channel-label with data-action="edit-channel-label"
+    const label = page.locator('.channel-label[data-action="edit-channel-label"][data-lane="0"]');
+    await expect(label).toBeAttached();
+  });
+
+  test('channel label text comes from inputNames fixture', async ({ connectedPage: page }) => {
+    // input-names.json has "ADC1 L" at index 0; lane 0 uses inputNames[lane*2] = inputNames[0]
+    await expect(page.locator('.channel-label[data-lane="0"]')).toContainText('ADC1 L');
+  });
+
+  test('clicking channel label makes it contenteditable; Enter commits and sends setInputNames WS', async ({ connectedPage: page }) => {
     const label = page.locator('.channel-label[data-lane="0"]');
-    const count = await label.count();
-    if (count === 0) {
-      test.skip(true, 'channel-label elements not yet rendered');
-      return;
-    }
 
     clearWsCapture(page);
 
-    // Double-click or click to enter edit mode
-    await label.dblclick();
-    // Type a new name
-    await page.keyboard.type('My ADC L');
-    // Blur to commit
+    // Single click triggers startChannelLabelEdit() via data-action="edit-channel-label" delegation
+    await label.click();
+
+    // Label becomes contenteditable='true'
+    await expect(label).toHaveAttribute('contenteditable', 'true', { timeout: 2000 });
+
+    // Select all existing text and replace
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('My Custom ADC');
     await page.keyboard.press('Enter');
 
-    // Verify WS command sent with full names array containing the new name
+    // startChannelLabelEdit commit() calls ws.send({ type: 'setInputNames', names: inputNames.slice() })
     const cmd = await expectWsCommand(page, 'setInputNames', {}, 3000);
-    expect(cmd.names).toBeDefined();
-    expect(Array.isArray(cmd.names)).toBe(true);
-    expect(cmd.names[0]).toBe('My ADC L');
+    expect(Array.isArray(cmd.names), 'names should be an array').toBe(true);
+    expect(cmd.names[0]).toBe('My Custom ADC');
   });
 
-  test('PGA control visible when input capabilities include bit 5 (32)', async ({ connectedPage: page }) => {
-    // Push audioChannelMap with a PGA-capable input (bit 5 = 32)
+  test('PGA slider rendered when input capabilities include bit 5 (HAL_CAP_PGA_CONTROL=32)', async ({ connectedPage: page }) => {
     await page.wsRoute.send({
       type: 'audioChannelMap',
       inputs: [
@@ -159,14 +167,13 @@ test.describe('@audio @ws Phase 2 — Input Channel Label and Capability Control
       matrix: []
     });
 
+    // Clear the render guard so re-render fires
     await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 3000 });
-    // PGA control should be visible on lane 0
-    const pgaControl = page.locator('.channel-strip[data-lane="0"] .pga-control, .channel-strip[data-lane="0"] [class*="pga"]');
-    await expect(pgaControl).toBeAttached({ timeout: 3000 });
+    // _buildInputStrip() adds #inputPga{lane} slider when (capabilities & 32) is truthy
+    await expect(page.locator('#inputPga0')).toBeAttached({ timeout: 3000 });
   });
 
-  test('HPF toggle visible when input capabilities include bit 6 (64)', async ({ connectedPage: page }) => {
-    // Push audioChannelMap with an HPF-capable input (bit 6 = 64)
+  test('HPF button rendered when input capabilities include bit 6 (HAL_CAP_HPF_CONTROL=64)', async ({ connectedPage: page }) => {
     await page.wsRoute.send({
       type: 'audioChannelMap',
       inputs: [
@@ -191,24 +198,26 @@ test.describe('@audio @ws Phase 2 — Input Channel Label and Capability Control
     });
 
     await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 3000 });
-    // HPF toggle should be visible on lane 0
-    const hpfToggle = page.locator('.channel-strip[data-lane="0"] .hpf-toggle, .channel-strip[data-lane="0"] [class*="hpf"]');
-    await expect(hpfToggle).toBeAttached({ timeout: 3000 });
+    // _buildInputStrip() adds #inputHpf{lane} button when (capabilities & 64) is truthy
+    await expect(page.locator('#inputHpf0')).toBeAttached({ timeout: 3000 });
   });
 
-  test('solo button toggles active class', async ({ connectedPage: page }) => {
-    const soloBtn = page.locator('#inputSolo0');
-    const count = await soloBtn.count();
-    if (count === 0) {
-      test.skip(true, 'Solo button not rendered for this fixture');
-      return;
-    }
+  test('PGA and HPF controls absent when capability bits not set', async ({ connectedPage: page }) => {
+    // PCM1808 has capabilities=8 — neither bit 5 (32) nor bit 6 (64) set
+    await expect(page.locator('#inputPga0')).not.toBeAttached();
+    await expect(page.locator('#inputHpf0')).not.toBeAttached();
+  });
 
+  test('solo button toggles active class on click', async ({ connectedPage: page }) => {
+    // toggleInputSolo() is UI-only — toggles .active on the button
+    const soloBtn = page.locator('#inputSolo0');
+    await expect(soloBtn).toBeAttached();
     await expect(soloBtn).not.toHaveClass(/active/);
+
     await soloBtn.click();
     await expect(soloBtn).toHaveClass(/active/);
 
-    // Second click should deactivate
+    // Second click deactivates
     await soloBtn.click();
     await expect(soloBtn).not.toHaveClass(/active/);
   });
