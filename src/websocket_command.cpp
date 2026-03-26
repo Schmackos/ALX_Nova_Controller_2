@@ -547,7 +547,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                   if (nb >= 2 && nb <= 4) { s.multibandComp.numBands = nb; changed = true; }
                 }
                 int mbSlot = s.multibandComp.mbSlot;
-                // Update per-band params in the pool (not double-buffered — direct write)
+                // Pool writes happen after swap to avoid data race with audio task.
+                // First collect numBands change into inactive config, swap, then write pool.
+                if (changed) {
+                  if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
+                }
+                // Now safe to write pool — audio task reads the newly-active config
+                // Update per-band params in the pool
                 if (mbSlot >= 0 && doc["bands"].is<JsonArray>()) {
                   JsonArray bands = doc["bands"].as<JsonArray>();
                   int bIdx = 0;
@@ -578,7 +584,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               }
             }
             if (changed) {
-              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();

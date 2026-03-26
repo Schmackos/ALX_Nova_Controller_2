@@ -1420,6 +1420,8 @@ JsonDocument doc;
 
         const String &body = server.arg("plain");
         if (body.length() == 0) { sendJsonError(400, "Empty body"); return; }
+        const size_t maxIrBytes = CONV_MAX_PARTITIONS * CONV_PARTITION_SIZE * sizeof(float);
+        if (body.length() > maxIrBytes) { sendJsonError(413, "IR too large"); return; }
 
         dsp_copy_active_to_inactive();
         DspState *inactive = dsp_get_inactive_config();
