@@ -182,6 +182,12 @@ feat: / fix: / docs: / refactor: / test: / chore:
 - After multi-agent workflows, clean up tool artifacts before committing
 - When CI gates fail after merge, fix immediately in same session
 
+## Obsidian Vault
+
+Architecture Decision Records and project notes are tracked in the Obsidian Vault.
+Vault path: `C:\Users\Necrosis\Documents\GitHub\Vault\Projects\ALX Nova\`
+After architectural decisions, create an ADR there (see Vault CLAUDE.md for format).
+
 ## Documentation Site (Docusaurus v3)
 
 `docs-site/` — deployed to GitHub Pages. Design token pipeline: `src/design_tokens.h` → `tools/extract_tokens.js` → CSS for web UI + docs site. MDX: escape `\{variable\}` outside code blocks. Internal docs: `docs-internal/`.
