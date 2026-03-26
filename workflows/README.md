@@ -1,0 +1,117 @@
+# Workflows
+
+Automation scripts for the ALX Nova project.
+
+## Voice Pipeline
+
+Converts audio voice memos into structured concept documents for the project backlog.
+
+### Flow
+
+```
+Audio files  -->  Voice notes  -->  Concept docs  -->  GitHub Issues  -->  Execute
+  (Whisper)       (Claude CLI)     (Claude CLI)        (manual)          (Claude)
+```
+
+### Quick Start
+
+```bash
+# 1. Drop audio files into the inbox
+cp *.m4a docs-internal/backlog/inbox/
+
+# 2. Run the pipeline
+python workflows/voice_pipeline.py
+
+# 3. Review concept docs in docs-internal/backlog/concept-*.md
+```
+
+### Directory Structure
+
+```
+docs-internal/backlog/
+  inbox/                 Drop audio files here (.m4a, .mp3, .wav, .ogg, .flac)
+    processed/           Archived audio files after processing
+  voice-notes/           Intermediate voice notes (summary + cleaned text)
+    raw/                 Whisper JSON transcripts
+    processed.json       Manifest tracking what has been processed
+  concept-*.md           Final structured concept documents
+```
+
+### Pipeline Stages
+
+| Stage | Tool | Description |
+|---|---|---|
+| 1. Transcribe | Whisper CLI | Converts audio to raw JSON transcripts |
+| 2. Process | Claude CLI | Creates voice notes with summary + cleaned text |
+| 3. Cluster | Claude CLI | Groups related notes, maps to concept docs |
+| 4. Generate | Claude CLI | Creates/updates concept docs from template |
+| 5. Archive | File move | Moves processed audio to inbox/processed/ |
+
+### CLI Arguments
+
+| Argument | Description | Default |
+|---|---|---|
+| `--dry-run` | Preview what would be processed without making changes | off |
+| `--stage <name>` | Run only one stage: `transcribe`, `process`, `cluster`, `generate`, `archive` | all stages |
+| `--model <name>` | Whisper model: `tiny`, `base`, `small`, `medium`, `large` | `base` |
+| `--verbose` | Show detailed logging output | off |
+
+### Examples
+
+```bash
+# Full pipeline (most common)
+python workflows/voice_pipeline.py
+
+# Preview without making changes
+python workflows/voice_pipeline.py --dry-run
+
+# Only transcribe new audio files
+python workflows/voice_pipeline.py --stage transcribe
+
+# Use a larger Whisper model for better accuracy
+python workflows/voice_pipeline.py --model small
+
+# Re-cluster and regenerate after manual edits
+python workflows/voice_pipeline.py --stage cluster
+python workflows/voice_pipeline.py --stage generate
+
+# Detailed output for debugging
+python workflows/voice_pipeline.py --verbose
+```
+
+### Concept Doc Template
+
+Each generated concept doc follows this structure:
+
+- **Problem / Opportunity** — Why this matters for ALX Nova (2-4 sentences)
+- **Sub-topics** — Grouped by theme, each with:
+  - What we know (facts, decisions, constraints)
+  - What needs research (open questions, unknowns)
+- **Action Items** — Claude-promptable instructions (checkboxes)
+- **Original Transcripts** — Full text in collapsed sections
+
+### Behavior
+
+- **Idempotent**: Safe to re-run. The manifest (`processed.json`) tracks what has been processed.
+- **Auto-append**: New audio that relates to an existing concept doc adds new sub-topics.
+- **Atomic writes**: Concept docs are written to a temp file first, then moved into place.
+- **Error recovery**: If a stage fails mid-run, re-running picks up where it left off.
+- **Split over merge**: When clustering is ambiguous, new concept docs are created rather than wrongly merging.
+
+### Prerequisites
+
+- Python 3.10+
+- [openai-whisper](https://github.com/openai/whisper): `pip install openai-whisper`
+- [ffmpeg](https://ffmpeg.org/): `choco install ffmpeg` (Windows)
+- [Claude Code CLI](https://claude.ai/code): must be installed and authenticated
+
+### Troubleshooting
+
+| Issue | Solution |
+|---|---|
+| `whisper` not found | `pip install openai-whisper` |
+| `ffmpeg` not found | `choco install ffmpeg` |
+| `claude` not found | Install Claude Code CLI |
+| Unicode errors on Windows | Set `PYTHONIOENCODING=utf-8` in your environment |
+| Clustering produces too many concept docs | Manually merge files, then re-run `--stage generate` |
+| Want to re-process a file | Remove its entry from `voice-notes/processed.json` |
