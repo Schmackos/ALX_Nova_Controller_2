@@ -143,12 +143,12 @@ static void applySettingsFromJson(const JsonDocument &doc) {
 
   // Ethernet configuration
   if (doc["ethUseStaticIP"].is<bool>()) appState.ethernet.useStaticIP = doc["ethUseStaticIP"].as<bool>();
-  if (doc["ethStaticIP"].is<const char*>()) appState.ethernet.staticIP = doc["ethStaticIP"].as<const char*>();
-  if (doc["ethSubnet"].is<const char*>()) appState.ethernet.staticSubnet = doc["ethSubnet"].as<const char*>();
-  if (doc["ethGateway"].is<const char*>()) appState.ethernet.staticGateway = doc["ethGateway"].as<const char*>();
-  if (doc["ethDns1"].is<const char*>()) appState.ethernet.staticDns1 = doc["ethDns1"].as<const char*>();
-  if (doc["ethDns2"].is<const char*>()) appState.ethernet.staticDns2 = doc["ethDns2"].as<const char*>();
-  if (doc["hostname"].is<const char*>()) appState.ethernet.hostname = doc["hostname"].as<const char*>();
+  if (doc["ethStaticIP"].is<const char*>()) strlcpy(appState.ethernet.staticIP, doc["ethStaticIP"].as<const char*>(), sizeof(appState.ethernet.staticIP));
+  if (doc["ethSubnet"].is<const char*>()) strlcpy(appState.ethernet.staticSubnet, doc["ethSubnet"].as<const char*>(), sizeof(appState.ethernet.staticSubnet));
+  if (doc["ethGateway"].is<const char*>()) strlcpy(appState.ethernet.staticGateway, doc["ethGateway"].as<const char*>(), sizeof(appState.ethernet.staticGateway));
+  if (doc["ethDns1"].is<const char*>()) strlcpy(appState.ethernet.staticDns1, doc["ethDns1"].as<const char*>(), sizeof(appState.ethernet.staticDns1));
+  if (doc["ethDns2"].is<const char*>()) strlcpy(appState.ethernet.staticDns2, doc["ethDns2"].as<const char*>(), sizeof(appState.ethernet.staticDns2));
+  if (doc["hostname"].is<const char*>()) strlcpy(appState.ethernet.hostname, doc["hostname"].as<const char*>(), sizeof(appState.ethernet.hostname));
 }
 
 // Flag set by loadSettingsJson() when the JSON config contains an "mqtt" section.

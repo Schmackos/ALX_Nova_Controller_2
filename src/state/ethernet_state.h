@@ -8,26 +8,26 @@ struct EthernetState {
   // ===== Core link/IP state =====
   bool linkUp = false;
   bool connected = false;
-  String ip = "";
+  char ip[40] = "";
   NetIfType activeInterface = NET_NONE;
 
   // ===== Runtime status (populated from ETH events, NOT persisted) =====
-  String mac = "";
-  String gateway = "";
-  String subnet = "";
-  String dns1 = "";
-  String dns2 = "";
+  char mac[40] = "";
+  char gateway[40] = "";
+  char subnet[40] = "";
+  char dns1[40] = "";
+  char dns2[40] = "";
   uint16_t speed = 0;
   bool fullDuplex = false;
 
   // ===== Configuration (persisted to /config.json) =====
   bool useStaticIP = false;
-  String staticIP = "";
-  String staticSubnet = "255.255.255.0";
-  String staticGateway = "";
-  String staticDns1 = "";
-  String staticDns2 = "";
-  String hostname = "alx-nova";
+  char staticIP[40] = "";
+  char staticSubnet[40] = "255.255.255.0";
+  char staticGateway[40] = "";
+  char staticDns1[40] = "";
+  char staticDns2[40] = "";
+  char hostname[64] = "alx-nova";
 
   // ===== Revert timer (NOT persisted) =====
   bool pendingConfirm = false;

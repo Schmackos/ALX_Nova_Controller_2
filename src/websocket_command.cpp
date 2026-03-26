@@ -1324,7 +1324,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               }
             }
             if (valid) {
-              appState.ethernet.hostname = h;
+              strlcpy(appState.ethernet.hostname, h.c_str(), sizeof(appState.ethernet.hostname));
             } else {
               LOG_W("[WebSocket] setEthConfig: invalid hostname");
             }
@@ -1341,11 +1341,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               return;
             }
             appState.ethernet.useStaticIP = true;
-            appState.ethernet.staticIP = doc["staticIP"].as<String>();
-            if (doc["subnet"].is<const char*>()) appState.ethernet.staticSubnet = doc["subnet"].as<String>();
-            if (doc["gateway"].is<const char*>()) appState.ethernet.staticGateway = doc["gateway"].as<String>();
-            if (doc["dns1"].is<const char*>()) appState.ethernet.staticDns1 = doc["dns1"].as<String>();
-            if (doc["dns2"].is<const char*>()) appState.ethernet.staticDns2 = doc["dns2"].as<String>();
+            strlcpy(appState.ethernet.staticIP, doc["staticIP"].as<const char*>(), sizeof(appState.ethernet.staticIP));
+            if (doc["subnet"].is<const char*>()) strlcpy(appState.ethernet.staticSubnet, doc["subnet"].as<const char*>(), sizeof(appState.ethernet.staticSubnet));
+            if (doc["gateway"].is<const char*>()) strlcpy(appState.ethernet.staticGateway, doc["gateway"].as<const char*>(), sizeof(appState.ethernet.staticGateway));
+            if (doc["dns1"].is<const char*>()) strlcpy(appState.ethernet.staticDns1, doc["dns1"].as<const char*>(), sizeof(appState.ethernet.staticDns1));
+            if (doc["dns2"].is<const char*>()) strlcpy(appState.ethernet.staticDns2, doc["dns2"].as<const char*>(), sizeof(appState.ethernet.staticDns2));
           } else {
             appState.ethernet.useStaticIP = false;
           }
@@ -1384,10 +1384,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_W("[WebSocket] setHostname: invalid hostname");
             return;
           }
-          appState.ethernet.hostname = h;
+          strlcpy(appState.ethernet.hostname, h.c_str(), sizeof(appState.ethernet.hostname));
           saveSettings();
           appState.markEthernetDirty();
-          LOG_I("[WebSocket] Hostname set to: %s", h.c_str());
+          LOG_I("[WebSocket] Hostname set to: %s", appState.ethernet.hostname);
           sendWiFiStatus();
         }
       }

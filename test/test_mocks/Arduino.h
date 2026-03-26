@@ -4,6 +4,20 @@
 #include <cstring>
 #include <stdint.h>
 #include <string>
+#include <stddef.h>
+
+// strlcpy: BSD/Arduino function not in standard C++. Provided here for native tests.
+#ifndef HAVE_STRLCPY
+static inline size_t strlcpy(char* dst, const char* src, size_t size) {
+    if (size == 0) return strlen(src);
+    size_t srclen = strlen(src);
+    size_t copy = srclen < size - 1 ? srclen : size - 1;
+    memcpy(dst, src, copy);
+    dst[copy] = '\0';
+    return srclen;
+}
+#define HAVE_STRLCPY 1
+#endif
 
 // Mock Arduino types
 // Basic String mock to support Arduino-style methods used in tests

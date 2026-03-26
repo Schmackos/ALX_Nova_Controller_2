@@ -15,8 +15,8 @@ bool eth_manager_is_connected();
 // Check if physical link is up (cable plugged in).
 bool eth_manager_link_up();
 
-// Get the Ethernet IP address as a string (empty if no IP).
-String eth_manager_get_ip();
+// Get the Ethernet IP address as a C string (empty if no IP).
+const char* eth_manager_get_ip();
 
 // Make Ethernet the default route (when link is up and has IP).
 void eth_manager_set_default_route();
