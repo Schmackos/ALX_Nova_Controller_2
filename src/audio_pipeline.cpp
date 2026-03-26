@@ -692,6 +692,11 @@ static void audio_pipeline_task_fn(void * /*param*/) {
     // isolated from WiFi TX/RX interrupts on Core 0 that cause audio pops.
     i2s_audio_init_channels();
 
+    // Watchdog: task registered with ESP task WDT. Reset every loop iteration.
+    // Recovery: on WDT timeout, default IDF handler reboots device.
+    // Future: consider graceful audio pipeline restart before reboot.
+    // Note: IDF5.5 esp_task_wdt_delete() has a linked-list corruption bug on
+    // task termination — not a concern here since this task never exits.
     esp_task_wdt_add(NULL);
     uint32_t loopCount = 0;
     while (true) {
