@@ -329,6 +329,7 @@ void setAmplifierState(bool state) {
 #ifdef DAC_ENABLED
     HalDevice* relayDev = HalDeviceManager::instance().findByCompatible("generic,relay-amp");
     if (relayDev && relayDev->_ready) {
+      // SAFETY: findByCompatible("generic,relay-amp") only matches HalRelay devices.
       static_cast<HalRelay*>(relayDev)->setEnabled(state);
       LOG_I("[Sensing] Amplifier %s (via HAL)", state ? "ON" : "OFF");
     } else {

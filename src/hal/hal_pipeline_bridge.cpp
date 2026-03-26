@@ -210,6 +210,7 @@ static void _updateAmpGating() {
         HalDevice* d = mgr.getDevice(i);
         if (!d || d->getType() != HAL_DEV_AMP) continue;
         if (d->_state != HAL_STATE_AVAILABLE) continue;
+        // SAFETY: guarded by HAL_DEV_AMP type check above; HalNs4150b is the only AMP driver registered.
         HalNs4150b* amp = static_cast<HalNs4150b*>(d);
         if (dacActive && !amp->isEnabled()) {
             amp->setEnable(true);

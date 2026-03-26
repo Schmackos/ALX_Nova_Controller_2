@@ -190,6 +190,7 @@ void gui_input_init(void) {
         if (!dev) continue;
         if (dev->getType() == HAL_DEV_INPUT &&
             strcmp(dev->getDescriptor().compatible, "alps,ec11") == 0) {
+            // SAFETY: guarded by HAL_DEV_INPUT type + "alps,ec11" compatible check above.
             HalEncoder* enc = static_cast<HalEncoder*>(dev);
             pinA  = enc->getPinA();
             pinB  = enc->getPinB();

@@ -113,6 +113,8 @@ void diagnostics_loop_tick() {
         const auto& desc = dev->getDescriptor();
         if ((desc.capabilities & HAL_CAP_DSD) &&
             strncmp(desc.compatible, "cirrus,", 7) == 0) {
+          // SAFETY: guarded by HAL_CAP_DSD + compatible "cirrus," prefix above;
+          // only HalCirrusDac2ch devices match both conditions.
           static_cast<HalCirrusDac2ch*>(dev)->setDsdMode(anyDsd);
         }
       }
