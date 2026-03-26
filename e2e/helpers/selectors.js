@@ -59,6 +59,28 @@ const SELECTORS = {
   audioMatrixContainer: '#audio-matrix-container',
   audioOutputsContainer: '#audio-outputs-container',
 
+  // Device grouping
+  deviceGroup: '.device-group',
+  deviceGroupHeader: '.device-group-header',
+  deviceGroupStatus: '.device-group-status',
+
+  // Channel labels (inline edit)
+  channelLabel: (lane) => `.channel-label[data-lane="${lane}"]`,
+
+  // Stereo link
+  stereoLinkToggle: (lane) => `.stereo-link-toggle[data-lane="${lane}"]`,
+
+  // Capability badges
+  capabilityBadge: '.capability-badge',
+  badgeDsd: '.badge-dsd',
+  badgeDpll: '.badge-dpll',
+
+  // Empty states
+  emptyState: '.empty-state',
+
+  // Solo buttons
+  inputSolo: (lane) => `#inputSolo${lane}`,
+
   // Waveform / spectrum / VU
   waveformEnabledToggle: '#waveformEnabledToggle',
   spectrumEnabledToggle: '#spectrumEnabledToggle',

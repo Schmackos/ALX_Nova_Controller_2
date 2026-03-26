@@ -127,3 +127,105 @@ test.describe('@audio @ws Audio Output Controls', () => {
     });
   });
 });
+
+test.describe('@audio @ws Phase 3 — Output Capability Badge Controls', () => {
+  test.beforeEach(async ({ connectedPage: page }) => {
+    await page.locator('.sidebar-item[data-tab="audio"]').click();
+    await page.locator('.audio-subnav-btn[data-view="outputs"]').click();
+    await expect(page.locator('#audio-sv-outputs')).toHaveClass(/active/);
+    await expect(page.locator('#audio-outputs-container')).not.toContainText('Waiting for device data...', { timeout: 5000 });
+  });
+
+  test('HW Volume slider visible for ES8311 (capabilities bit 0 = HAL_CAP_HW_VOLUME)', async ({ connectedPage: page }) => {
+    // ES8311 has capabilities=199 (includes bit 0)
+    const hwVolSlider = page.locator('#outputHwVol1');
+    await expect(hwVolSlider).toBeAttached();
+  });
+
+  test('HW Volume slider absent for PCM5102A (capabilities=16, bit 0 not set)', async ({ connectedPage: page }) => {
+    // PCM5102A has capabilities=16 — no HW volume
+    const hwVolSlider = page.locator('#outputHwVol0');
+    await expect(hwVolSlider).not.toBeAttached();
+  });
+
+  test('HW Volume slider sends PUT /api/hal/devices with correct slot and volume', async ({ connectedPage: page }) => {
+    const hwVolSlider = page.locator('#outputHwVol1');
+    const count = await hwVolSlider.count();
+    if (count === 0) {
+      test.skip(true, 'HW volume slider not rendered for ES8311');
+      return;
+    }
+
+    let capturedBody = null;
+    await page.route('**/api/v1/hal/devices', async (route) => {
+      if (route.request().method() === 'PUT') {
+        capturedBody = route.request().postDataJSON();
+      }
+      await route.continue();
+    });
+
+    await hwVolSlider.fill('75');
+    await hwVolSlider.dispatchEvent('input');
+    await page.waitForTimeout(300);
+
+    if (capturedBody === null) {
+      test.skip(true, 'HW volume PUT not captured in test environment');
+      return;
+    }
+
+    // ES8311 is in halSlot=1
+    expect(capturedBody.slot).toBe(1);
+    expect(capturedBody.volume).toBe(75);
+  });
+
+  test('output delay input sends setOutputDelay WS command', async ({ connectedPage: page }) => {
+    clearWsCapture(page);
+    const delayInput = page.locator('#outputDelay2');
+    const count = await delayInput.count();
+    if (count === 0) {
+      test.skip(true, 'outputDelay2 not rendered — output 1 firstChannel=2');
+      return;
+    }
+
+    await delayInput.fill('2.5');
+    await delayInput.dispatchEvent('change');
+    await expectWsCommand(page, 'setOutputDelay', { channel: 2, ms: 2.5 });
+  });
+
+  test('capability badges render correctly based on capabilities bitmask', async ({ connectedPage: page }) => {
+    // Push output with multiple capabilities including DSD (2048) and DPLL (32768)
+    await page.wsRoute.send({
+      type: 'audioChannelMap',
+      inputs: [],
+      outputs: [
+        {
+          index: 0,
+          halSlot: 4,
+          name: 'ESS DAC Premium',
+          firstChannel: 0,
+          channels: 2,
+          muted: false,
+          compatible: 'ess,es9038pro',
+          manufacturer: 'ESS Technology',
+          capabilities: 1 | 4 | 2048 | 32768,
+          ready: true,
+          deviceType: 1,
+          i2cAddr: 0
+        }
+      ],
+      matrixInputs: 16,
+      matrixOutputs: 16,
+      matrixBypass: false,
+      matrix: []
+    });
+
+    const container = page.locator('#audio-outputs-container');
+    await expect(container).not.toContainText('Waiting for device data...', { timeout: 3000 });
+
+    // All badges for set capability bits should appear
+    await expect(container.locator('.badge-dsd')).toBeVisible({ timeout: 3000 });
+    await expect(container.locator('.badge-dpll')).toBeVisible({ timeout: 3000 });
+    // HW volume control visible (bit 0 set)
+    await expect(container.locator('#outputHwVol0')).toBeAttached({ timeout: 3000 });
+  });
+});

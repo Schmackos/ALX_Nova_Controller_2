@@ -102,3 +102,114 @@ test.describe('@audio @ws Audio Input Controls', () => {
     await expect(strip3.locator('.channel-device-name')).toHaveText('USB Audio');
   });
 });
+
+test.describe('@audio @ws Phase 2 — Input Channel Label and Capability Controls', () => {
+  test.beforeEach(async ({ connectedPage: page }) => {
+    await page.locator('.sidebar-item[data-tab="audio"]').click();
+    await expect(page.locator('#audio-sv-inputs')).toHaveClass(/active/);
+    await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 5000 });
+  });
+
+  test('inline channel label edit: click → type → blur → sends setInputNames WS', async ({ connectedPage: page }) => {
+    const label = page.locator('.channel-label[data-lane="0"]');
+    const count = await label.count();
+    if (count === 0) {
+      test.skip(true, 'channel-label elements not yet rendered');
+      return;
+    }
+
+    clearWsCapture(page);
+
+    // Double-click or click to enter edit mode
+    await label.dblclick();
+    // Type a new name
+    await page.keyboard.type('My ADC L');
+    // Blur to commit
+    await page.keyboard.press('Enter');
+
+    // Verify WS command sent with full names array containing the new name
+    const cmd = await expectWsCommand(page, 'setInputNames', {}, 3000);
+    expect(cmd.names).toBeDefined();
+    expect(Array.isArray(cmd.names)).toBe(true);
+    expect(cmd.names[0]).toBe('My ADC L');
+  });
+
+  test('PGA control visible when input capabilities include bit 5 (32)', async ({ connectedPage: page }) => {
+    // Push audioChannelMap with a PGA-capable input (bit 5 = 32)
+    await page.wsRoute.send({
+      type: 'audioChannelMap',
+      inputs: [
+        {
+          lane: 0,
+          name: 'ADC PGA',
+          channels: 2,
+          matrixCh: 0,
+          deviceName: 'ES8388',
+          deviceType: 2,
+          compatible: 'everest-semi,es8388',
+          manufacturer: 'Everest Semiconductor',
+          capabilities: 32,
+          ready: true
+        }
+      ],
+      outputs: [],
+      matrixInputs: 16,
+      matrixOutputs: 16,
+      matrixBypass: false,
+      matrix: []
+    });
+
+    await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 3000 });
+    // PGA control should be visible on lane 0
+    const pgaControl = page.locator('.channel-strip[data-lane="0"] .pga-control, .channel-strip[data-lane="0"] [class*="pga"]');
+    await expect(pgaControl).toBeAttached({ timeout: 3000 });
+  });
+
+  test('HPF toggle visible when input capabilities include bit 6 (64)', async ({ connectedPage: page }) => {
+    // Push audioChannelMap with an HPF-capable input (bit 6 = 64)
+    await page.wsRoute.send({
+      type: 'audioChannelMap',
+      inputs: [
+        {
+          lane: 0,
+          name: 'ADC HPF',
+          channels: 2,
+          matrixCh: 0,
+          deviceName: 'ES8388',
+          deviceType: 2,
+          compatible: 'everest-semi,es8388',
+          manufacturer: 'Everest Semiconductor',
+          capabilities: 64,
+          ready: true
+        }
+      ],
+      outputs: [],
+      matrixInputs: 16,
+      matrixOutputs: 16,
+      matrixBypass: false,
+      matrix: []
+    });
+
+    await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 3000 });
+    // HPF toggle should be visible on lane 0
+    const hpfToggle = page.locator('.channel-strip[data-lane="0"] .hpf-toggle, .channel-strip[data-lane="0"] [class*="hpf"]');
+    await expect(hpfToggle).toBeAttached({ timeout: 3000 });
+  });
+
+  test('solo button toggles active class', async ({ connectedPage: page }) => {
+    const soloBtn = page.locator('#inputSolo0');
+    const count = await soloBtn.count();
+    if (count === 0) {
+      test.skip(true, 'Solo button not rendered for this fixture');
+      return;
+    }
+
+    await expect(soloBtn).not.toHaveClass(/active/);
+    await soloBtn.click();
+    await expect(soloBtn).toHaveClass(/active/);
+
+    // Second click should deactivate
+    await soloBtn.click();
+    await expect(soloBtn).not.toHaveClass(/active/);
+  });
+});

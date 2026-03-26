@@ -34,6 +34,7 @@ function buildInitialState() {
     'mqtt-settings',
     'hal-device-state',
     'audio-channel-map',
+    'input-names',
     'audio-graph-state',
     'signal-generator',
     'debug-state',
@@ -117,6 +118,9 @@ function handleCommand(type, data) {
 
     case 'setOutputDelay':
       return [];
+
+    case 'setInputNames':
+      return [{ type: 'inputNames', names: data.names }];
 
     // ===== Signal generator =====
     case 'setSignalGen':
