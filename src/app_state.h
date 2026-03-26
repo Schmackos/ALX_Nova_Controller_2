@@ -228,7 +228,7 @@ public:
   void resetMqttBackoff() { mqttBackoffDelay = 5000; }
 
 private:
-  AppState() {} // Private constructor
+  AppState() = default; // Private constructor — value-initializes all members
 
   // Dirty flags for change detection
   volatile bool _ethernetDirty = false;
