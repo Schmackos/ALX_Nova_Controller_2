@@ -202,3 +202,17 @@ When starting work:
 `docs-site/` — deployed to GitHub Pages. Design token pipeline: `src/design_tokens.h` → `tools/extract_tokens.js` → CSS for web UI + docs site. MDX: escape `\{variable\}` outside code blocks. Internal docs: `docs-internal/`.
 
 Site structure: 3 sidebars (`userSidebar`, `devSidebar`, `enterpriseSidebar`). Blog enabled at `/blog` (release notes). Showcase page at `/showcase`. Local search via `@easyops-cn/docusaurus-search-local` (15 results, blog+pages indexed). Enterprise section: `docs/enterprise/` (overview, oem-integration, production-deployment, certification, support-tiers).
+
+**Before writing ADRs, explanations, or documentation, check if the topic is already covered:**
+
+| Topic | Docs path |
+|---|---|
+| HAL (lifecycle, drivers, mezzanine, PSU) | `docs-site/docs/developer/hal/` |
+| Audio pipeline & DSP | `docs-site/docs/developer/audio-pipeline.md`, `dsp-system.md` |
+| REST API (HAL, DSP, health, pipeline, EEPROM) | `docs-site/docs/developer/api/` |
+| WebSocket protocol | `docs-site/docs/developer/websocket.md` |
+| Architecture overview | `docs-site/docs/developer/architecture.md` |
+| Testing (CI, device, overview) | `docs-site/docs/developer/testing/` |
+| User flows (boot, toggle, routing, PEQ, mezzanine) | `docs-site/docs/developer/user-flows/` |
+| User guides (WiFi, MQTT/HA, OTA, web UI) | `docs-site/docs/user/` |
+| Enterprise (OEM, certification, deployment) | `docs-site/docs/enterprise/` |
