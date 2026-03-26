@@ -231,5 +231,9 @@
                 handleDiagEvent(data);
             } else if (data.type === 'protocolVersion') {
                 console.log('[WS] Protocol version: ' + data.version);
+            } else if (data.type === 'thdResult') {
+                handleThdResult(data);
+            } else if (data.type === 'dspPresetList') {
+                handleDspPresetList(data);
             }
         }

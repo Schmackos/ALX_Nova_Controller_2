@@ -2799,3 +2799,203 @@
     border-color: var(--accent);
     color: var(--accent);
 }
+
+/* ===== THD Measurement ===== */
+.thd-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.thd-progress-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-card);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.thd-progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.2s ease;
+}
+.thd-progress-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 80px;
+    text-align: right;
+}
+.thd-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.thd-metric {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-width: 110px;
+    flex: 1;
+}
+.thd-metric-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.thd-metric-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-top: 2px;
+}
+.thd-harmonics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.thd-harmonics-table th,
+.thd-harmonics-table td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.thd-harmonics-table th {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* ===== DSP Preset Overlay ===== */
+.dsp-preset-overlay {
+    align-items: center;
+    justify-content: center;
+}
+.dsp-preset-overlay-inner {
+    background: var(--bg-surface);
+    border-radius: 16px;
+    width: min(480px, 96vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    overflow: hidden;
+}
+.dsp-preset-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.dsp-preset-tab {
+    flex: 1;
+    padding: 10px 8px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.dsp-preset-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.dsp-preset-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+.dsp-preset-footer {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+.dsp-preset-loading,
+.dsp-preset-error,
+.dsp-preset-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 24px 0;
+}
+.dsp-preset-actions {
+    margin-bottom: 10px;
+}
+.dsp-preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.dsp-preset-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 8px 10px;
+    gap: 8px;
+}
+.dsp-preset-item.active {
+    border: 1px solid var(--accent);
+}
+.dsp-preset-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.dsp-preset-item-name {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dsp-preset-item-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.dsp-preset-item-badge {
+    font-size: 10px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.dsp-preset-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.btn-danger {
+    background: rgba(244, 67, 54, 0.15);
+    color: #F44336;
+    border: 1px solid rgba(244, 67, 54, 0.3);
+}
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
+/* ===== Audio Subnav Presets Button ===== */
+.audio-subnav-presets {
+    margin-left: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+}
+.audio-subnav-presets:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}

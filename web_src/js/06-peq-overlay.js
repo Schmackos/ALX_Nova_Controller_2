@@ -173,6 +173,14 @@
                 html += '  <button class="btn btn-sm btn-primary" data-action="peq-add-band">Add Band</button>';
             }
             html += '  <button class="btn btn-sm btn-secondary" data-action="peq-reset-all">Reset All</button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-preset-save" title="Save EQ curve as preset">';
+            html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17,3H7A2,2 0 0,0 5,5V21L12,18L19,21V5C19,3.89 18.1,3 17,3Z"/></svg>';
+            html += '    Save Preset';
+            html += '  </button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-preset-load" title="Load a saved PEQ preset">';
+            html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21V18C21,19.1 20.11,20 19,20Z"/></svg>';
+            html += '    Load Preset';
+            html += '  </button>';
             html += '  <label class="btn btn-sm btn-secondary peq-import-label" title="Import REW/APO filter text">';
             html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M13,13V18H11V13H8L12,9L16,13H13Z"/></svg>';
             html += '    Import REW';
@@ -972,6 +980,10 @@
                     peqRemoveBand(parseInt(el.dataset.band));
                 } else if (action === 'peq-rew-export') {
                     peqHandleRewExport();
+                } else if (action === 'peq-preset-save') {
+                    peqOverlayQuickSave();
+                } else if (action === 'peq-preset-load') {
+                    peqOverlayQuickLoad();
                 } else if (action === 'xover-apply') {
                     applyXover(parseInt(el.dataset.channel));
                 } else if (action === 'compressor-apply') {

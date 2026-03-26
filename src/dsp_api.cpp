@@ -1319,7 +1319,6 @@ JsonDocument doc;
 
         if (name.length() == 0) { sendJsonError(400, "Name required"); return; }
 
-        extern bool dsp_preset_rename(int, const char*);
         if (dsp_preset_rename(slot, name.c_str())) {
             server_send(200, "application/json", "{\"success\":true}");
         } else {
