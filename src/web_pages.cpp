@@ -55,7 +55,8 @@ body.night-mode {
             --accent-dark: #E68900;
             --text-primary: #212121;
             --text-secondary: #757575;
-            --text-disabled: #9E9E9E;
+            --text-muted: #9E9E9E;
+            --text-disabled: #BDBDBD;
             --success: #4CAF50;
             --error: #F44336;
             --warning: #FFC107;
@@ -75,7 +76,8 @@ body.night-mode {
             --bg-input: #2C2C2C;
             --text-primary: #FFFFFF;
             --text-secondary: #B0B0B0;
-            --text-disabled: #666666;
+            --text-muted: #808080;
+            --text-disabled: #555555;
             --error: #F44336;
             --info: #2196F3;
             --border: #333333;
@@ -3258,6 +3260,286 @@ body.night-mode {
     color: var(--accent);
 }
 
+/* ===== THD Measurement ===== */
+.thd-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.thd-progress-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-card);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.thd-progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.2s ease;
+}
+.thd-progress-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 80px;
+    text-align: right;
+}
+.thd-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.thd-metric {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-width: 110px;
+    flex: 1;
+}
+.thd-metric-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.thd-metric-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-top: 2px;
+}
+.thd-harmonics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.thd-harmonics-table th,
+.thd-harmonics-table td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.thd-harmonics-table th {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* ===== DSP Preset Overlay ===== */
+.dsp-preset-overlay {
+    align-items: center;
+    justify-content: center;
+}
+.dsp-preset-overlay-inner {
+    background: var(--bg-surface);
+    border-radius: 16px;
+    width: min(480px, 96vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    overflow: hidden;
+}
+.dsp-preset-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.dsp-preset-tab {
+    flex: 1;
+    padding: 10px 8px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.dsp-preset-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.dsp-preset-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+.dsp-preset-footer {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+.dsp-preset-loading,
+.dsp-preset-error,
+.dsp-preset-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 24px 0;
+}
+.dsp-preset-actions {
+    margin-bottom: 10px;
+}
+.dsp-preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.dsp-preset-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 8px 10px;
+    gap: 8px;
+}
+.dsp-preset-item.active {
+    border: 1px solid var(--accent);
+}
+.dsp-preset-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.dsp-preset-item-name {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dsp-preset-item-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.dsp-preset-item-badge {
+    font-size: 10px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.dsp-preset-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.btn-danger {
+    background: rgba(244, 67, 54, 0.15);
+    color: #F44336;
+    border: 1px solid rgba(244, 67, 54, 0.3);
+}
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
+/* ===== PEQ A/B Compare + Copy from Channel ===== */
+.peq-overlay-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    margin-right: 8px;
+}
+.peq-ab-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.peq-ab-btn {
+    padding: 3px 10px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.peq-ab-btn.active {
+    background: var(--accent);
+    color: #000;
+}
+.peq-copy-select {
+    font-size: 11px;
+    padding: 3px 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    max-width: 160px;
+}
+
+/* ===== Audio Subnav Presets Button ===== */
+.audio-subnav-presets {
+    margin-left: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+}
+.audio-subnav-presets:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* ===== Collapsible Viz Section ===== */
+.viz-section {
+    margin: 12px 0 0;
+}
+.viz-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+}
+.viz-section-header:hover {
+    background: var(--bg-input);
+    color: var(--text-primary);
+}
+.viz-section-header.collapsed {
+    border-radius: 8px;
+}
+.viz-collapse-chevron {
+    margin-left: auto;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+.viz-section-body {
+    margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+    .viz-section-header {
+        font-size: 12px;
+        padding: 7px 10px;
+    }
+}
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -3695,6 +3977,54 @@ body.night-mode {
             .matrix-cell {
                 min-width: 32px;
             }
+            /* Channel strip VU: horizontal layout on mobile */
+            .channel-vu-pair {
+                flex-direction: row;
+                align-items: center;
+                min-height: unset;
+                gap: 6px;
+            }
+            .channel-vu-wrapper {
+                flex-direction: row;
+                align-items: center;
+                gap: 4px;
+                flex: 1;
+            }
+            .channel-vu-canvas {
+                width: 100% !important;
+                height: 16px !important;
+            }
+            .channel-vu-label {
+                writing-mode: horizontal-tb;
+                font-size: 10px;
+                min-width: 12px;
+            }
+            .channel-vu-readout {
+                font-size: 10px;
+                min-width: 60px;
+                text-align: right;
+            }
+            /* THD card: tighter on mobile */
+            .thd-summary {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .thd-metric {
+                min-width: 80px;
+            }
+            /* DSP preset overlay: full-width on mobile */
+            .dsp-preset-overlay-inner {
+                width: 96vw;
+                max-height: 85vh;
+            }
+            /* A/B toggle compact on mobile */
+            .peq-overlay-header-tools {
+                gap: 6px;
+            }
+            .peq-ab-btn {
+                padding: 3px 7px;
+                font-size: 11px;
+            }
         }
 
         /* Ultra-small screens (< 360px) */
@@ -4022,6 +4352,10 @@ body.night-mode {
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>
                     SigGen
                 </button>
+                <button class="audio-subnav-btn audio-subnav-presets" id="audioPresetsBtn" onclick="openDspPresetOverlay()" aria-label="DSP Presets">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17,3H7A2,2 0 0,0 5,5V21L12,18L19,21V5C19,3.89 18.1,3 17,3Z"/></svg>
+                    Presets
+                </button>
             </div>
 
             <!-- ===== INPUTS Sub-View ===== -->
@@ -4034,6 +4368,15 @@ body.night-mode {
                 </div>
 
 
+
+            <!-- ===== Visualization Section (collapsible) ===== -->
+            <div class="viz-section" id="audioVizSection">
+                <div class="viz-section-header" onclick="toggleVizSection()" id="audioVizSectionHeader">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>
+                    <span>Visualizations</span>
+                    <svg class="viz-collapse-chevron" id="audioVizChevron" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+                </div>
+                <div class="viz-section-body" id="audioVizBody">
 
             <!-- Audio Waveform -->
             <div class="card">
@@ -4114,8 +4457,10 @@ body.night-mode {
                             <option value="4">Nuttall</option>
                             <option value="5">Flat-Top</option>
                         </select>
-                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">SNR: <span id="audioSnr0">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">ADC 1 SNR: <span id="audioSnr0">--</span> dB</span>
                         <span style="font-size:11px;color:var(--text-secondary);">SFDR: <span id="audioSfdr0">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">ADC 2 SNR: <span id="audioSnr1">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);">SFDR: <span id="audioSfdr1">--</span> dB</span>
                     </div>
                 </div>
             </div>
@@ -4241,8 +4586,8 @@ body.night-mode {
                 </div>
             </div>
 
-
-
+                </div><!-- end viz-section-body -->
+            </div><!-- end viz-section -->
 
             </div><!-- end audio-sv-inputs -->
 
@@ -4343,6 +4688,39 @@ body.night-mode {
                 </div>
                 <p id="siggenPwmNote" style="display:none;font-size:11px;color:#FFA726;margin-top:8px">PWM output requires external RC low-pass filter for sine approximation.</p>
                 </div>
+            </div>
+            <!-- THD Measurement -->
+            <div class="card">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M11,2V4.07C7.38,4.53 4.53,7.38 4.07,11H2V13H4.07C4.53,16.62 7.38,19.47 11,19.93V22H13V19.93C16.62,19.47 19.47,16.62 19.93,13H22V11H19.93C19.47,7.38 16.62,4.53 13,4.07V2H11M12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8Z"/></svg>
+                    THD+N Measurement
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Averages</label>
+                    <select class="form-input" id="thdAverages">
+                        <option value="4">4 frames (~fast)</option>
+                        <option value="8" selected>8 frames (~normal)</option>
+                        <option value="16">16 frames (~slow/accurate)</option>
+                    </select>
+                </div>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Uses current SigGen frequency. SigGen must be enabled with Sine waveform.</p>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn btn-primary" id="thdMeasureBtn" onclick="startThdMeasurement()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg>
+                        Measure THD
+                    </button>
+                    <button class="btn btn-secondary" id="thdStopBtn" onclick="stopThdMeasurement()" disabled>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M18,18H6V6H18V18Z"/></svg>
+                        Stop
+                    </button>
+                </div>
+                <div class="thd-progress" id="thdProgressWrap" style="margin-top:10px">
+                    <div class="thd-progress-bar-track">
+                        <div class="thd-progress-bar-fill" id="thdProgressBar" style="width:0%"></div>
+                    </div>
+                    <span class="thd-progress-label" id="thdProgressLabel">0 / 0 frames</span>
+                </div>
+                <div id="thdResults" style="display:none;margin-top:12px"></div>
             </div>
             </div><!-- end audio-sv-siggen -->
         </section>
@@ -6283,6 +6661,10 @@ body.night-mode {
                 handleDiagEvent(data);
             } else if (data.type === 'protocolVersion') {
                 console.log('[WS] Protocol version: ' + data.version);
+            } else if (data.type === 'thdResult') {
+                handleThdResult(data);
+            } else if (data.type === 'dspPresetList') {
+                handleDspPresetList(data);
             }
         }
 
@@ -7500,6 +7882,11 @@ body.night-mode {
                     }
                 }
             }
+            // SNR/SFDR readout from audioLevels broadcast
+            if (data.adcSnrDb || data.adcSfdrDb) {
+                updateSnrSfdr(data.adcSnrDb, data.adcSfdrDb);
+            }
+
             // Output sink VU meters
             if (data.sinks && audioSubView === 'outputs') {
                 for (var s = 0; s < data.sinks.length; s++) {
@@ -7722,6 +8109,14 @@ body.night-mode {
         let peqOverlayBands = [];     // [{type, freq, gain, Q, enabled}]
         let peqOverlayFs = 48000;
 
+        // ===== A/B Compare State =====
+        // _peqAbSlot: 'A' or 'B' — which set is currently active (being edited)
+        // _peqBandsA: bands stored as slot A (populated when A/B is first activated)
+        // _peqBandsB: bands stored as slot B (starts empty)
+        var _peqAbSlot = 'A';
+        var _peqBandsA = null;   // null = A/B not yet activated
+        var _peqBandsB = [];
+
         // Graph coordinate constants — shared between draw and pointer handlers
         var PEQ_F_MIN = 5;
         var PEQ_F_MAX = 20000;
@@ -7818,8 +8213,36 @@ body.night-mode {
             var title = target.type === 'input' ? 'Input PEQ — Lane ' + target.channel : 'Output PEQ — Ch ' + target.channel;
             var maxBands = target.type === 'input' ? 6 : 10;
 
+            // Reset A/B state when opening overlay fresh
+            _peqAbSlot = 'A';
+            _peqBandsA = null;
+            _peqBandsB = [];
+
+            // Build copy-from-channel options from audioChannelMap
+            var copyOptions = '<option value="">-- Select channel --</option>';
+            if (audioChannelMap) {
+                var srcList = target.type === 'input' ? (audioChannelMap.inputs || []) : (audioChannelMap.outputs || []);
+                for (var ci = 0; ci < srcList.length; ci++) {
+                    var srcChan = target.type === 'input' ? srcList[ci].lane : srcList[ci].firstChannel;
+                    if (srcChan === target.channel) continue;
+                    var srcLabel = target.type === 'input'
+                        ? 'Lane ' + srcChan + ' (' + escapeHtml(srcList[ci].deviceName || 'Input') + ')'
+                        : 'Ch ' + srcChan + ' (' + escapeHtml(srcList[ci].name || 'Output') + ')';
+                    copyOptions += '<option value="' + srcChan + '">' + srcLabel + '</option>';
+                }
+            }
+
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">' + title + '</span>';
+            html += '  <div class="peq-overlay-header-tools">';
+            html += '    <div class="peq-ab-toggle" title="A/B compare: store two EQ curves and switch between them">';
+            html += '      <button class="peq-ab-btn active" id="peqAbBtnA" data-action="peq-ab-select" data-slot="A">A</button>';
+            html += '      <button class="peq-ab-btn" id="peqAbBtnB" data-action="peq-ab-select" data-slot="B">B</button>';
+            html += '    </div>';
+            html += '    <select class="peq-copy-select" id="peqCopySelect" data-action="peq-copy-channel" title="Copy EQ bands from another channel">';
+            html += '      ' + copyOptions;
+            html += '    </select>';
+            html += '  </div>';
             html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
@@ -7848,6 +8271,14 @@ body.night-mode {
                 html += '  <button class="btn btn-sm btn-primary" data-action="peq-add-band">Add Band</button>';
             }
             html += '  <button class="btn btn-sm btn-secondary" data-action="peq-reset-all">Reset All</button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-preset-save" title="Save EQ curve as preset">';
+            html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17,3H7A2,2 0 0,0 5,5V21L12,18L19,21V5C19,3.89 18.1,3 17,3Z"/></svg>';
+            html += '    Save Preset';
+            html += '  </button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-preset-load" title="Load a saved PEQ preset">';
+            html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21V18C21,19.1 20.11,20 19,20Z"/></svg>';
+            html += '    Load Preset';
+            html += '  </button>';
             html += '  <label class="btn btn-sm btn-secondary peq-import-label" title="Import REW/APO filter text">';
             html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M13,13V18H11V13H8L12,9L16,13H13Z"/></svg>';
             html += '    Import REW';
@@ -7928,8 +8359,104 @@ body.night-mode {
         function closePeqOverlay() {
             peqOverlayActive = false;
             _peqDragBand = -1;
+            _peqBandsA = null;
+            _peqBandsB = [];
+            _peqAbSlot = 'A';
             var overlay = document.getElementById('peqOverlay');
             if (overlay) overlay.style.display = 'none';
+        }
+
+        // ===== A/B Compare =====
+        // On first activation: saves current bands as A, initialises B as empty.
+        // Subsequent clicks swap the active slot and reload bands.
+
+        function peqAbSelect(slot) {
+            if (!peqOverlayActive) return;
+
+            if (_peqBandsA === null) {
+                // First time activating A/B — capture current bands into A
+                _peqBandsA = peqOverlayBands.slice();
+                _peqBandsB = [];
+            }
+
+            // Save current editing set into the slot we are leaving
+            if (_peqAbSlot === 'A') {
+                _peqBandsA = peqOverlayBands.slice();
+            } else {
+                _peqBandsB = peqOverlayBands.slice();
+            }
+
+            _peqAbSlot = slot;
+
+            // Load the new slot
+            peqOverlayBands = (slot === 'A' ? _peqBandsA : _peqBandsB).slice();
+
+            // Update button styles
+            var btnA = document.getElementById('peqAbBtnA');
+            var btnB = document.getElementById('peqAbBtnB');
+            if (btnA) btnA.classList.toggle('active', slot === 'A');
+            if (btnB) btnB.classList.toggle('active', slot === 'B');
+
+            // Re-render table and graph
+            var tbody = document.getElementById('peqBandRows');
+            if (tbody) {
+                var html = '';
+                for (var i = 0; i < peqOverlayBands.length; i++) html += peqBandRowHtml(i);
+                tbody.innerHTML = html;
+            }
+            peqDrawGraph();
+        }
+
+        // ===== Copy from Channel =====
+        // Fetches the DSP channel config from the firmware and loads its PEQ bands.
+
+        function peqCopyFromChannel(srcChannel) {
+            if (srcChannel === '' || srcChannel === null || srcChannel === undefined) return;
+            var ch = parseInt(srcChannel, 10);
+            if (isNaN(ch)) return;
+
+            apiFetch('/api/dsp/channel?channel=' + ch)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) { showToast('Copy failed: ' + (data.message || 'error'), 'error'); return; }
+                    // Extract biquad (PEQ) stages from the stage list
+                    var stages = data.stages || [];
+                    var bands = [];
+                    for (var s = 0; s < stages.length; s++) {
+                        var st = stages[s];
+                        // Include all biquad types (0-10, 19, 20) as bands
+                        var typeId = typeof st.type === 'number' ? st.type : parseInt(st.type, 10);
+                        if (typeId >= 0 && typeId <= 10 || typeId === 19 || typeId === 20) {
+                            bands.push({
+                                type: typeId,
+                                freq: (st.params && st.params.frequency) || 1000,
+                                gain: (st.params && st.params.gain) || 0,
+                                Q: (st.params && st.params.Q) || 0.707,
+                                enabled: st.enabled !== false
+                            });
+                        }
+                    }
+
+                    if (bands.length === 0) {
+                        showToast('No PEQ bands found on channel ' + ch, 'info');
+                        return;
+                    }
+
+                    peqOverlayBands = bands;
+                    var tbody = document.getElementById('peqBandRows');
+                    if (tbody) {
+                        var html = '';
+                        for (var i = 0; i < peqOverlayBands.length; i++) html += peqBandRowHtml(i);
+                        tbody.innerHTML = html;
+                    }
+                    peqDrawGraph();
+                    showToast('Copied ' + bands.length + ' band(s) from Ch ' + ch, 'success');
+
+                    // Reset copy dropdown
+                    var sel = document.getElementById('peqCopySelect');
+                    if (sel) sel.value = '';
+                })
+                .catch(function() { showToast('Copy failed', 'error'); });
         }
 
         // ===== Drag-on-graph interaction =====
@@ -8647,6 +9174,12 @@ body.night-mode {
                     peqRemoveBand(parseInt(el.dataset.band));
                 } else if (action === 'peq-rew-export') {
                     peqHandleRewExport();
+                } else if (action === 'peq-preset-save') {
+                    peqOverlayQuickSave();
+                } else if (action === 'peq-preset-load') {
+                    peqOverlayQuickLoad();
+                } else if (action === 'peq-ab-select') {
+                    peqAbSelect(el.dataset.slot);
                 } else if (action === 'xover-apply') {
                     applyXover(parseInt(el.dataset.channel));
                 } else if (action === 'compressor-apply') {
@@ -8681,7 +9214,9 @@ body.night-mode {
                 if (!el) return;
                 var action = el.dataset.action;
 
-                if (action === 'peq-rew-import') {
+                if (action === 'peq-copy-channel') {
+                    peqCopyFromChannel(el.value);
+                } else if (action === 'peq-rew-import') {
                     peqHandleRewImport(el.files && el.files[0]);
                     el.value = '';  // allow re-import of same file
                 } else if (action === 'fir-file-select') {
@@ -10075,7 +10610,398 @@ body.night-mode {
                 ws.send(JSON.stringify({type:map[graph], enabled:enabled}));
         }
 
+        // ===== Collapsible Viz Section =====
+        var _vizSectionOpen = true;
+
+        function toggleVizSection() {
+            _vizSectionOpen = !_vizSectionOpen;
+            var body = document.getElementById('audioVizBody');
+            var chevron = document.getElementById('audioVizChevron');
+            var header = document.getElementById('audioVizSectionHeader');
+            if (body) body.style.display = _vizSectionOpen ? '' : 'none';
+            if (chevron) chevron.style.transform = _vizSectionOpen ? '' : 'rotate(-90deg)';
+            if (header) header.classList.toggle('collapsed', !_vizSectionOpen);
+        }
+
+        // ===== SNR/SFDR update from audioLevels broadcast =====
+        function updateSnrSfdr(adcSnrDb, adcSfdrDb) {
+            if (!adcSnrDb) return;
+            for (var a = 0; a < adcSnrDb.length; a++) {
+                var snrEl = document.getElementById('audioSnr' + a);
+                var sfdrEl = document.getElementById('audioSfdr' + a);
+                if (snrEl) snrEl.textContent = adcSnrDb[a] !== null && adcSnrDb[a] !== undefined ? adcSnrDb[a].toFixed(1) : '--';
+                if (sfdrEl && adcSfdrDb) sfdrEl.textContent = adcSfdrDb[a] !== null && adcSfdrDb[a] !== undefined ? adcSfdrDb[a].toFixed(1) : '--';
+            }
+        }
+
 //# sourceURL=09-audio-viz.js
+
+        // ===== DSP / PEQ Preset Manager Overlay =====
+        // Provides a two-tab overlay:
+        //   Tab 1 — DSP Config Presets (32 named slots, backed by /api/dsp/presets)
+        //   Tab 2 — PEQ Presets (10 named, backed by /api/dsp/peq/presets)
+
+        var _dspPresetOverlayOpen = false;
+        var _dspPresetTab = 'dsp';  // 'dsp' | 'peq'
+
+        // ===== Open / Close =====
+
+        function openDspPresetOverlay() {
+            _dspPresetOverlayOpen = true;
+            var overlay = document.getElementById('dspPresetOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'dspPresetOverlay';
+                overlay.className = 'peq-overlay dsp-preset-overlay';
+                document.body.appendChild(overlay);
+                overlay.addEventListener('click', function(e) {
+                    if (e.target === overlay) closeDspPresetOverlay();
+                });
+            }
+            _renderDspPresetOverlay(overlay);
+            overlay.style.display = 'flex';
+            _loadDspPresets();
+        }
+
+        function closeDspPresetOverlay() {
+            _dspPresetOverlayOpen = false;
+            var overlay = document.getElementById('dspPresetOverlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function _renderDspPresetOverlay(overlay) {
+            var html = '<div class="peq-overlay-inner dsp-preset-overlay-inner">';
+            html += '<div class="peq-overlay-header">';
+            html += '  <span class="peq-overlay-title">';
+            html += '    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M17,3H7A2,2 0 0,0 5,5V21L12,18L19,21V5C19,3.89 18.1,3 17,3Z"/></svg>';
+            html += '    DSP Presets';
+            html += '  </span>';
+            html += '  <button class="peq-overlay-close" id="dspPresetClose" aria-label="Close presets">';
+            html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
+            html += '  </button>';
+            html += '</div>';
+
+            // Tab strip
+            html += '<div class="dsp-preset-tabs">';
+            html += '  <button class="dsp-preset-tab' + (_dspPresetTab === 'dsp' ? ' active' : '') + '" id="dspPresetTabDsp" onclick="switchDspPresetTab(\'dsp\')">DSP Configs (32 slots)</button>';
+            html += '  <button class="dsp-preset-tab' + (_dspPresetTab === 'peq' ? ' active' : '') + '" id="dspPresetTabPeq" onclick="switchDspPresetTab(\'peq\')">PEQ Presets (10 named)</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="dsp-preset-body" id="dspPresetBody">';
+            html += '  <div class="dsp-preset-loading">Loading...</div>';
+            html += '</div>';
+
+            // Footer
+            html += '<div class="dsp-preset-footer">';
+            html += '  <button class="btn btn-secondary btn-sm" onclick="closeDspPresetOverlay()">Close</button>';
+            html += '</div>';
+            html += '</div>';
+
+            overlay.innerHTML = html;
+            document.getElementById('dspPresetClose').addEventListener('click', closeDspPresetOverlay);
+        }
+
+        function switchDspPresetTab(tab) {
+            _dspPresetTab = tab;
+            var tabDsp = document.getElementById('dspPresetTabDsp');
+            var tabPeq = document.getElementById('dspPresetTabPeq');
+            if (tabDsp) tabDsp.classList.toggle('active', tab === 'dsp');
+            if (tabPeq) tabPeq.classList.toggle('active', tab === 'peq');
+            _loadDspPresets();
+        }
+
+        // ===== Load and Render =====
+
+        function _loadDspPresets() {
+            var body = document.getElementById('dspPresetBody');
+            if (!body) return;
+            body.innerHTML = '<div class="dsp-preset-loading">Loading...</div>';
+
+            if (_dspPresetTab === 'dsp') {
+                apiFetch('/api/dsp/presets')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) { _renderDspConfigPresets(data); })
+                    .catch(function() {
+                        if (body) body.innerHTML = '<div class="dsp-preset-error">Failed to load presets</div>';
+                    });
+            } else {
+                apiFetch('/api/dsp/peq/presets')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) { _renderPeqPresets(data); })
+                    .catch(function() {
+                        if (body) body.innerHTML = '<div class="dsp-preset-error">Failed to load PEQ presets</div>';
+                    });
+            }
+        }
+
+        function _renderDspConfigPresets(data) {
+            var body = document.getElementById('dspPresetBody');
+            if (!body) return;
+
+            var slots = data.slots || [];
+            var activeIndex = data.activeIndex !== undefined ? data.activeIndex : -1;
+
+            // Save-to-new button
+            var html = '<div class="dsp-preset-actions">';
+            html += '  <button class="btn btn-primary btn-sm" onclick="dspPresetSaveNew()">';
+            html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17,13H13V17H11V13H7V11H11V7H13V11H17M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg>';
+            html += '    Save Current Config';
+            html += '  </button>';
+            html += '</div>';
+
+            if (slots.length === 0) {
+                html += '<div class="dsp-preset-empty">No presets saved. Save your current DSP configuration to create one.</div>';
+            } else {
+                html += '<div class="dsp-preset-list" id="dspConfigPresetList">';
+                for (var i = 0; i < slots.length; i++) {
+                    var slot = slots[i];
+                    if (!slot.exists) continue;
+                    var isActive = slot.index === activeIndex;
+                    html += _dspPresetSlotHtml(slot, isActive);
+                }
+                html += '</div>';
+            }
+
+            body.innerHTML = html;
+        }
+
+        function _dspPresetSlotHtml(slot, isActive) {
+            var html = '<div class="dsp-preset-item' + (isActive ? ' active' : '') + '" data-slot="' + slot.index + '">';
+            html += '  <div class="dsp-preset-item-info">';
+            html += '    <span class="dsp-preset-item-name">' + escapeHtml(slot.name || ('Preset ' + slot.index)) + '</span>';
+            if (isActive) html += '    <span class="dsp-preset-item-badge">Active</span>';
+            html += '  </div>';
+            html += '  <div class="dsp-preset-item-actions">';
+            html += '    <button class="btn btn-sm btn-primary" onclick="dspPresetLoad(' + slot.index + ')" title="Load preset">Load</button>';
+            html += '    <button class="btn btn-sm btn-secondary" onclick="dspPresetRename(' + slot.index + ', ' + JSON.stringify(slot.name || '') + ')" title="Rename preset">';
+            html += '      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>';
+            html += '    </button>';
+            html += '    <button class="btn btn-sm btn-danger" onclick="dspPresetDelete(' + slot.index + ')" title="Delete preset">';
+            html += '      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>';
+            html += '    </button>';
+            html += '  </div>';
+            html += '</div>';
+            return html;
+        }
+
+        function _renderPeqPresets(data) {
+            var body = document.getElementById('dspPresetBody');
+            if (!body) return;
+
+            var presets = data.presets || [];
+
+            var html = '<div class="dsp-preset-actions">';
+            html += '  <button class="btn btn-primary btn-sm" onclick="peqPresetSaveFromOverlay()">';
+            html += '    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17,13H13V17H11V13H7V11H11V7H13V11H17M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg>';
+            html += '    Save Current PEQ';
+            html += '  </button>';
+            html += '</div>';
+
+            if (presets.length === 0) {
+                html += '<div class="dsp-preset-empty">No PEQ presets saved. Open a PEQ overlay and save your EQ curve.</div>';
+            } else {
+                html += '<div class="dsp-preset-list" id="peqPresetList">';
+                for (var i = 0; i < presets.length; i++) {
+                    var p = presets[i];
+                    html += '<div class="dsp-preset-item" data-name="' + escapeHtml(p.name) + '">';
+                    html += '  <div class="dsp-preset-item-info">';
+                    html += '    <span class="dsp-preset-item-name">' + escapeHtml(p.name) + '</span>';
+                    if (p.channel !== undefined) html += '    <span class="dsp-preset-item-sub">Ch ' + p.channel + '</span>';
+                    html += '  </div>';
+                    html += '  <div class="dsp-preset-item-actions">';
+                    html += '    <button class="btn btn-sm btn-primary" onclick="peqPresetLoad(' + JSON.stringify(p.name) + ')">Load</button>';
+                    html += '    <button class="btn btn-sm btn-danger" onclick="peqPresetDelete(' + JSON.stringify(p.name) + ')">';
+                    html += '      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>';
+                    html += '    </button>';
+                    html += '  </div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            body.innerHTML = html;
+        }
+
+        // ===== DSP Config Preset Actions =====
+
+        function dspPresetSaveNew() {
+            var name = prompt('Preset name (max 20 chars):');
+            if (!name || name.trim() === '') return;
+            name = name.trim().slice(0, 20);
+            // Find first empty slot
+            apiFetch('/api/dsp/presets')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var slots = data.slots || [];
+                    var slot = -1;
+                    for (var i = 0; i < 32; i++) {
+                        var s = slots.find(function(x) { return x.index === i; });
+                        if (!s || !s.exists) { slot = i; break; }
+                    }
+                    if (slot < 0) { showToast('All 32 preset slots are full', 'error'); return; }
+                    return apiFetch('/api/dsp/presets/save?slot=' + slot, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: name })
+                    });
+                })
+                .then(function(r) { if (r) return r.json(); })
+                .then(function(d) {
+                    if (d && d.success) {
+                        showToast('Preset saved', 'success');
+                        _loadDspPresets();
+                    } else {
+                        showToast('Save failed', 'error');
+                    }
+                })
+                .catch(function() { showToast('Save failed', 'error'); });
+        }
+
+        function dspPresetLoad(slot) {
+            apiFetch('/api/dsp/presets/load?slot=' + slot, { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) {
+                        showToast('Preset loaded', 'success');
+                        closeDspPresetOverlay();
+                    } else {
+                        showToast('Load failed', 'error');
+                    }
+                })
+                .catch(function() { showToast('Load failed', 'error'); });
+        }
+
+        function dspPresetDelete(slot) {
+            if (!confirm('Delete this preset?')) return;
+            apiFetch('/api/dsp/presets?slot=' + slot, { method: 'DELETE' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) {
+                        showToast('Preset deleted', 'success');
+                        _loadDspPresets();
+                    } else {
+                        showToast('Delete failed', 'error');
+                    }
+                })
+                .catch(function() { showToast('Delete failed', 'error'); });
+        }
+
+        function dspPresetRename(slot, currentName) {
+            var name = prompt('New name:', currentName);
+            if (!name || name.trim() === '' || name.trim() === currentName) return;
+            name = name.trim().slice(0, 20);
+            apiFetch('/api/dsp/presets/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot: slot, name: name })
+            })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) {
+                        showToast('Preset renamed', 'success');
+                        _loadDspPresets();
+                    } else {
+                        showToast('Rename failed', 'error');
+                    }
+                })
+                .catch(function() { showToast('Rename failed', 'error'); });
+        }
+
+        function handleDspPresetList(data) {
+            // Called when firmware broadcasts dspPresetList — refresh overlay if open
+            if (_dspPresetOverlayOpen) _loadDspPresets();
+        }
+
+        // ===== PEQ Preset Actions =====
+
+        function peqPresetSaveFromOverlay() {
+            // If a PEQ overlay is open, save its current bands; otherwise use current channel
+            var name = prompt('PEQ preset name (max 40 chars):');
+            if (!name || name.trim() === '') return;
+            name = name.trim().slice(0, 40);
+
+            var bands = peqOverlayActive ? peqOverlayBands.slice() : [];
+            var channel = peqOverlayActive && peqOverlayTarget ? peqOverlayTarget.channel : 0;
+
+            apiFetch('/api/dsp/peq/presets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, channel: channel, stages: bands })
+            })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) {
+                        showToast('PEQ preset saved', 'success');
+                        _loadDspPresets();
+                    } else {
+                        showToast('Save failed', 'error');
+                    }
+                })
+                .catch(function() { showToast('Save failed', 'error'); });
+        }
+
+        function peqPresetLoad(name) {
+            apiFetch('/api/dsp/peq/preset?name=' + encodeURIComponent(name))
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success && d.preset) {
+                        if (peqOverlayActive && d.preset.stages) {
+                            // Load bands into open PEQ overlay
+                            peqOverlayBands = d.preset.stages.slice();
+                            var tbody = document.getElementById('peqBandRows');
+                            if (tbody) {
+                                var html = '';
+                                for (var i = 0; i < peqOverlayBands.length; i++) html += peqBandRowHtml(i);
+                                tbody.innerHTML = html;
+                            }
+                            peqDrawGraph();
+                            showToast('PEQ preset loaded', 'success');
+                        } else {
+                            showToast('Open a PEQ editor first to apply this preset', 'info');
+                        }
+                        closeDspPresetOverlay();
+                    } else {
+                        showToast('Load failed', 'error');
+                    }
+                })
+                .catch(function() { showToast('Load failed', 'error'); });
+        }
+
+        function peqPresetDelete(name) {
+            if (!confirm('Delete PEQ preset "' + name + '"?')) return;
+            apiFetch('/api/dsp/peq/preset', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) {
+                        showToast('PEQ preset deleted', 'success');
+                        _loadDspPresets();
+                    } else {
+                        showToast('Delete failed', 'error');
+                    }
+                })
+                .catch(function() { showToast('Delete failed', 'error'); });
+        }
+
+        // ===== PEQ Overlay Quick-Save / Quick-Load =====
+        // Called from PEQ overlay toolbar (defined in 06-peq-overlay.js openPeqOverlay)
+
+        function peqOverlayQuickSave() {
+            openDspPresetOverlay();
+            // Switch to PEQ tab so user can save
+            switchDspPresetTab('peq');
+        }
+
+        function peqOverlayQuickLoad() {
+            openDspPresetOverlay();
+            switchDspPresetTab('peq');
+        }
+
+//# sourceURL=10-dsp-presets.js
 
         function updateSigGen() {
             document.getElementById('siggenFields').style.display = document.getElementById('siggenEnable').checked ? '' : 'none';
@@ -10121,8 +11047,73 @@ body.night-mode {
             if (d.targetAdc !== undefined) document.getElementById('siggenTargetAdc').value = d.targetAdc;
             document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
             document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
+        }
 
+        // ===== THD Measurement =====
+        var _thdMeasuring = false;
 
+        function startThdMeasurement() {
+            var freq = parseFloat(document.getElementById('siggenFreq').value) || 1000;
+            var avg = parseInt(document.getElementById('thdAverages').value) || 8;
+            _thdMeasuring = true;
+            _updateThdProgress(0, avg);
+            document.getElementById('thdMeasureBtn').disabled = true;
+            document.getElementById('thdStopBtn').disabled = false;
+            document.getElementById('thdResults').style.display = 'none';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'startThdMeasurement', freq: freq, averages: avg }));
+            }
+        }
+
+        function stopThdMeasurement() {
+            _thdMeasuring = false;
+            document.getElementById('thdMeasureBtn').disabled = false;
+            document.getElementById('thdStopBtn').disabled = true;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'stopThdMeasurement' }));
+            }
+        }
+
+        function _updateThdProgress(processed, target) {
+            var bar = document.getElementById('thdProgressBar');
+            var label = document.getElementById('thdProgressLabel');
+            if (!bar || !label) return;
+            var pct = target > 0 ? Math.round((processed / target) * 100) : 0;
+            bar.style.width = pct + '%';
+            label.textContent = processed + ' / ' + target + ' frames';
+        }
+
+        function handleThdResult(data) {
+            if (!_thdMeasuring && !data.valid) return;
+            _updateThdProgress(data.framesProcessed || 0, data.framesTarget || 0);
+            if (data.valid) {
+                _thdMeasuring = false;
+                var measureBtn = document.getElementById('thdMeasureBtn');
+                var stopBtn = document.getElementById('thdStopBtn');
+                if (measureBtn) measureBtn.disabled = false;
+                if (stopBtn) stopBtn.disabled = true;
+                _renderThdResults(data);
+            }
+        }
+
+        function _renderThdResults(data) {
+            var container = document.getElementById('thdResults');
+            if (!container) return;
+            var harmonicNames = ['2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
+            var harmonics = data.harmonicLevels || [];
+            var rows = '';
+            for (var i = 0; i < harmonicNames.length && i < harmonics.length; i++) {
+                rows += '<tr><td>' + harmonicNames[i] + '</td><td>' + harmonics[i].toFixed(1) + ' dB</td></tr>';
+            }
+            container.innerHTML =
+                '<div class="thd-summary">' +
+                '  <span class="thd-metric"><span class="thd-metric-label">THD+N</span><span class="thd-metric-value">' + (data.thdPlusNPercent || 0).toFixed(4) + '%</span></span>' +
+                '  <span class="thd-metric"><span class="thd-metric-label">THD+N</span><span class="thd-metric-value">' + (data.thdPlusNDb || 0).toFixed(1) + ' dB</span></span>' +
+                '  <span class="thd-metric"><span class="thd-metric-label">Fundamental</span><span class="thd-metric-value">' + (data.fundamentalDbfs || 0).toFixed(1) + ' dBFS</span></span>' +
+                '</div>' +
+                '<table class="thd-harmonics-table"><thead><tr><th>Harmonic</th><th>Level (rel)</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody></table>';
+            container.style.display = 'block';
         }
 
 //# sourceURL=13-signal-gen.js

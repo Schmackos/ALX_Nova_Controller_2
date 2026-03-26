@@ -51,8 +51,8 @@ const _stages = { 0: [], 1: [], 2: [], 3: [] };
 const _outputStages = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
 // PEQ presets store
 const _peqPresets = [];
-// DSP full presets store
-const _dspPresets = [];
+// DSP full presets store — slot-indexed object (slots 0-31)
+const _dspPresets = {};
 let _stageIdCounter = 1;
 
 // ===== Input pipeline DSP =====
@@ -221,56 +221,54 @@ router.delete('/dsp/peq/preset', (req, res) => {
 
 // ===== DSP Full Presets =====
 
-// GET /dsp/presets — list full DSP presets
+// GET /dsp/presets — list all DSP preset slots (returns slots array)
 router.get('/dsp/presets', (req, res) => {
-  res.json({ success: true, presets: _dspPresets.map(p => ({ name: p.name })) });
+  const slots = [];
+  for (let i = 0; i < 32; i++) {
+    const p = _dspPresets[i];
+    slots.push({ index: i, exists: !!p, name: p ? p.name : '' });
+  }
+  res.json({ success: true, slots, activeIndex: -1 });
 });
 
-// POST /dsp/presets/save — save full DSP config as a named preset
+// POST /dsp/presets/save?slot=N — save full DSP config into a slot
 router.post('/dsp/presets/save', (req, res) => {
+  const slot = parseInt(req.query.slot);
   const { name } = req.body || {};
-  if (!name) {
-    return res.status(400).json({ success: false, message: 'Missing name' });
+  if (isNaN(slot) || slot < 0 || slot > 31) {
+    return res.status(400).json({ success: false, message: 'Invalid slot' });
   }
-  const existing = _dspPresets.findIndex(p => p.name === name);
-  const entry = { name, stages: JSON.parse(JSON.stringify(_stages)) };
-  if (existing >= 0) {
-    _dspPresets[existing] = entry;
-  } else {
-    _dspPresets.push(entry);
-  }
+  _dspPresets[slot] = { name: name || ('Preset ' + slot), stages: JSON.parse(JSON.stringify(_stages)) };
   res.json({ success: true });
 });
 
-// POST /dsp/presets/load — load a full DSP preset by name
+// POST /dsp/presets/load?slot=N — load DSP preset from slot
 router.post('/dsp/presets/load', (req, res) => {
-  const { name } = req.body || {};
-  const preset = _dspPresets.find(p => p.name === name);
+  const slot = parseInt(req.query.slot);
+  const preset = _dspPresets[slot];
   if (!preset) {
     return res.status(404).json({ success: false, message: 'Preset not found' });
   }
-  // Restore stages from preset
   Object.assign(_stages, JSON.parse(JSON.stringify(preset.stages)));
   res.json({ success: true });
 });
 
-// DELETE /dsp/presets — delete a DSP preset
+// DELETE /dsp/presets?slot=N — delete DSP preset from slot
 router.delete('/dsp/presets', (req, res) => {
-  const { name } = req.body || {};
-  const idx = _dspPresets.findIndex(p => p.name === name);
-  if (idx >= 0) _dspPresets.splice(idx, 1);
+  const slot = parseInt(req.query.slot);
+  if (!isNaN(slot) && _dspPresets[slot]) delete _dspPresets[slot];
   res.json({ success: true });
 });
 
 // POST /dsp/presets/rename — rename a DSP preset
 router.post('/dsp/presets/rename', (req, res) => {
-  const { name, newName } = req.body || {};
-  const preset = _dspPresets.find(p => p.name === name);
-  if (!preset) {
-    return res.status(404).json({ success: false, message: 'Preset not found' });
+  const { slot, newName } = req.body || {};
+  const s = parseInt(slot);
+  if (!isNaN(s) && _dspPresets[s]) {
+    _dspPresets[s].name = newName;
+    return res.json({ success: true });
   }
-  preset.name = newName;
-  res.json({ success: true });
+  res.status(404).json({ success: false, message: 'Preset not found' });
 });
 
 // POST /dsp/channel/stereolink — link/unlink a stereo channel pair

@@ -96,6 +96,14 @@ function handleCommand(type, data) {
       // thdResult is a server-push event; tests that need it send it explicitly.
       return [];
 
+    // ===== THD measurement commands =====
+    case 'startThdMeasurement':
+      // Firmware starts measurement; mock returns a progress broadcast immediately
+      return [{ type: 'thdProgress', framesProcessed: 0, framesTarget: data.averages || 8 }];
+
+    case 'stopThdMeasurement':
+      return [];
+
     // ===== Input pipeline commands =====
     case 'setInputGain':
       return [];

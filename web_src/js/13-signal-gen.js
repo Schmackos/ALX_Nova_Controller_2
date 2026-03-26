@@ -42,6 +42,71 @@
             if (d.targetAdc !== undefined) document.getElementById('siggenTargetAdc').value = d.targetAdc;
             document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
             document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
+        }
 
+        // ===== THD Measurement =====
+        var _thdMeasuring = false;
 
+        function startThdMeasurement() {
+            var freq = parseFloat(document.getElementById('siggenFreq').value) || 1000;
+            var avg = parseInt(document.getElementById('thdAverages').value) || 8;
+            _thdMeasuring = true;
+            _updateThdProgress(0, avg);
+            document.getElementById('thdMeasureBtn').disabled = true;
+            document.getElementById('thdStopBtn').disabled = false;
+            document.getElementById('thdResults').style.display = 'none';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'startThdMeasurement', freq: freq, averages: avg }));
+            }
+        }
+
+        function stopThdMeasurement() {
+            _thdMeasuring = false;
+            document.getElementById('thdMeasureBtn').disabled = false;
+            document.getElementById('thdStopBtn').disabled = true;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'stopThdMeasurement' }));
+            }
+        }
+
+        function _updateThdProgress(processed, target) {
+            var bar = document.getElementById('thdProgressBar');
+            var label = document.getElementById('thdProgressLabel');
+            if (!bar || !label) return;
+            var pct = target > 0 ? Math.round((processed / target) * 100) : 0;
+            bar.style.width = pct + '%';
+            label.textContent = processed + ' / ' + target + ' frames';
+        }
+
+        function handleThdResult(data) {
+            if (!_thdMeasuring && !data.valid) return;
+            _updateThdProgress(data.framesProcessed || 0, data.framesTarget || 0);
+            if (data.valid) {
+                _thdMeasuring = false;
+                var measureBtn = document.getElementById('thdMeasureBtn');
+                var stopBtn = document.getElementById('thdStopBtn');
+                if (measureBtn) measureBtn.disabled = false;
+                if (stopBtn) stopBtn.disabled = true;
+                _renderThdResults(data);
+            }
+        }
+
+        function _renderThdResults(data) {
+            var container = document.getElementById('thdResults');
+            if (!container) return;
+            var harmonicNames = ['2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
+            var harmonics = data.harmonicLevels || [];
+            var rows = '';
+            for (var i = 0; i < harmonicNames.length && i < harmonics.length; i++) {
+                rows += '<tr><td>' + harmonicNames[i] + '</td><td>' + harmonics[i].toFixed(1) + ' dB</td></tr>';
+            }
+            container.innerHTML =
+                '<div class="thd-summary">' +
+                '  <span class="thd-metric"><span class="thd-metric-label">THD+N</span><span class="thd-metric-value">' + (data.thdPlusNPercent || 0).toFixed(4) + '%</span></span>' +
+                '  <span class="thd-metric"><span class="thd-metric-label">THD+N</span><span class="thd-metric-value">' + (data.thdPlusNDb || 0).toFixed(1) + ' dB</span></span>' +
+                '  <span class="thd-metric"><span class="thd-metric-label">Fundamental</span><span class="thd-metric-value">' + (data.fundamentalDbfs || 0).toFixed(1) + ' dBFS</span></span>' +
+                '</div>' +
+                '<table class="thd-harmonics-table"><thead><tr><th>Harmonic</th><th>Level (rel)</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody></table>';
+            container.style.display = 'block';
         }
