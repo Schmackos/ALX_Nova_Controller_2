@@ -4,8 +4,10 @@
 #include <stdint.h>
 #include <stddef.h>  // size_t
 
+// Must be defined in config.h
+#include "config.h"
 #ifndef AUDIO_PIPELINE_MAX_INPUTS
-#define AUDIO_PIPELINE_MAX_INPUTS 8
+#error "AUDIO_PIPELINE_MAX_INPUTS must be defined in config.h"
 #endif
 
 // ===== VU Meter Constants =====

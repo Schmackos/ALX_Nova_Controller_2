@@ -143,12 +143,12 @@ static void applySettingsFromJson(const JsonDocument &doc) {
 
   // Ethernet configuration
   if (doc["ethUseStaticIP"].is<bool>()) appState.ethernet.useStaticIP = doc["ethUseStaticIP"].as<bool>();
-  if (doc["ethStaticIP"].is<const char*>()) appState.ethernet.staticIP = doc["ethStaticIP"].as<const char*>();
-  if (doc["ethSubnet"].is<const char*>()) appState.ethernet.staticSubnet = doc["ethSubnet"].as<const char*>();
-  if (doc["ethGateway"].is<const char*>()) appState.ethernet.staticGateway = doc["ethGateway"].as<const char*>();
-  if (doc["ethDns1"].is<const char*>()) appState.ethernet.staticDns1 = doc["ethDns1"].as<const char*>();
-  if (doc["ethDns2"].is<const char*>()) appState.ethernet.staticDns2 = doc["ethDns2"].as<const char*>();
-  if (doc["hostname"].is<const char*>()) appState.ethernet.hostname = doc["hostname"].as<const char*>();
+  if (doc["ethStaticIP"].is<const char*>()) strlcpy(appState.ethernet.staticIP, doc["ethStaticIP"].as<const char*>(), sizeof(appState.ethernet.staticIP));
+  if (doc["ethSubnet"].is<const char*>()) strlcpy(appState.ethernet.staticSubnet, doc["ethSubnet"].as<const char*>(), sizeof(appState.ethernet.staticSubnet));
+  if (doc["ethGateway"].is<const char*>()) strlcpy(appState.ethernet.staticGateway, doc["ethGateway"].as<const char*>(), sizeof(appState.ethernet.staticGateway));
+  if (doc["ethDns1"].is<const char*>()) strlcpy(appState.ethernet.staticDns1, doc["ethDns1"].as<const char*>(), sizeof(appState.ethernet.staticDns1));
+  if (doc["ethDns2"].is<const char*>()) strlcpy(appState.ethernet.staticDns2, doc["ethDns2"].as<const char*>(), sizeof(appState.ethernet.staticDns2));
+  if (doc["hostname"].is<const char*>()) strlcpy(appState.ethernet.hostname, doc["hostname"].as<const char*>(), sizeof(appState.ethernet.hostname));
 }
 
 // Flag set by loadSettingsJson() when the JSON config contains an "mqtt" section.
@@ -575,7 +575,7 @@ bool loadInputNames() {
       file.close();
     // Set defaults
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-      appState.audio.inputNames[i] = INPUT_NAME_DEFAULTS[i];
+      strlcpy(appState.audio.inputNames[i], INPUT_NAME_DEFAULTS[i], sizeof(appState.audio.inputNames[i]));
     }
     return false;
   }
@@ -583,8 +583,9 @@ bool loadInputNames() {
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     String line = file.readStringUntil('\n');
     line.trim();
-    appState.audio.inputNames[i] =
-        (line.length() > 0) ? line : String(INPUT_NAME_DEFAULTS[i]);
+    strlcpy(appState.audio.inputNames[i],
+            (line.length() > 0) ? line.c_str() : INPUT_NAME_DEFAULTS[i],
+            sizeof(appState.audio.inputNames[i]));
   }
   file.close();
   LOG_I("[Settings] Input names loaded");
@@ -1682,8 +1683,8 @@ void handleSettingsImport() {
   if (!doc["inputNames"].isNull() && doc["inputNames"].is<JsonArray>()) {
     JsonArray names = doc["inputNames"].as<JsonArray>();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
-      String name = names[i].as<String>();
-      if (name.length() > 0) appState.audio.inputNames[i] = name;
+      const char* name = names[i] | "";
+      if (name[0] != '\0') strlcpy(appState.audio.inputNames[i], name, sizeof(appState.audio.inputNames[i]));
     }
     saveInputNames();
   }

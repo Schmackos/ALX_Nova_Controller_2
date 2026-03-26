@@ -738,7 +738,7 @@ String calculateSHA256(uint8_t* data, size_t len) {
   String hashString = "";
   for (int i = 0; i < 32; i++) {
     char str[3];
-    sprintf(str, "%02x", shaResult[i]);
+    snprintf(str, sizeof(str), "%02x", shaResult[i]);
     hashString += str;
   }
   
@@ -923,7 +923,7 @@ bool performOTAUpdate(String firmwareUrl) {
     String calculatedChecksum = "";
     for (int i = 0; i < 32; i++) {
       char str[3];
-      sprintf(str, "%02x", shaResult[i]);
+      snprintf(str, sizeof(str), "%02x", shaResult[i]);
       calculatedChecksum += str;
     }
 

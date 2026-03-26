@@ -4,6 +4,27 @@
 #include <cstring>
 #include <stdint.h>
 #include <string>
+#include <stddef.h>
+
+// strlcpy: BSD/Arduino function, not always in standard C++.
+// glibc 2.38+ and BSD/macOS provide it natively — skip our definition there.
+#include <string.h>
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 38))
+  #define HAVE_STRLCPY 1
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+  #define HAVE_STRLCPY 1
+#endif
+#ifndef HAVE_STRLCPY
+inline size_t strlcpy(char* dst, const char* src, size_t size) {
+    if (size == 0) return strlen(src);
+    size_t srclen = strlen(src);
+    size_t copy = srclen < size - 1 ? srclen : size - 1;
+    memcpy(dst, src, copy);
+    dst[copy] = '\0';
+    return srclen;
+}
+#define HAVE_STRLCPY 1
+#endif
 
 // Mock Arduino types
 // Basic String mock to support Arduino-style methods used in tests

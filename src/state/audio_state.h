@@ -71,7 +71,7 @@ struct AudioState {
 #endif
 
   // Input channel names (user-configurable)
-  String inputNames[AUDIO_PIPELINE_MAX_INPUTS * 2];
+  char inputNames[AUDIO_PIPELINE_MAX_INPUTS * 2][32] = {};
 
   // Audio update rate
   uint16_t updateRate = DEFAULT_AUDIO_UPDATE_RATE;

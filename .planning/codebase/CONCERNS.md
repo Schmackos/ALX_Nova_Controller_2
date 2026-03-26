@@ -53,6 +53,8 @@
 
 ### Redundant Constant Definitions Across Headers
 
+**Status: RESOLVED (2026-03-26)** — Fallback `#ifndef` guards removed from `audio_pipeline.h`, `audio_input_source.h`, `i2s_audio.h`. All three now `#include "config.h"` and use `#error` guards. Constants defined authoritatively only in `config.h`. Test files with wrong fallback values (MATRIX_SIZE=16, MAX_INPUTS=2) also fixed.
+
 - **Severity:** Medium
 - **Issue:** `AUDIO_PIPELINE_MAX_INPUTS` is `#define`d in 4 separate files (`src/config.h`, `src/audio_pipeline.h`, `src/audio_input_source.h`, `src/i2s_audio.h`) all guarded by `#ifndef`. `AUDIO_PIPELINE_MATRIX_SIZE` is defined as 32 in `src/config.h` but has a fallback of 16 in `src/audio_pipeline.h`. `AUDIO_PIPELINE_MAX_OUTPUTS` is 16 in `src/config.h` but 8 in `src/audio_pipeline.h`. Include order determines which value wins.
 - **Files:**
@@ -98,6 +100,8 @@
 
 ### Arduino String Usage in Cross-Core State (Heap Fragmentation Risk)
 
+**Status: RESOLVED (2026-03-26)** — All String fields converted to char[]: `AudioState::inputNames` → `char[16][32]`, `AppState::errorMessage` → `char[128]`, `EthernetState` 11 fields → `char[40]` (IP/MAC/gateway/subnet/DNS) and `char[64]` (hostname). All callers migrated to `strlcpy`. Zero Arduino String usage in state structs.
+
 - **Severity:** Medium
 - **Issue:** `AudioState::inputNames` uses `String[16]` (Arduino heap-allocated strings) in a struct accessed from both Core 0 (main loop) and Core 1 (audio task). Ethernet, OTA, and error states also use `String`. Arduino `String` objects cause heap fragmentation over time due to repeated alloc/free cycles and are not thread-safe for concurrent access.
 - **Files:**
@@ -108,6 +112,8 @@
 - **Fix approach:** Replace `String` fields in state structs with fixed-size `char[]` arrays. `inputNames` can be `char[16][32]`. Ethernet fields can be `char[16]` (IP) or `char[18]` (MAC). This eliminates heap fragmentation from state management.
 
 ### Stale Worktree Directories (22MB disk waste)
+
+**Status: RESOLVED (2026-03-26)** — `fix-matrix-routing-bounds` directory removed. `phase2-asrc-dsd` was already cleaned up in a prior session.
 
 - **Severity:** Low
 - **Issue:** Two git worktree directories remain under `.claude/worktrees/`: `fix-matrix-routing-bounds` and `phase2-asrc-dsd`, totaling 22MB. These are leftover from completed work and should be cleaned up.
@@ -120,6 +126,8 @@
 ## Security Concerns
 
 ### innerHTML Usage Without Consistent Sanitization
+
+**Status: RESOLVED (2026-03-26)** — Full audit of ~95 innerHTML assignments across 15 JS files. 3 genuine XSS risks fixed: MQTT broker hostname in `21-mqtt-settings.js`, pin table fields (function, description, category) in `22-settings.js` and `24-hardware-stats.js`. All other innerHTML uses verified safe (hardcoded HTML/SVG, numeric values, or already escaped).
 
 - **Severity:** Medium
 - **Issue:** 76 `innerHTML` assignments exist across web UI JS files. While `escapeHtml()` is available and used in some paths (e.g., device names in `05-audio-tab.js`), many `innerHTML` assignments in `15-hal-devices.js`, `06-peq-overlay.js`, and `08-ui-status.js` construct HTML strings from device data without escaping all interpolated values.
@@ -143,6 +151,8 @@
 - **Fix approach:** Deferred. Document as a known limitation. For enterprise deployments, recommend placing behind a reverse proxy with TLS termination.
 
 ### sprintf Without Bounds Checking (OTA module)
+
+**Status: RESOLVED (2026-03-26)** — Both `sprintf()` calls replaced with `snprintf(str, sizeof(str), "%02x", ...)`. Zero `sprintf` calls remain in `src/`.
 
 - **Severity:** Low
 - **Issue:** Two `sprintf()` calls in `src/ota_updater.cpp` (lines 741, 926) write hex digest characters without bounds checking. The buffers are `char str[3]` which is sufficient for `"%02x"` output, so this is not currently exploitable, but violates the project convention of using `snprintf()` everywhere else.
@@ -249,31 +259,36 @@
 
 ### static_cast Without RTTI Guards (10 occurrences)
 
-- **Severity:** Medium
-- **Issue:** 10 `static_cast<HalXxx*>` calls across the codebase cast `HalDevice*` to specific subclasses without runtime type verification (RTTI is disabled via `-fno-rtti`). Each relies on either capability flag checks or type/compatible string comparisons as a proxy for type safety.
+**Status: RESOLVED (2026-03-26)** — The most fragile cast (DSD mode `strncmp` + `static_cast<HalCirrusDac2ch*>`) was replaced with virtual `setDsdMode()` in a prior PR. Remaining 7 casts across 6 files now have inline SAFETY comments documenting their type guard invariant (device type check, capability flag, or compatible string match).
+
+- **Severity:** Low (reduced — all casts documented, most fragile one eliminated)
+- **Issue:** 7 `static_cast<HalXxx*>` calls remain, each protected by a type/capability guard. With RTTI disabled, these cannot use `dynamic_cast`. The inline documentation makes the guard relationship explicit for future maintainers.
 - **Files:**
-  - `src/main.cpp` (line 1376: `static_cast<HalCirrusDac2ch*>`)
-  - `src/main.cpp` (line 961: `static_cast<HalLed*>`)
-  - `src/smart_sensing.cpp` (line 332: `static_cast<HalRelay*>`)
-  - `src/hal/hal_pipeline_bridge.cpp` (line 213: `static_cast<HalNs4150b*>`)
-  - `src/gui/gui_input.cpp` (line 193: `static_cast<HalEncoder*>`)
-  - `src/websocket_broadcast.cpp` (line 50: `static_cast<HalAudioDevice*>`)
-- **Impact:** If the type guard (capability check, device type check) ever becomes inconsistent with the actual object type, the `static_cast` produces undefined behavior. Most are well-guarded, but the DSD mode string check (`strncmp("cirrus,", 7)`) is the most fragile.
-- **Fix approach:** Add virtual methods to base classes where possible (e.g., `setDsdMode()` on `HalAudioDevice`). For remaining cases, document the type guard invariant next to each `static_cast`.
+  - `src/main.cpp` (HalLed — guarded by `_halLed` typed pointer)
+  - `src/smart_sensing.cpp` (HalRelay — guarded by `findByCompatible("generic,relay-amp")`)
+  - `src/hal/hal_pipeline_bridge.cpp` (HalNs4150b — guarded by `HAL_DEV_AMP` type check)
+  - `src/gui/gui_input.cpp` (HalEncoder — guarded by `HAL_DEV_INPUT` + "alps,ec11" compatible)
+  - `src/websocket_broadcast.cpp` (HalAudioDevice — guarded by DAC/CODEC type check; HalTempSensor — guarded by HAL_DEV_SENSOR)
+  - `src/diagnostics_loop.cpp` (HalCirrusDac2ch — guarded by `HAL_CAP_DSD` + "cirrus," prefix)
+- **Impact:** Low. All guards are sound. Future changes to device type enums or compatible strings should update the corresponding cast guard.
+- **Fix approach:** No further action needed. Guard invariants are documented inline.
 
 ## Missing Features / Gaps
 
 ### No Watchdog Recovery for Audio Pipeline Task
 
-- **Severity:** Medium
-- **Issue:** The audio pipeline task (`audio_pipeline_task`, Core 1, priority 3) has no explicit watchdog enrollment. If the task hangs (e.g., I2S read blocks indefinitely due to hardware fault), no recovery mechanism exists. The ESP-IDF task watchdog monitors the idle task but not custom high-priority tasks.
+**Status: RESOLVED (2026-03-26)** — Audio pipeline task already registered with `esp_task_wdt_add(NULL)` and resets every loop iteration via `esp_task_wdt_reset()`. Documentation comments added explaining behavior and IDF5.5 `esp_task_wdt_delete()` linked-list bug. Graceful recovery (restart without reboot) deferred — default IDF handler reboots on WDT timeout.
+
+- **Severity:** Medium (reduced — watchdog detection is active, only graceful recovery is missing)
+- **Issue:** The audio pipeline task (`audio_pipeline_task`, Core 1, priority 3) is enrolled in the ESP task watchdog but has no graceful recovery path. On WDT timeout, the default IDF handler reboots the device rather than attempting an audio pipeline restart.
 - **Files:**
-  - `src/audio_pipeline.cpp` (line 939: `xTaskCreatePinnedToCore`)
-  - `src/main.cpp` (line 182: comment about `esp_task_wdt_delete` issues)
-- **Impact:** A hung audio task would silently stop audio processing. The health check would eventually flag the issue, but no automatic restart occurs.
-- **Fix approach:** Register the audio task with `esp_task_wdt_add()` and add periodic `esp_task_wdt_reset()` in the audio loop. On watchdog trigger, use `audio_pipeline_request_pause()`/`resume()` to restart. Note the comment in main.cpp about `esp_task_wdt_delete` causing list corruption in IDF5.5 -- investigate if this is resolved.
+  - `src/audio_pipeline.cpp` (line ~695: `esp_task_wdt_add`, line ~698: `esp_task_wdt_reset`)
+- **Impact:** A hung audio task triggers a device reboot via WDT. For most use cases this is acceptable behavior. Graceful restart (pause/resume without reboot) would require complex cross-task coordination.
+- **Fix approach:** Future: implement WDT callback that attempts `audio_pipeline_request_pause()`/`resume()` before falling through to reboot. Blocked by IDF5.5 `esp_task_wdt_delete()` linked-list corruption issue.
 
 ### No Integration Test for ASRC + DSP + Matrix Chain
+
+**Status: RESOLVED (2026-03-26)** — `test/test_pipeline_integration/test_pipeline_integration.cpp` added with 12 integration tests covering: ASRC upsample/downsample/passthrough, DSP biquad/gain/bypass, matrix routing/gain/summation, multi-lane independence, signal energy preservation.
 
 - **Severity:** Medium
 - **Issue:** The ASRC engine, DSP pipeline, and routing matrix are each unit tested independently, but no integration test verifies the full chain: ASRC resampling -> DSP biquad processing -> matrix routing -> output sink. The ASRC TODO about variable frame count propagation means the interaction between these stages has untested edge cases.
@@ -307,16 +322,26 @@
 
 5. **[Medium] ~~Implement Content-Security-Policy header~~** -- **RESOLVED (2026-03-25).** CSP with 9 directives added to http_add_security_headers(). 9 new CSP tests. Covers frame/object blocking, base-uri/form-action restriction, CDN allowlist.
 
-6. **[Medium] Consolidate constant definitions** -- Remove redundant `#define` guards from `audio_pipeline.h`, `audio_input_source.h`, `i2s_audio.h`. Define only in `config.h`. Estimated effort: 1 hour.
+6. **[Medium] ~~Consolidate constant definitions~~** -- **RESOLVED (2026-03-26).** Fallback `#ifndef` guards removed, `#include "config.h"` + `#error` guards added. Test fallbacks with wrong values also fixed.
 
 7. **[Medium] ~~Migrate raw server.send() to server_send()~~** -- **RESOLVED (2026-03-25).** All 16 raw server.send() + 3 server.send_P() migrated to server_send()/server_send_P() wrappers. Zero raw calls remain outside http_security.h.
 
 8. **[Medium] ~~Add virtual setDsdMode() to HalAudioDevice~~** -- **RESOLVED (2026-03-26).** Virtual dispatch added; strncmp + static_cast removed.
 
-9. **[Low] Replace Arduino String in state structs** -- Convert `String` fields to `char[]` in `AudioState`, `EthernetState`, `AppState`. Reduces heap fragmentation. Estimated effort: 2 hours.
+9. **[Low] ~~Replace Arduino String in state structs~~** -- **RESOLVED (2026-03-26).** All state struct String fields converted to char[]: inputNames, errorMessage, and all 11 EthernetState fields. Zero Arduino String in state structs.
 
-10. **[Low] Clean up stale worktrees** -- Remove `.claude/worktrees/fix-matrix-routing-bounds` and `.claude/worktrees/phase2-asrc-dsd`. Estimated effort: 5 minutes.
+10. **[Low] ~~Clean up stale worktrees~~** -- **RESOLVED (2026-03-26).** Both directories removed.
+
+11. **[Low] ~~Fix sprintf in OTA module~~** -- **RESOLVED (2026-03-26).** Both `sprintf` → `snprintf`. Zero `sprintf` calls remain in `src/`.
+
+12. **[Medium] ~~innerHTML sanitization audit~~** -- **RESOLVED (2026-03-26).** 95 innerHTML assignments audited, 3 XSS risks fixed (MQTT broker, pin table fields).
+
+13. **[Medium] ~~Document static_cast invariants~~** -- **RESOLVED (2026-03-26).** 7 casts documented with SAFETY comments. Most fragile (DSD) was already virtual.
+
+14. **[Medium] ~~Audio pipeline watchdog~~** -- **RESOLVED (2026-03-26).** Already implemented; documentation added. Graceful recovery deferred.
+
+15. **[Medium] ~~ASRC+DSP+Matrix integration test~~** -- **RESOLVED (2026-03-26).** 12 integration tests added covering full signal chain.
 
 ---
 
-*Concerns audit: 2026-03-26 -- 4 critical/high resolved, 4 medium resolved (CSP, server.send, setDsdMode, main.cpp extraction), 3 performance resolved (ASRC lazy, DSD virtual, volatile flags). Remaining: 2 medium (constants, innerHTML), 3 low (Strings, worktrees, sprintf), 3 monitor-only (device slots, event bits, web pages monolith), 3 gaps (watchdog, integration test, PSRAM degradation).*
+*Concerns audit: 2026-03-26 — 4 critical/high resolved (prior), 10 medium resolved (CSP, server.send, setDsdMode, main.cpp extraction, constants, innerHTML, static_cast, watchdog, integration test, String), 3 low resolved (sprintf, worktrees, Strings). Remaining: 3 monitor-only (device slots, event bits, web pages monolith), 2 deferred-by-design (HTTPS, PSRAM degradation), 1 dormant (power mgmt API).*

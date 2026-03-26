@@ -16,21 +16,21 @@ static bool _ethStarted = false;
 
 // ===== Static helper: apply static IP config via ETH.config() =====
 static bool eth_apply_static_config() {
-    if (!appState.ethernet.useStaticIP || appState.ethernet.staticIP.length() == 0) return false;
+    if (!appState.ethernet.useStaticIP || appState.ethernet.staticIP[0] == '\0') return false;
     IPAddress ip, gw, sn, d1, d2;
     if (!ip.fromString(appState.ethernet.staticIP)) {
-        LOG_E("[ETH] Invalid static IP: %s", appState.ethernet.staticIP.c_str());
+        LOG_E("[ETH] Invalid static IP: %s", appState.ethernet.staticIP);
         return false;
     }
     if (!sn.fromString(appState.ethernet.staticSubnet)) sn = IPAddress(255, 255, 255, 0);
-    if (appState.ethernet.staticGateway.length() > 0) gw.fromString(appState.ethernet.staticGateway);
-    if (appState.ethernet.staticDns1.length() > 0) d1.fromString(appState.ethernet.staticDns1);
-    if (appState.ethernet.staticDns2.length() > 0) d2.fromString(appState.ethernet.staticDns2);
+    if (appState.ethernet.staticGateway[0] != '\0') gw.fromString(appState.ethernet.staticGateway);
+    if (appState.ethernet.staticDns1[0] != '\0') d1.fromString(appState.ethernet.staticDns1);
+    if (appState.ethernet.staticDns2[0] != '\0') d2.fromString(appState.ethernet.staticDns2);
     if (!ETH.config(ip, gw, sn, d1, d2)) {
         LOG_E("[ETH] ETH.config() failed");
         return false;
     }
-    LOG_I("[ETH] Static IP configured: %s", appState.ethernet.staticIP.c_str());
+    LOG_I("[ETH] Static IP configured: %s", appState.ethernet.staticIP);
     return true;
 }
 
@@ -39,8 +39,8 @@ static void eth_event_handler(arduino_event_id_t event) {
     switch (event) {
         case ARDUINO_EVENT_ETH_START:
             LOG_I("[ETH] Started");
-            ETH.setHostname(appState.ethernet.hostname.c_str());
-            appState.ethernet.mac = ETH.macAddress();
+            ETH.setHostname(appState.ethernet.hostname);
+            strlcpy(appState.ethernet.mac, ETH.macAddress().c_str(), sizeof(appState.ethernet.mac));
             _ethStarted = true;
             if (appState.ethernet.useStaticIP) {
                 eth_apply_static_config();
@@ -57,11 +57,11 @@ static void eth_event_handler(arduino_event_id_t event) {
         case ARDUINO_EVENT_ETH_GOT_IP:
             LOG_I("[ETH] Got IP: %s", ETH.localIP().toString().c_str());
             appState.ethernet.connected = true;
-            appState.ethernet.ip = ETH.localIP().toString();
-            appState.ethernet.gateway = ETH.gatewayIP().toString();
-            appState.ethernet.subnet = ETH.subnetMask().toString();
-            appState.ethernet.dns1 = ETH.dnsIP(0).toString();
-            appState.ethernet.dns2 = ETH.dnsIP(1).toString();
+            strlcpy(appState.ethernet.ip, ETH.localIP().toString().c_str(), sizeof(appState.ethernet.ip));
+            strlcpy(appState.ethernet.gateway, ETH.gatewayIP().toString().c_str(), sizeof(appState.ethernet.gateway));
+            strlcpy(appState.ethernet.subnet, ETH.subnetMask().toString().c_str(), sizeof(appState.ethernet.subnet));
+            strlcpy(appState.ethernet.dns1, ETH.dnsIP(0).toString().c_str(), sizeof(appState.ethernet.dns1));
+            strlcpy(appState.ethernet.dns2, ETH.dnsIP(1).toString().c_str(), sizeof(appState.ethernet.dns2));
             appState.ethernet.activeInterface = NET_ETHERNET;
             appState.markEthernetDirty();
             // Make Ethernet the default route when it gets IP
@@ -70,11 +70,11 @@ static void eth_event_handler(arduino_event_id_t event) {
         case ARDUINO_EVENT_ETH_LOST_IP:
             LOG_W("[ETH] Lost IP");
             appState.ethernet.connected = false;
-            appState.ethernet.ip = "";
-            appState.ethernet.gateway = "";
-            appState.ethernet.subnet = "";
-            appState.ethernet.dns1 = "";
-            appState.ethernet.dns2 = "";
+            appState.ethernet.ip[0] = '\0';
+            appState.ethernet.gateway[0] = '\0';
+            appState.ethernet.subnet[0] = '\0';
+            appState.ethernet.dns1[0] = '\0';
+            appState.ethernet.dns2[0] = '\0';
             appState.ethernet.speed = 0;
             appState.ethernet.fullDuplex = false;
             if (appState.ethernet.activeInterface == NET_ETHERNET) {
@@ -86,11 +86,11 @@ static void eth_event_handler(arduino_event_id_t event) {
             LOG_W("[ETH] Link down");
             appState.ethernet.linkUp = false;
             appState.ethernet.connected = false;
-            appState.ethernet.ip = "";
-            appState.ethernet.gateway = "";
-            appState.ethernet.subnet = "";
-            appState.ethernet.dns1 = "";
-            appState.ethernet.dns2 = "";
+            appState.ethernet.ip[0] = '\0';
+            appState.ethernet.gateway[0] = '\0';
+            appState.ethernet.subnet[0] = '\0';
+            appState.ethernet.dns1[0] = '\0';
+            appState.ethernet.dns2[0] = '\0';
             appState.ethernet.speed = 0;
             appState.ethernet.fullDuplex = false;
             if (appState.ethernet.activeInterface == NET_ETHERNET) {
@@ -103,7 +103,7 @@ static void eth_event_handler(arduino_event_id_t event) {
             _ethStarted = false;
             appState.ethernet.linkUp = false;
             appState.ethernet.connected = false;
-            appState.ethernet.ip = "";
+            appState.ethernet.ip[0] = '\0';
             break;
         default:
             break;
@@ -130,7 +130,7 @@ bool eth_manager_link_up() {
     return appState.ethernet.linkUp;
 }
 
-String eth_manager_get_ip() {
+const char* eth_manager_get_ip() {
     return appState.ethernet.ip;
 }
 
@@ -142,7 +142,7 @@ void eth_manager_set_default_route() {
 
 void eth_manager_apply_config() {
     if (!_ethStarted) return;
-    ETH.setHostname(appState.ethernet.hostname.c_str());
+    ETH.setHostname(appState.ethernet.hostname);
     if (appState.ethernet.useStaticIP) {
         eth_apply_static_config();
     } else {
@@ -172,11 +172,11 @@ void eth_manager_check_revert() {
 
     LOG_W("[ETH] Config confirmation timeout — reverting to DHCP");
     appState.ethernet.useStaticIP = false;
-    appState.ethernet.staticIP = "";
-    appState.ethernet.staticSubnet = "255.255.255.0";
-    appState.ethernet.staticGateway = "";
-    appState.ethernet.staticDns1 = "";
-    appState.ethernet.staticDns2 = "";
+    appState.ethernet.staticIP[0] = '\0';
+    strlcpy(appState.ethernet.staticSubnet, "255.255.255.0", sizeof(appState.ethernet.staticSubnet));
+    appState.ethernet.staticGateway[0] = '\0';
+    appState.ethernet.staticDns1[0] = '\0';
+    appState.ethernet.staticDns2[0] = '\0';
     appState.ethernet.pendingConfirm = false;
     appState.ethernet.confirmDeadline = 0;
     eth_manager_apply_config();
@@ -240,7 +240,7 @@ void handleEthConfig() {
             server_send(400, "application/json", "{\"error\":\"Invalid hostname\"}");
             return;
         }
-        appState.ethernet.hostname = newHostname;
+        strlcpy(appState.ethernet.hostname, newHostname.c_str(), sizeof(appState.ethernet.hostname));
         configChanged = true;
     }
 
@@ -276,7 +276,7 @@ void handleEthConfig() {
                     server_send(400, "application/json", "{\"error\":\"Invalid staticDns1\"}");
                     return;
                 }
-                appState.ethernet.staticDns1 = doc["staticDns1"].as<const char*>();
+                strlcpy(appState.ethernet.staticDns1, doc["staticDns1"].as<const char*>(), sizeof(appState.ethernet.staticDns1));
             }
             if (doc["staticDns2"].is<const char*>()) {
                 IPAddress testD2;
@@ -284,12 +284,12 @@ void handleEthConfig() {
                     server_send(400, "application/json", "{\"error\":\"Invalid staticDns2\"}");
                     return;
                 }
-                appState.ethernet.staticDns2 = doc["staticDns2"].as<const char*>();
+                strlcpy(appState.ethernet.staticDns2, doc["staticDns2"].as<const char*>(), sizeof(appState.ethernet.staticDns2));
             }
             appState.ethernet.useStaticIP = true;
-            appState.ethernet.staticIP      = doc["staticIP"].as<const char*>();
-            appState.ethernet.staticSubnet  = doc["staticSubnet"].as<const char*>();
-            appState.ethernet.staticGateway = doc["staticGateway"].as<const char*>();
+            strlcpy(appState.ethernet.staticIP,      doc["staticIP"].as<const char*>(),      sizeof(appState.ethernet.staticIP));
+            strlcpy(appState.ethernet.staticSubnet,  doc["staticSubnet"].as<const char*>(),  sizeof(appState.ethernet.staticSubnet));
+            strlcpy(appState.ethernet.staticGateway, doc["staticGateway"].as<const char*>(), sizeof(appState.ethernet.staticGateway));
             staticIpChanged = true;
         } else {
             appState.ethernet.useStaticIP = false;
@@ -321,7 +321,7 @@ void handleEthConfigConfirm() {
 void eth_manager_init() {}
 bool eth_manager_is_connected() { return false; }
 bool eth_manager_link_up() { return false; }
-String eth_manager_get_ip() { return ""; }
+const char* eth_manager_get_ip() { return ""; }
 void eth_manager_set_default_route() {}
 void eth_manager_apply_config() {}
 void eth_manager_start_confirm_timer() {}

@@ -95,15 +95,16 @@ void AppState::setSignalGenEnabled(bool enabled) {
 }
 
 // ===== Error State Management =====
-void AppState::setError(int code, const String &message) {
+void AppState::setError(int code, const char* message) {
   errorCode = code;
-  errorMessage = message;
+  strncpy(errorMessage, message ? message : "", sizeof(errorMessage) - 1);
+  errorMessage[sizeof(errorMessage) - 1] = '\0';
   setFSMState(STATE_ERROR);
 }
 
 void AppState::clearError() {
   errorCode = 0;
-  errorMessage = "";
+  errorMessage[0] = '\0';
   if (fsmState == STATE_ERROR) {
     setFSMState(STATE_IDLE);
   }

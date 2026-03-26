@@ -211,9 +211,9 @@ public:
 
   // ===== Error State =====
   int errorCode = 0;
-  String errorMessage;
+  char errorMessage[128] = "";
 
-  void setError(int code, const String &message);
+  void setError(int code, const char* message);
   void clearError();
   bool hasError() const { return errorCode != 0; }
 
@@ -228,7 +228,7 @@ public:
   void resetMqttBackoff() { mqttBackoffDelay = 5000; }
 
 private:
-  AppState() {} // Private constructor
+  AppState() = default; // Private constructor — value-initializes all members
 
   // Dirty flags for change detection
   volatile bool _ethernetDirty = false;

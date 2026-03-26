@@ -48,6 +48,8 @@ HalAudioDevice* ws_audio_device_for_sink_slot(uint8_t sinkSlot) {
     HalDevice* dev = HalDeviceManager::instance().getDevice((uint8_t)halSlot);
     if (!dev) return nullptr;
     if (dev->getType() != HAL_DEV_DAC && dev->getType() != HAL_DEV_CODEC) return nullptr;
+    // SAFETY: guarded by HAL_DEV_DAC / HAL_DEV_CODEC type check above;
+    // all DAC and CODEC devices derive from HalAudioDevice.
     return static_cast<HalAudioDevice*>(dev);
 }
 #endif
@@ -410,6 +412,7 @@ void sendHalDeviceState() {
 
         // For sensor devices, include live readings
         if (desc.type == HAL_DEV_SENSOR) {
+            // SAFETY: guarded by HAL_DEV_SENSOR type check above; all sensor devices are HalTempSensor.
             HalTempSensor* ts = static_cast<HalTempSensor*>(dev);
             obj["temperature"] = ts->getTemperature();
         }

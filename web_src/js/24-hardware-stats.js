@@ -486,8 +486,8 @@
                     var html = '';
                     for (i = 0; i < data.pins.length; i++) {
                         var p = data.pins[i];
-                        var catName = catLabels[p.c] || p.c;
-                        html += '<tr><td>' + p.g + '</td><td>' + p.f + '</td><td>' + p.d + '</td><td><span class="pin-cat pin-cat-' + p.c + '">' + catName + '</span></td></tr>';
+                        var catName = catLabels[p.c] || escapeHtml(p.c);
+                        html += '<tr><td>' + p.g + '</td><td>' + escapeHtml(p.f) + '</td><td>' + escapeHtml(p.d) + '</td><td><span class="pin-cat pin-cat-' + escapeHtml(p.c) + '">' + catName + '</span></td></tr>';
                     }
                     ptb.innerHTML = html;
                 }

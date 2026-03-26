@@ -1085,15 +1085,12 @@ void test_e2e_all_input_bypass_produces_silence(void) {
 // ============================================================
 // Section 10: 16x16 Matrix set/get API
 //
-// The audio pipeline uses a 16x16 routing matrix (AUDIO_PIPELINE_MATRIX_SIZE).
+// The audio pipeline uses a routing matrix (AUDIO_PIPELINE_MATRIX_SIZE).
 // These tests replicate the bounds-checked set_matrix_gain / get_matrix_gain
-// logic inline and verify full 16x16 coverage, default state, boundary
+// logic inline and verify full coverage, default state, boundary
 // conditions, and gain readback.
+// AUDIO_PIPELINE_MATRIX_SIZE must be defined via config.h or build flags.
 // ============================================================
-
-#ifndef AUDIO_PIPELINE_MATRIX_SIZE
-#define AUDIO_PIPELINE_MATRIX_SIZE 16
-#endif
 
 // Inline replica of the 16x16 matrix set/get logic from audio_pipeline.cpp.
 // Tests exercise this independent copy rather than pulling in the full

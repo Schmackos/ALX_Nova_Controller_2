@@ -587,6 +587,7 @@ void loop() {
       if (millis() - lastBlinkTime >= 200) {
         static bool _ledBlinkState = false;
         _ledBlinkState = !_ledBlinkState;
+        // SAFETY: _halLed is declared as HalLed* — cast is a no-op, kept for clarity.
         if (_halLed && _halLed->_ready) static_cast<HalLed*>(_halLed)->setOn(_ledBlinkState);
         lastBlinkTime = millis();
       }
@@ -609,6 +610,7 @@ void loop() {
       // Button not pressed - restore LED to low if it was lit for feedback
       static bool wasPressed = false;
       if (wasPressed) {
+        // SAFETY: _halLed is declared as HalLed* — cast is a no-op, kept for clarity.
         if (_halLed && _halLed->_ready) static_cast<HalLed*>(_halLed)->setOn(false);
         wasPressed = false;
       }

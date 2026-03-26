@@ -4,15 +4,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// ===== Dimensions (override via config.h build flags) =====
+// ===== Dimensions — must be defined in config.h =====
+#include "config.h"
 #ifndef AUDIO_PIPELINE_MAX_INPUTS
-#define AUDIO_PIPELINE_MAX_INPUTS  8
+#error "AUDIO_PIPELINE_MAX_INPUTS must be defined in config.h"
 #endif
 #ifndef AUDIO_PIPELINE_MAX_OUTPUTS
-#define AUDIO_PIPELINE_MAX_OUTPUTS 8
+#error "AUDIO_PIPELINE_MAX_OUTPUTS must be defined in config.h"
 #endif
 #ifndef AUDIO_PIPELINE_MATRIX_SIZE
-#define AUDIO_PIPELINE_MATRIX_SIZE 16
+#error "AUDIO_PIPELINE_MATRIX_SIZE must be defined in config.h"
 #endif
 
 // ===== Public API =====
