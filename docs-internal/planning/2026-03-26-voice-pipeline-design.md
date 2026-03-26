@@ -46,7 +46,7 @@ Each concept doc follows this structure:
 
 | Field | Value |
 |---|---|
-| Workflow | `draft` / `ready` / `in-progress` / `done` |
+| Workflow | `raw` / `draft` / `ready` / `in-progress` / `done` |
 | Priority | `---` (unset until decided) |
 | Effort | `---` (unset until researched) |
 | Sources | <list of source audio filenames> |

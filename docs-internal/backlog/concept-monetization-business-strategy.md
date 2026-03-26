@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Workflow | `draft` |
+| Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Monetisation open source.m4a, Monitisation Scaling.m4a, Monetisation devices.m4a |

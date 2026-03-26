@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Workflow | `draft` |
+| Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Aitomatic roadmap exexution.m4a, Github managing Issue, auto close and himan intervention.m4a, What are we missing in lroject structure.m4a |

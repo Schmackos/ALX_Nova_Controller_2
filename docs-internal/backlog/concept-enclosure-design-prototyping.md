@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Workflow | `draft` |
+| Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Enclosure creation.m4a |

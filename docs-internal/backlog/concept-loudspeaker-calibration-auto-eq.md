@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Workflow | `draft` |
+| Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | Loudspeaker Calibration Platform.m4a, Auto EQ Software Feature Part 2 Basic and advacned.m4a |

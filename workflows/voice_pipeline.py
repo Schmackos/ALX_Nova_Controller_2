@@ -79,7 +79,7 @@ CONCEPT_TEMPLATE = """# Concept: {title}
 
 | Field | Value |
 |---|---|
-| Workflow | `draft` |
+| Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | {sources} |
@@ -449,6 +449,15 @@ def stage_generate(manifest, dry_run=False, verbose=False):
     for slug, group in groups.items():
         concept_file = BACKLOG_DIR / f"concept-{slug}.md"
         is_update = concept_file.exists()
+
+        # Guard: skip docs that have been manually edited (workflow != raw)
+        if is_update:
+            existing = concept_file.read_text(encoding="utf-8")
+            wf_match = re.search(r"\|\s*Workflow\s*\|\s*`(\w[\w-]*)`", existing)
+            if wf_match and wf_match.group(1) != "raw":
+                log(f"  [Skipped] concept-{slug}.md — workflow is `{wf_match.group(1)}`, not `raw`")
+                continue
+
         action = "Updating" if is_update else "Creating"
         log(f"  [{action}] concept-{slug}.md ({len(group['notes'])} notes)")
 
@@ -503,7 +512,7 @@ Generate a markdown document with EXACTLY this structure:
 
 | Field | Value |
 |---|---|
-| Workflow | `draft` |
+| Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
 | Sources | <comma-separated list of source .m4a filenames> |
