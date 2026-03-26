@@ -6,9 +6,16 @@
 #include <string>
 #include <stddef.h>
 
-// strlcpy: BSD/Arduino function not in standard C++. Provided here for native tests.
+// strlcpy: BSD/Arduino function, not always in standard C++.
+// glibc 2.38+ and BSD/macOS provide it natively — skip our definition there.
+#include <string.h>
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 38))
+  #define HAVE_STRLCPY 1
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+  #define HAVE_STRLCPY 1
+#endif
 #ifndef HAVE_STRLCPY
-static inline size_t strlcpy(char* dst, const char* src, size_t size) {
+inline size_t strlcpy(char* dst, const char* src, size_t size) {
     if (size == 0) return strlen(src);
     size_t srclen = strlen(src);
     size_t copy = srclen < size - 1 ? srclen : size - 1;
