@@ -575,7 +575,7 @@ bool loadInputNames() {
       file.close();
     // Set defaults
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-      appState.audio.inputNames[i] = INPUT_NAME_DEFAULTS[i];
+      strlcpy(appState.audio.inputNames[i], INPUT_NAME_DEFAULTS[i], sizeof(appState.audio.inputNames[i]));
     }
     return false;
   }
@@ -583,8 +583,9 @@ bool loadInputNames() {
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     String line = file.readStringUntil('\n');
     line.trim();
-    appState.audio.inputNames[i] =
-        (line.length() > 0) ? line : String(INPUT_NAME_DEFAULTS[i]);
+    strlcpy(appState.audio.inputNames[i],
+            (line.length() > 0) ? line.c_str() : INPUT_NAME_DEFAULTS[i],
+            sizeof(appState.audio.inputNames[i]));
   }
   file.close();
   LOG_I("[Settings] Input names loaded");
@@ -1682,8 +1683,8 @@ void handleSettingsImport() {
   if (!doc["inputNames"].isNull() && doc["inputNames"].is<JsonArray>()) {
     JsonArray names = doc["inputNames"].as<JsonArray>();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
-      String name = names[i].as<String>();
-      if (name.length() > 0) appState.audio.inputNames[i] = name;
+      const char* name = names[i] | "";
+      if (name[0] != '\0') strlcpy(appState.audio.inputNames[i], name, sizeof(appState.audio.inputNames[i]));
     }
     saveInputNames();
   }

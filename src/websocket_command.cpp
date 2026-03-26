@@ -320,8 +320,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (doc["names"].is<JsonArray>()) {
             JsonArray names = doc["names"].as<JsonArray>();
             for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
-              String name = names[i].as<String>();
-              if (name.length() > 0) appState.audio.inputNames[i] = name;
+              const char* name = names[i] | "";
+              if (name[0] != '\0') strlcpy(appState.audio.inputNames[i], name, sizeof(appState.audio.inputNames[i]));
             }
             saveInputNames();
             // Broadcast updated names

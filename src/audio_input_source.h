@@ -4,6 +4,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Maximum number of input sources — must be defined in config.h
+#include "config.h"
+#ifndef AUDIO_PIPELINE_MAX_INPUTS
+#error "AUDIO_PIPELINE_MAX_INPUTS must be defined in config.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,12 +18,6 @@ extern "C" {
 // Legacy hardcoded registration removed — ADC sources now registered via HalPcm1808::getInputSource().
 #define AUDIO_SRC_LANE_ADC1   0
 #define AUDIO_SRC_LANE_ADC2   1
-
-// Maximum number of input sources — must be defined in config.h
-#include "config.h"
-#ifndef AUDIO_PIPELINE_MAX_INPUTS
-#error "AUDIO_PIPELINE_MAX_INPUTS must be defined in config.h"
-#endif
 
 // Reusable input source interface.
 // Each audio input (ADC, USB, signal generator, etc.) can register itself

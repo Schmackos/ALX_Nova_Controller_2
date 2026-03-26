@@ -211,9 +211,9 @@ public:
 
   // ===== Error State =====
   int errorCode = 0;
-  String errorMessage;
+  char errorMessage[128] = "";
 
-  void setError(int code, const String &message);
+  void setError(int code, const char* message);
   void clearError();
   bool hasError() const { return errorCode != 0; }
 

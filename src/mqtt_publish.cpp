@@ -905,7 +905,7 @@ void publishMqttInputNames() {
       "input7_name_l", "input7_name_r", "input8_name_l", "input8_name_r"};
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     mqttClient.publish((base + "/audio/" + labels[i]).c_str(),
-                       appState.audio.inputNames[i].c_str(), true);
+                       appState.audio.inputNames[i], true);
   }
 }
 
