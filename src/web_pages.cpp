@@ -55,7 +55,8 @@ body.night-mode {
             --accent-dark: #E68900;
             --text-primary: #212121;
             --text-secondary: #757575;
-            --text-disabled: #9E9E9E;
+            --text-muted: #9E9E9E;
+            --text-disabled: #BDBDBD;
             --success: #4CAF50;
             --error: #F44336;
             --warning: #FFC107;
@@ -75,7 +76,8 @@ body.night-mode {
             --bg-input: #2C2C2C;
             --text-primary: #FFFFFF;
             --text-secondary: #B0B0B0;
-            --text-disabled: #666666;
+            --text-muted: #808080;
+            --text-disabled: #555555;
             --error: #F44336;
             --info: #2196F3;
             --border: #333333;
@@ -3516,7 +3518,7 @@ body.night-mode {
     transition: background 0.15s, color 0.15s;
 }
 .viz-section-header:hover {
-    background: var(--bg-hover, rgba(255,255,255,0.05));
+    background: var(--bg-input);
     color: var(--text-primary);
 }
 .viz-section-header.collapsed {
@@ -3974,6 +3976,54 @@ body.night-mode {
             /* Matrix horizontal scroll handled by .matrix-scroll-wrap */
             .matrix-cell {
                 min-width: 32px;
+            }
+            /* Channel strip VU: horizontal layout on mobile */
+            .channel-vu-pair {
+                flex-direction: row;
+                align-items: center;
+                min-height: unset;
+                gap: 6px;
+            }
+            .channel-vu-wrapper {
+                flex-direction: row;
+                align-items: center;
+                gap: 4px;
+                flex: 1;
+            }
+            .channel-vu-canvas {
+                width: 100% !important;
+                height: 16px !important;
+            }
+            .channel-vu-label {
+                writing-mode: horizontal-tb;
+                font-size: 10px;
+                min-width: 12px;
+            }
+            .channel-vu-readout {
+                font-size: 10px;
+                min-width: 60px;
+                text-align: right;
+            }
+            /* THD card: tighter on mobile */
+            .thd-summary {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .thd-metric {
+                min-width: 80px;
+            }
+            /* DSP preset overlay: full-width on mobile */
+            .dsp-preset-overlay-inner {
+                width: 96vw;
+                max-height: 85vh;
+            }
+            /* A/B toggle compact on mobile */
+            .peq-overlay-header-tools {
+                gap: 6px;
+            }
+            .peq-ab-btn {
+                padding: 3px 7px;
+                font-size: 11px;
             }
         }
 

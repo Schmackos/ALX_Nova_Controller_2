@@ -3058,7 +3058,7 @@
     transition: background 0.15s, color 0.15s;
 }
 .viz-section-header:hover {
-    background: var(--bg-hover, rgba(255,255,255,0.05));
+    background: var(--bg-input);
     color: var(--text-primary);
 }
 .viz-section-header.collapsed {

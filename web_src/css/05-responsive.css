@@ -224,6 +224,54 @@
             .matrix-cell {
                 min-width: 32px;
             }
+            /* Channel strip VU: horizontal layout on mobile */
+            .channel-vu-pair {
+                flex-direction: row;
+                align-items: center;
+                min-height: unset;
+                gap: 6px;
+            }
+            .channel-vu-wrapper {
+                flex-direction: row;
+                align-items: center;
+                gap: 4px;
+                flex: 1;
+            }
+            .channel-vu-canvas {
+                width: 100% !important;
+                height: 16px !important;
+            }
+            .channel-vu-label {
+                writing-mode: horizontal-tb;
+                font-size: 10px;
+                min-width: 12px;
+            }
+            .channel-vu-readout {
+                font-size: 10px;
+                min-width: 60px;
+                text-align: right;
+            }
+            /* THD card: tighter on mobile */
+            .thd-summary {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .thd-metric {
+                min-width: 80px;
+            }
+            /* DSP preset overlay: full-width on mobile */
+            .dsp-preset-overlay-inner {
+                width: 96vw;
+                max-height: 85vh;
+            }
+            /* A/B toggle compact on mobile */
+            .peq-overlay-header-tools {
+                gap: 6px;
+            }
+            .peq-ab-btn {
+                padding: 3px 7px;
+                font-size: 11px;
+            }
         }
 
         /* Ultra-small screens (< 360px) */
