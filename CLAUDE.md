@@ -184,9 +184,18 @@ feat: / fix: / docs: / refactor: / test: / chore:
 
 ## Obsidian Vault
 
-Architecture Decision Records and project notes are tracked in the Obsidian Vault.
+Architecture Decision Records, capacity tracking, and project notes in the Obsidian Vault.
 Vault path: `C:\Users\Necrosis\Documents\GitHub\Vault\Projects\ALX Nova\`
-After architectural decisions, create an ADR there (see Vault CLAUDE.md for format).
+
+When completing work:
+- **Architectural decision made** → create ADR with `pr:` and `source_files:` fields
+- **Feature paused mid-session** → create handoff note in `Projects/ALX Nova/Handoffs/`
+- **API removed or replaced** → append to the domain's deprecation-log in `Projects/ALX Nova/Deprecations/`
+- **Resource allocated** (event bit, HAL slot, driver) → update matching capacity-budget in `Projects/ALX Nova/Capacity/`
+
+When starting work:
+- Check `Handoffs/` for paused work on the same area
+- Check capacity-budget notes before allocating event bits, HAL slots, or driver registry entries
 
 ## Documentation Site (Docusaurus v3)
 
