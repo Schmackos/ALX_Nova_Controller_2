@@ -6,6 +6,7 @@
 #include "dsp_coefficients.h"
 #include "dsp_rew_parser.h"
 #include "dsp_crossover.h"
+#include "dsp_convolution.h"
 #include "thd_measurement.h"
 #include "app_state.h"
 #include "globals.h"
@@ -1408,6 +1409,102 @@ JsonDocument doc;
         appState.markDspConfigDirty();
         server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] Stereo link pair %d: %s", pair, linked ? "linked" : "unlinked");
+    });
+
+    // POST /api/dsp/convolution/upload?ch=N — upload WAV impulse response for convolution
+    server_on_versioned("/api/dsp/convolution/upload", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        int ch = parseChannelParam();
+        if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+
+        const String &body = server.arg("plain");
+        if (body.length() == 0) { sendJsonError(400, "Empty body"); return; }
+        const size_t maxIrBytes = CONV_MAX_PARTITIONS * CONV_PARTITION_SIZE * sizeof(float);
+        if (body.length() > maxIrBytes) { sendJsonError(413, "IR too large"); return; }
+
+        dsp_copy_active_to_inactive();
+        DspState *inactive = dsp_get_inactive_config();
+        DspChannelConfig &chCfg = inactive->channels[ch];
+
+        // Allocate convolution slot (pool has CONV_MAX_IR_SLOTS=2 slots)
+        // Check if channel already has a DSP_CONVOLUTION stage to reuse its slot
+        int existingSlot = -1;
+        int existingStageIdx = -1;
+        for (int s = 0; s < chCfg.stageCount; s++) {
+            if (chCfg.stages[s].type == DSP_CONVOLUTION) {
+                existingSlot = chCfg.stages[s].convolution.convSlot;
+                existingStageIdx = s;
+                break;
+            }
+        }
+
+        // Allocate temp IR buffer for WAV parsing (up to CONV_MAX_PARTITIONS * CONV_PARTITION_SIZE floats)
+        const int maxTaps = CONV_MAX_PARTITIONS * CONV_PARTITION_SIZE;
+        float *irBuf = (float *)psram_alloc(maxTaps, sizeof(float), "conv_ir_upload");
+        if (!irBuf) { sendJsonError(503, "Out of memory"); return; }
+
+        uint32_t sampleRate = inactive->sampleRate > 0 ? inactive->sampleRate : 48000;
+        int taps = dsp_parse_wav_ir((const uint8_t *)body.c_str(), (int)body.length(),
+                                    irBuf, maxTaps, sampleRate);
+        if (taps <= 0) {
+            psram_free(irBuf, "conv_ir_upload");
+            sendJsonError(400, "Invalid WAV: must be mono PCM/float at matching sample rate");
+            return;
+        }
+
+        // Free old convolution slot if reusing
+        if (existingSlot >= 0) {
+            dsp_conv_free_slot(existingSlot);
+        }
+
+        // Allocate new convolution slot
+        // Find first available slot (0 or 1)
+        int convSlot = -1;
+        for (int i = 0; i < CONV_MAX_IR_SLOTS; i++) {
+            if (!dsp_conv_is_active(i)) { convSlot = i; break; }
+        }
+        if (convSlot < 0) {
+            psram_free(irBuf, "conv_ir_upload");
+            sendJsonError(400, "No convolution slots available");
+            return;
+        }
+
+        int rc = dsp_conv_init_slot(convSlot, irBuf, taps);
+        psram_free(irBuf, "conv_ir_upload");
+        if (rc < 0) { sendJsonError(500, "Convolution init failed"); return; }
+
+        // Update or add DSP_CONVOLUTION stage
+        if (existingStageIdx >= 0) {
+            chCfg.stages[existingStageIdx].convolution.convSlot = (int8_t)convSlot;
+            chCfg.stages[existingStageIdx].enabled = true;
+        } else {
+            if (chCfg.stageCount >= DSP_MAX_STAGES) {
+                dsp_conv_free_slot(convSlot);
+                sendJsonError(400, "Max stages reached");
+                return;
+            }
+            DspStage &s = chCfg.stages[chCfg.stageCount];
+            dsp_init_stage(s, DSP_CONVOLUTION);
+            s.convolution.convSlot = (int8_t)convSlot;
+            chCfg.stageCount++;
+        }
+
+        if (!dsp_swap_config()) {
+            dsp_conv_free_slot(convSlot);
+            dsp_log_swap_failure("DSP API");
+            sendJsonError(503, "DSP busy, retry");
+            return;
+        }
+        saveDspSettingsDebounced();
+        appState.markDspConfigDirty();
+
+        char resp[80];
+        snprintf(resp, sizeof(resp), "{\"success\":true,\"irLength\":%d,\"sampleRate\":%lu}",
+                 taps, (unsigned long)sampleRate);
+        server_send(200, "application/json", resp);
+        LOG_I("[DSP] Convolution upload: ch=%d slot=%d irLength=%d sampleRate=%lu",
+              ch, convSlot, taps, (unsigned long)sampleRate);
     });
 
     LOG_I("[DSP] REST API endpoints registered");

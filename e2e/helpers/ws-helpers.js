@@ -34,6 +34,7 @@ function buildInitialState() {
     'mqtt-settings',
     'hal-device-state',
     'audio-channel-map',
+    'input-names',
     'audio-graph-state',
     'signal-generator',
     'debug-state',
@@ -90,6 +91,11 @@ function handleCommand(type, data) {
     case 'setDeviceEnabled':
       return [loadFixture('hal-device-state')];
 
+    // ===== Server-push broadcasts (not client commands — handled gracefully) =====
+    case 'thdResult':
+      // thdResult is a server-push event; tests that need it send it explicitly.
+      return [];
+
     // ===== Input pipeline commands =====
     case 'setInputGain':
       return [];
@@ -104,9 +110,6 @@ function handleCommand(type, data) {
     case 'setOutputGain':
       return [];
 
-    case 'setOutputHwVolume':
-      return [];
-
     case 'setOutputMute':
       return [];
 
@@ -115,6 +118,9 @@ function handleCommand(type, data) {
 
     case 'setOutputDelay':
       return [];
+
+    case 'setInputNames':
+      return [{ type: 'inputNames', names: data.names }];
 
     // ===== Signal generator =====
     case 'setSignalGen':

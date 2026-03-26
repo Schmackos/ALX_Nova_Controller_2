@@ -6,6 +6,7 @@
 
 #ifndef NATIVE_TEST
 #include "debug_serial.h"
+#include "app_state.h"
 #else
 #define LOG_I(...)
 #define LOG_W(...)
@@ -145,6 +146,9 @@ void thd_process_fft_buffer(const float *fftMag, int numBins, float binFreqHz, f
 
         _result.valid = true;
         LOG_I("[THD] Measurement complete: THD+N=%.3f%% (%.1f dB)", _result.thdPlusNPercent, _result.thdPlusNDb);
+#ifndef NATIVE_TEST
+        AppState::getInstance().markThdDirty();
+#endif
     }
 }
 

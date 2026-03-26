@@ -13,6 +13,7 @@
 #define DSP_PRESET_MAX_SLOTS 32
 #define OUTPUT_DSP_MAX_CHANNELS 8
 #define OUTPUT_DSP_MAX_STAGES 12
+#define OUTPUT_DSP_MAX_DELAY_SAMPLES 4800
 
 #include <unity.h>
 #include <math.h>
@@ -53,6 +54,7 @@ const char* stage_type_name(DspStageType t) {
         case DSP_BIQUAD_LPF_1ST: return "LPF_1ST";
         case DSP_BIQUAD_HPF_1ST: return "HPF_1ST";
         case DSP_BIQUAD_LINKWITZ: return "LINKWITZ";
+        case DSP_DELAY: return "DELAY";
         default: return "UNKNOWN";
     }
 }
@@ -484,6 +486,170 @@ void test_mono_processing_no_crash() {
     }
 }
 
+// ===== Test 15: DSP_DELAY stage can be added =====
+
+void test_delay_stage_can_be_added() {
+    OutputDspState *inactive = output_dsp_get_inactive_config();
+    inactive->channels[0].bypass = false;
+
+    int pos = output_dsp_add_stage(0, DSP_DELAY);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, pos);
+
+    OutputDspState *cfg = output_dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL(DSP_DELAY, cfg->channels[0].stages[pos].type);
+    TEST_ASSERT_EQUAL_UINT8(1, cfg->channels[0].stageCount);
+}
+
+// ===== Test 16: DSP_DELAY with 0 samples is a pass-through =====
+
+void test_delay_zero_samples_passthrough() {
+    OutputDspState *inactive = output_dsp_get_inactive_config();
+    inactive->channels[0].bypass = false;
+
+    int pos = output_dsp_add_stage(0, DSP_DELAY);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, pos);
+    inactive->channels[0].stages[pos].delay.delaySamples = 0;
+    inactive->channels[0].stages[pos].delay.writePos = 0;
+
+    output_dsp_swap_config();
+
+    float buf[64];
+    float ref[64];
+    generate_sine(buf, 64, 1000.0f, 48000.0f);
+    memcpy(ref, buf, sizeof(buf));
+
+    output_dsp_process(0, buf, 64);
+
+    TEST_ASSERT_EQUAL_FLOAT_ARRAY(ref, buf, 64);
+}
+
+// ===== Test 17: DSP_DELAY with N samples delays signal by N samples =====
+
+void test_delay_n_samples_delays_signal() {
+    const int DELAY_SAMPLES = 10;
+    const int BUF_SIZE = 128;
+
+    OutputDspState *inactive = output_dsp_get_inactive_config();
+    inactive->channels[0].bypass = false;
+
+    int pos = output_dsp_add_stage(0, DSP_DELAY);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, pos);
+    inactive->channels[0].stages[pos].delay.delaySamples = DELAY_SAMPLES;
+    inactive->channels[0].stages[pos].delay.writePos = 0;
+
+    output_dsp_swap_config();
+
+    // Input: impulse at position 0 (1.0 followed by zeros)
+    float buf[BUF_SIZE];
+    memset(buf, 0, sizeof(buf));
+    buf[0] = 1.0f;
+
+    output_dsp_process(0, buf, BUF_SIZE);
+
+    // First DELAY_SAMPLES samples should be silence (reading from zeroed delay buffer)
+    for (int i = 0; i < DELAY_SAMPLES; i++) {
+        TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, buf[i]);
+    }
+    // The impulse should appear at position DELAY_SAMPLES
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 1.0f, buf[DELAY_SAMPLES]);
+}
+
+// ===== Test 18: DSP_DELAY ms-to-samples conversion (handler logic) =====
+
+void test_delay_ms_to_samples_conversion() {
+    // At 48kHz: 10ms = 480 samples
+    float ms = 10.0f;
+    uint32_t sampleRate = 48000;
+    uint16_t delaySamples = (uint16_t)((ms * sampleRate) / 1000.0f);
+    TEST_ASSERT_EQUAL_UINT16(480, delaySamples);
+
+    // At 48kHz: 100ms = 4800 samples (== OUTPUT_DSP_MAX_DELAY_SAMPLES)
+    ms = 100.0f;
+    delaySamples = (uint16_t)((ms * sampleRate) / 1000.0f);
+    TEST_ASSERT_EQUAL_UINT16(4800, delaySamples);
+
+    // Clamping: 101ms at 48kHz = 4848 → clamps to 4800
+    ms = 101.0f;
+    delaySamples = (uint16_t)((ms * sampleRate) / 1000.0f);
+    if (delaySamples > OUTPUT_DSP_MAX_DELAY_SAMPLES) delaySamples = OUTPUT_DSP_MAX_DELAY_SAMPLES;
+    TEST_ASSERT_EQUAL_UINT16(OUTPUT_DSP_MAX_DELAY_SAMPLES, delaySamples);
+}
+
+// ===== Test 19: DSP_DELAY find-or-create: second add updates existing stage =====
+
+void test_delay_find_or_create_updates_existing() {
+    OutputDspState *inactive = output_dsp_get_inactive_config();
+    inactive->channels[0].bypass = false;
+
+    // Add delay stage with 100 samples
+    int pos = output_dsp_add_stage(0, DSP_DELAY);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, pos);
+    inactive->channels[0].stages[pos].delay.delaySamples = 100;
+    output_dsp_swap_config();
+
+    int countAfterFirst = 0;
+    OutputDspState *active = output_dsp_get_active_config();
+    for (int s = 0; s < active->channels[0].stageCount; s++) {
+        if (active->channels[0].stages[s].type == DSP_DELAY) countAfterFirst++;
+    }
+    TEST_ASSERT_EQUAL(1, countAfterFirst);
+
+    // Simulate find-or-create: update existing stage (don't add another)
+    output_dsp_copy_active_to_inactive();
+    inactive = output_dsp_get_inactive_config();
+    bool found = false;
+    for (int s = 0; s < inactive->channels[0].stageCount; s++) {
+        if (inactive->channels[0].stages[s].type == DSP_DELAY) {
+            inactive->channels[0].stages[s].delay.delaySamples = 200;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        int idx = output_dsp_add_stage(0, DSP_DELAY);
+        if (idx >= 0) inactive->channels[0].stages[idx].delay.delaySamples = 200;
+    }
+    output_dsp_swap_config();
+
+    active = output_dsp_get_active_config();
+    int countAfterSecond = 0;
+    uint16_t finalSamples = 0;
+    for (int s = 0; s < active->channels[0].stageCount; s++) {
+        if (active->channels[0].stages[s].type == DSP_DELAY) {
+            countAfterSecond++;
+            finalSamples = active->channels[0].stages[s].delay.delaySamples;
+        }
+    }
+    TEST_ASSERT_EQUAL(1, countAfterSecond);
+    TEST_ASSERT_EQUAL_UINT16(200, finalSamples);
+}
+
+// ===== Test: Crossover swap-to-active (setOutputCrossover WS path) =====
+
+void test_crossover_swap_to_active() {
+    // Simulate the setOutputCrossover WS handler pattern:
+    // copy → setup → swap → confirm stages visible in active config
+    output_dsp_copy_active_to_inactive();
+    int stagesAdded = output_dsp_setup_crossover(1, 0, 120.0f, 4);
+    TEST_ASSERT_EQUAL(4, stagesAdded);
+
+    output_dsp_swap_config();
+
+    // Verify the crossover stages are now in the active config
+    OutputDspState *active = output_dsp_get_active_config();
+
+    // Sub ch 1: 2 LPF with "XO" label
+    OutputDspChannelConfig &subCh = active->channels[1];
+    TEST_ASSERT_EQUAL_UINT8(2, subCh.stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, subCh.stages[0].type);
+    TEST_ASSERT_EQUAL('X', subCh.stages[0].label[0]);
+
+    // Main ch 0: 2 HPF with "XO" label
+    OutputDspChannelConfig &mainCh = active->channels[0];
+    TEST_ASSERT_EQUAL_UINT8(2, mainCh.stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, mainCh.stages[0].type);
+}
+
 // ===== Main =====
 
 int main() {
@@ -502,5 +668,11 @@ int main() {
     RUN_TEST(test_stage_enable_disable);
     RUN_TEST(test_multi_stage_chain);
     RUN_TEST(test_mono_processing_no_crash);
+    RUN_TEST(test_delay_stage_can_be_added);
+    RUN_TEST(test_delay_zero_samples_passthrough);
+    RUN_TEST(test_delay_n_samples_delays_signal);
+    RUN_TEST(test_delay_ms_to_samples_conversion);
+    RUN_TEST(test_delay_find_or_create_updates_existing);
+    RUN_TEST(test_crossover_swap_to_active);
     return UNITY_END();
 }

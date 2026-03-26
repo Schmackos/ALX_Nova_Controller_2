@@ -21,6 +21,7 @@
 #include "psram_alloc.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
+#include "thd_measurement.h"
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
@@ -351,6 +352,24 @@ void sendDspMetrics() {
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
+
+void sendThdResult() {
+  if (!ws_any_auth()) return;
+  ThdResult r = thd_get_result();
+  JsonDocument doc;
+  doc["type"] = "thdResult";
+  doc["valid"] = r.valid;
+  doc["thdPlusNPercent"] = r.thdPlusNPercent;
+  doc["thdPlusNDb"] = r.thdPlusNDb;
+  doc["fundamentalDbfs"] = r.fundamentalDbfs;
+  doc["framesProcessed"] = r.framesProcessed;
+  doc["framesTarget"] = r.framesTarget;
+  JsonArray harmonics = doc["harmonicLevels"].to<JsonArray>();
+  for (int h = 0; h < THD_MAX_HARMONICS; h++) harmonics.add(r.harmonicLevels[h]);
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
 #endif
 
 void sendHalDeviceState() {
@@ -491,6 +510,7 @@ void sendAudioChannelMap() {
         if (!sink) continue;
         JsonObject out = outputs.add<JsonObject>();
         out["index"] = s;
+        out["halSlot"] = sink->halSlot;
         out["name"] = sink->name;
         out["firstChannel"] = sink->firstChannel;
         out["channels"] = sink->channelCount;
@@ -933,6 +953,8 @@ void sendAudioData() {
     JsonArray adcArr = doc["adc"].to<JsonArray>();
     JsonArray adcStatusArr = doc["adcStatus"].to<JsonArray>();
     JsonArray adcNoiseArr = doc["adcNoiseFloor"].to<JsonArray>();
+    JsonArray adcSnrArr = doc["adcSnrDb"].to<JsonArray>();
+    JsonArray adcSfdrArr = doc["adcSfdrDb"].to<JsonArray>();
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       const AdcState &adc = appState.audio.adc[a];
       JsonObject adcObj = adcArr.add<JsonObject>();
@@ -955,6 +977,8 @@ void sendAudioData() {
       }
       adcStatusArr.add(statusStr);
       adcNoiseArr.add(adc.noiseFloorDbfs);
+      adcSnrArr.add(appState.audio.snrDb[a]);
+      adcSfdrArr.add(appState.audio.sfdrDb[a]);
     }
     // Output sink VU data
     JsonArray sinkArr = doc["sinks"].to<JsonArray>();

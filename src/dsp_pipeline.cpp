@@ -142,6 +142,43 @@ void dsp_mb_free_slot(int slot) {
     }
 }
 
+bool dsp_mb_set_band_params(int slotIdx, int band, float thresholdDb, float attackMs,
+                             float releaseMs, float ratio, float kneeDb, float makeupGainDb) {
+    if (slotIdx < 0 || slotIdx >= DSP_MULTIBAND_MAX_SLOTS) return false;
+    if (band < 0 || band >= DSP_MULTIBAND_MAX_BANDS) return false;
+#ifndef NATIVE_TEST
+    if (!_mbSlots) return false;
+#endif
+    DspMultibandBand &b = _mbSlots[slotIdx].bands[band];
+    b.thresholdDb  = thresholdDb;
+    b.attackMs     = attackMs;
+    b.releaseMs    = releaseMs;
+    b.ratio        = ratio;
+    b.kneeDb       = kneeDb;
+    b.makeupGainDb = makeupGainDb;
+    b.makeupLinear = powf(10.0f, makeupGainDb / 20.0f);
+    return true;
+}
+
+bool dsp_mb_set_crossover_freq(int slotIdx, int boundary, float freqHz, uint32_t sampleRate) {
+    if (slotIdx < 0 || slotIdx >= DSP_MULTIBAND_MAX_SLOTS) return false;
+    if (boundary < 0 || boundary >= 3) return false;
+    if (sampleRate == 0) return false;
+#ifndef NATIVE_TEST
+    if (!_mbSlots) return false;
+#endif
+    DspMultibandSlot &slot = _mbSlots[slotIdx];
+    slot.crossoverFreqs[boundary] = freqHz;
+    float normFreq = freqHz / (float)sampleRate;
+    if (normFreq <= 0.0f || normFreq >= 0.5f) return false;
+    // Recompute LPF and HPF coefficients for this crossover boundary
+    dsp_gen_lpf_f32(slot.xoverCoeffs[boundary][0], normFreq, 0.707f);
+    dsp_gen_hpf_f32(slot.xoverCoeffs[boundary][1], normFreq, 0.707f);
+    // Reset delay lines to avoid clicks from stale state
+    memset(slot.xoverDelay[boundary], 0, sizeof(slot.xoverDelay[boundary]));
+    return true;
+}
+
 // ===== Conversion Buffers (PSRAM on ESP32, static on native) =====
 #ifdef NATIVE_TEST
 static float _dspBufL[256];

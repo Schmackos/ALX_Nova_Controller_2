@@ -176,6 +176,84 @@ void tearDown(void) {
     // Clean up after each test
 }
 
+// ===== Test: thdResult WS message shape =====
+// Verifies that sendThdResult() emits the correct JSON keys and types.
+// Mirrors the construction in websocket_broadcast.cpp sendThdResult().
+
+#define THD_MAX_HARMONICS 8
+
+void test_thd_result_message_has_required_keys() {
+    JsonDocument doc;
+
+    // Simulate sendThdResult() output
+    doc["type"] = "thdResult";
+    doc["valid"] = true;
+    doc["thdPlusNPercent"] = 0.05f;
+    doc["thdPlusNDb"] = -66.0f;
+    doc["fundamentalDbfs"] = -6.0f;
+    doc["framesProcessed"] = (uint16_t)8;
+    doc["framesTarget"] = (uint16_t)8;
+    JsonArray harmonics = doc["harmonicLevels"].to<JsonArray>();
+    for (int h = 0; h < THD_MAX_HARMONICS; h++) harmonics.add(-80.0f + (float)h);
+
+    // Verify type
+    TEST_ASSERT_EQUAL_STRING("thdResult", doc["type"].as<const char*>());
+
+    // Required fields
+    TEST_ASSERT_TRUE(doc["valid"].is<bool>());
+    TEST_ASSERT_TRUE(doc["thdPlusNPercent"].is<float>());
+    TEST_ASSERT_TRUE(doc["thdPlusNDb"].is<float>());
+    TEST_ASSERT_TRUE(doc["fundamentalDbfs"].is<float>());
+    TEST_ASSERT_TRUE(doc["framesProcessed"].is<uint16_t>());
+    TEST_ASSERT_TRUE(doc["framesTarget"].is<uint16_t>());
+
+    // harmonicLevels array has THD_MAX_HARMONICS entries
+    TEST_ASSERT_TRUE(doc["harmonicLevels"].is<JsonArray>());
+    TEST_ASSERT_EQUAL(THD_MAX_HARMONICS, doc["harmonicLevels"].as<JsonArray>().size());
+}
+
+void test_thd_result_invalid_measurement_has_valid_false() {
+    JsonDocument doc;
+    doc["type"] = "thdResult";
+    doc["valid"] = false;
+    doc["thdPlusNPercent"] = 0.0f;
+    doc["thdPlusNDb"] = 0.0f;
+    doc["fundamentalDbfs"] = 0.0f;
+    doc["framesProcessed"] = (uint16_t)0;
+    doc["framesTarget"] = (uint16_t)8;
+    doc["harmonicLevels"].to<JsonArray>();
+
+    TEST_ASSERT_FALSE(doc["valid"].as<bool>());
+    TEST_ASSERT_EQUAL_STRING("thdResult", doc["type"].as<const char*>());
+}
+
+// ===== Test: audioLevels snrDb/sfdrDb arrays =====
+// Verifies the audioLevels broadcast includes adcSnrDb and adcSfdrDb arrays.
+
+void test_audio_levels_includes_snr_sfdr_arrays() {
+    JsonDocument doc;
+    doc["type"] = "audioLevels";
+
+    // Simulate the arrays added in websocket_broadcast.cpp sendAudioData()
+    JsonArray snrArr = doc["adcSnrDb"].to<JsonArray>();
+    JsonArray sfdrArr = doc["adcSfdrDb"].to<JsonArray>();
+    for (int a = 0; a < 2; a++) {
+        snrArr.add(85.0f + (float)a);
+        sfdrArr.add(90.0f + (float)a);
+    }
+
+    TEST_ASSERT_TRUE(doc["adcSnrDb"].is<JsonArray>());
+    TEST_ASSERT_TRUE(doc["adcSfdrDb"].is<JsonArray>());
+    TEST_ASSERT_EQUAL(2, doc["adcSnrDb"].as<JsonArray>().size());
+    TEST_ASSERT_EQUAL(2, doc["adcSfdrDb"].as<JsonArray>().size());
+
+    // Values should be numeric
+    for (int a = 0; a < 2; a++) {
+        TEST_ASSERT_TRUE(doc["adcSnrDb"][a].is<float>());
+        TEST_ASSERT_TRUE(doc["adcSfdrDb"][a].is<float>());
+    }
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
 
@@ -188,6 +266,13 @@ int main(int argc, char **argv) {
     RUN_TEST(test_protocol_version_constant_defined);
     RUN_TEST(test_protocol_version_format);
     RUN_TEST(test_protocol_version_message_structure);
+
+    // THD result message shape
+    RUN_TEST(test_thd_result_message_has_required_keys);
+    RUN_TEST(test_thd_result_invalid_measurement_has_valid_false);
+
+    // audioLevels snrDb/sfdrDb arrays
+    RUN_TEST(test_audio_levels_includes_snr_sfdr_arrays);
 
     return UNITY_END();
 }

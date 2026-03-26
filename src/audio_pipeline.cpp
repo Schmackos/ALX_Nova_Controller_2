@@ -1088,6 +1088,12 @@ const AudioInputSource* audio_pipeline_get_source(int lane) {
     return &_sources[lane];
 }
 
+void audio_pipeline_set_source_gain(int lane, float gainLinear) {
+    if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return;
+    if (!_sources[lane].read) return;
+    _sources[lane].gainLinear = gainLinear;
+}
+
 float audio_pipeline_get_lane_vu_l(int lane) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return -90.0f;
     return _sources[lane].vuL;

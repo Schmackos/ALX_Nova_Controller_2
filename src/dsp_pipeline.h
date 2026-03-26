@@ -595,6 +595,13 @@ const char *stage_type_name(DspStageType t);               // Stage type to stri
 int dsp_mb_alloc_slot();
 void dsp_mb_free_slot(int slot);
 
+// Multi-band compressor per-band accessors.
+// slot: mbSlot index from DspMultibandCompParams; band: 0-3; boundary: 0-2.
+// Returns false if slot or band index is out of range.
+bool dsp_mb_set_band_params(int slot, int band, float thresholdDb, float attackMs,
+                             float releaseMs, float ratio, float kneeDb, float makeupGainDb);
+bool dsp_mb_set_crossover_freq(int slot, int boundary, float freqHz, uint32_t sampleRate);
+
 // FIR pool access (taps/delay stored outside DspStage union to save DRAM)
 int dsp_fir_alloc_slot();                              // Allocate slot, returns index or -1
 void dsp_fir_free_slot(int slot);                      // Release slot

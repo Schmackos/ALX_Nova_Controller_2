@@ -133,6 +133,11 @@ public:
   }
   bool isDspConfigDirty() const { return _dspConfigDirty; }
   void clearDspConfigDirty() { _dspConfigDirty = false; }
+
+  // ===== THD Measurement Completion Dirty Flag =====
+  void markThdDirty() { _thdDirty = true; app_events_signal(EVT_THD); }
+  bool isThdDirty() const { return _thdDirty; }
+  void clearThdDirty() { _thdDirty = false; }
 #endif
 
   // ===== USB Audio State =====
@@ -226,28 +231,29 @@ private:
   AppState() {} // Private constructor
 
   // Dirty flags for change detection
-  bool _ethernetDirty = false;
-  bool _displayDirty = false;
-  bool _buzzerDirty = false;
-  bool _settingsDirty = false;
-  bool _adcEnabledDirty = false;
-  bool _sigGenDirty = false;
-  bool _otaDirty = false;
+  volatile bool _ethernetDirty = false;
+  volatile bool _displayDirty = false;
+  volatile bool _buzzerDirty = false;
+  volatile bool _settingsDirty = false;
+  volatile bool _adcEnabledDirty = false;
+  volatile bool _sigGenDirty = false;
+  volatile bool _otaDirty = false;
 #ifdef DSP_ENABLED
-  bool _dspConfigDirty = false;
+  volatile bool _dspConfigDirty = false;
+  volatile bool _thdDirty = false;
 #endif
 #ifdef USB_AUDIO_ENABLED
-  bool _usbAudioDirty = false;
-  bool _usbAudioVuDirty = false;
+  volatile bool _usbAudioDirty = false;
+  volatile bool _usbAudioVuDirty = false;
 #endif
 #ifdef DAC_ENABLED
-  bool _eepromDirty = false;
-  bool _halDeviceDirty = false;
-  bool _channelMapDirty = false;
+  volatile bool _eepromDirty = false;
+  volatile bool _halDeviceDirty = false;
+  volatile bool _channelMapDirty = false;
 #endif
-  bool _diagJournalDirty = false;
-  bool _heapDirty = false;
-  bool _healthCheckDirty = false;
+  volatile bool _diagJournalDirty = false;
+  volatile bool _heapDirty = false;
+  volatile bool _healthCheckDirty = false;
 };
 
 // Convenience macro for accessing AppState

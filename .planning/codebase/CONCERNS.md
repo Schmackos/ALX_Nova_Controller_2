@@ -155,6 +155,8 @@
 
 ### ASRC Coefficient Table (20KB PSRAM at boot)
 
+**Status: RESOLVED (2026-03-26)** — Lazy allocation: coefficients + history buffers deferred to first non-1:1 `asrc_set_ratio()` call. Boot no longer allocates 20KB PSRAM.
+
 - **Severity:** Low
 - **Issue:** The ASRC polyphase filter coefficient table (160 phases x 32 taps x 4 bytes = 20KB) is computed at boot time using `psram_alloc()` and held permanently. Per-lane history buffers add 256 bytes each (2KB for all 8 lanes). Total: ~22KB PSRAM permanently allocated even when no sample rate conversion is active.
 - **Files:**
@@ -164,6 +166,8 @@
 
 ### DSD Mode Switching Uses String Comparison
 
+**Status: RESOLVED (2026-03-26)** — Virtual `setDsdMode()`/`isDsdMode()` added to `HalAudioDevice` base class. `strncmp` + `static_cast<HalCirrusDac2ch*>` removed from diagnostics_loop.cpp.
+
 - **Severity:** Low
 - **Issue:** The DSD DAC mode switching logic in `main.cpp` identifies Cirrus DACs using `strncmp(desc.compatible, "cirrus,", 7)` combined with `HAL_CAP_DSD` check, then performs `static_cast<HalCirrusDac2ch*>(dev)`. This pattern is fragile -- any future DSD-capable non-Cirrus DAC (e.g., ESS SABRE with DoP support) would not be handled, and a miscategorized device could cause undefined behavior via the `static_cast`.
 - **Files:**
@@ -172,6 +176,8 @@
 - **Fix approach:** Add a virtual `setDsdMode(bool)` method to `HalAudioDevice` base class with default no-op. Override in Cirrus drivers. Call via `HalAudioDevice*` pointer without `static_cast`. Eliminates string matching entirely.
 
 ### 16 Dirty Flags Without Atomic Access
+
+**Status: RESOLVED (2026-03-26)** — All 16 dirty flags marked `volatile bool` for consistency with existing cross-core volatile pattern.
 
 - **Severity:** Low
 - **Issue:** AppState has 16 `bool` dirty flags (non-volatile, non-atomic) written by various tasks (MQTT on Core 0, audio on Core 1, HTTP handlers) and read by the main loop. While bool writes are naturally atomic on RISC-V, the compiler may optimize reads away without `volatile`. The `_mqttReconfigPending` and `_pendingApToggle` fields are correctly marked `volatile`, but the dirty flags are not.
@@ -231,6 +237,8 @@
 - **Fix approach:** Already mitigated by CI guard and pre-commit hook. Consider splitting into chunked PROGMEM arrays if compile time becomes problematic.
 
 ### main.cpp Complexity (1,547 LOC, mixed concerns)
+
+**Status: RESOLVED (2026-03-26)** — Route registration extracted to `src/routes.cpp` (414 LOC). Timer-based diagnostics extracted to `src/diagnostics_loop.cpp` (254 LOC). main.cpp reduced to ~952 LOC.
 
 - **Severity:** Medium
 - **Issue:** `src/main.cpp` contains `setup()`, `loop()`, route registration, format negotiation, DSD mode switching, diagnostics rules, and LED blink logic. The `loop()` function alone handles 15+ dirty flag checks, format negotiation, ASRC configuration, DSD switching, clipping detection, and timer management.
@@ -303,7 +311,7 @@
 
 7. **[Medium] ~~Migrate raw server.send() to server_send()~~** -- **RESOLVED (2026-03-25).** All 16 raw server.send() + 3 server.send_P() migrated to server_send()/server_send_P() wrappers. Zero raw calls remain outside http_security.h.
 
-8. **[Medium] Add virtual setDsdMode() to HalAudioDevice** -- Eliminate `static_cast<HalCirrusDac2ch*>` + string matching pattern. Estimated effort: 1 hour.
+8. **[Medium] ~~Add virtual setDsdMode() to HalAudioDevice~~** -- **RESOLVED (2026-03-26).** Virtual dispatch added; strncmp + static_cast removed.
 
 9. **[Low] Replace Arduino String in state structs** -- Convert `String` fields to `char[]` in `AudioState`, `EthernetState`, `AppState`. Reduces heap fragmentation. Estimated effort: 2 hours.
 
@@ -311,4 +319,4 @@
 
 ---
 
-*Concerns audit: 2026-03-25 -- 4 critical/high resolved, 2 medium resolved (CSP + server.send migration), 4 medium remaining, 4 low. Previous resolved items omitted -- see git history for 2026-03-24 CONCERNS.md.*
+*Concerns audit: 2026-03-26 -- 4 critical/high resolved, 4 medium resolved (CSP, server.send, setDsdMode, main.cpp extraction), 3 performance resolved (ASRC lazy, DSD virtual, volatile flags). Remaining: 2 medium (constants, innerHTML), 3 low (Strings, worktrees, sprintf), 3 monitor-only (device slots, event bits, web pages monolith), 3 gaps (watchdog, integration test, PSRAM degradation).*

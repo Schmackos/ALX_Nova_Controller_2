@@ -43,10 +43,22 @@ static float _outGainBuf[256];
 static float *_outGainBuf = nullptr;
 #endif
 
+// ===== Per-channel delay circular buffers (PSRAM-allocated on demand) =====
+// One buffer per output channel. Allocated when a DSP_DELAY stage is first created.
+// writePos per stage is stored in DspDelayParams.writePos.
+#ifdef NATIVE_TEST
+static float _outDelayBuf[OUTPUT_DSP_MAX_CHANNELS][OUTPUT_DSP_MAX_DELAY_SAMPLES];
+static bool _outDelayBufAlloc[OUTPUT_DSP_MAX_CHANNELS];
+#else
+static float *_outDelayBuf[OUTPUT_DSP_MAX_CHANNELS];
+static bool _outDelayBufAlloc[OUTPUT_DSP_MAX_CHANNELS];
+#endif
+
 // ===== Forward Declarations =====
 static void output_dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint32_t sampleRate);
 static void output_dsp_gain_process(DspGainParams &gain, float *buf, int len, uint32_t sampleRate);
 static void output_dsp_compressor_process(DspCompressorParams &comp, float *buf, int len, uint32_t sampleRate);
+static void output_dsp_delay_process(DspDelayParams &d, float *delayBuf, float *buf, int frames);
 
 // ===== Local stage type helpers (reuse stage_type_name from dsp_pipeline.h for serialization) =====
 
@@ -69,6 +81,7 @@ static DspStageType output_dsp_type_from_name(const char *name) {
     if (strcmp(name, "POLARITY") == 0) return DSP_POLARITY;
     if (strcmp(name, "MUTE") == 0) return DSP_MUTE;
     if (strcmp(name, "COMPRESSOR") == 0) return DSP_COMPRESSOR;
+    if (strcmp(name, "DELAY") == 0) return DSP_DELAY;
     if (strcmp(name, "LPF_1ST") == 0) return DSP_BIQUAD_LPF_1ST;
     if (strcmp(name, "HPF_1ST") == 0) return DSP_BIQUAD_HPF_1ST;
     if (strcmp(name, "LINKWITZ") == 0) return DSP_BIQUAD_LINKWITZ;
@@ -163,7 +176,10 @@ void output_dsp_init() {
     if (!_outGainBuf) {
         _outGainBuf = (float *)psram_alloc(256, sizeof(float), "outdsp_buf");
     }
+    // Delay buffers are allocated on demand (output_dsp_alloc_delay_buf)
+    memset(_outDelayBuf, 0, sizeof(_outDelayBuf));
 #endif
+    memset(_outDelayBufAlloc, 0, sizeof(_outDelayBufAlloc));
 
     output_dsp_init_state(_states[0]);
     output_dsp_init_state(_states[1]);
@@ -358,10 +374,36 @@ void output_dsp_process(int ch, float *buf, int frames) {
             case DSP_COMPRESSOR:
                 output_dsp_compressor_process(s.compressor, buf, frames, sampleRate);
                 break;
+            case DSP_DELAY:
+                if (_outDelayBufAlloc[ch]) {
+                    output_dsp_delay_process(s.delay, _outDelayBuf[ch], buf, frames);
+                }
+                break;
             default:
                 break;
         }
     }
+}
+
+// ===== Delay (circular buffer, per-channel PSRAM buffer) =====
+
+static void output_dsp_delay_process(DspDelayParams &d, float *delayBuf, float *buf, int frames) {
+    uint16_t delaySamples = d.delaySamples;
+    if (delaySamples == 0) return;  // 0ms delay — pass through unchanged
+    if (delaySamples > OUTPUT_DSP_MAX_DELAY_SAMPLES) delaySamples = OUTPUT_DSP_MAX_DELAY_SAMPLES;
+
+    uint16_t wp = d.writePos;
+    for (int i = 0; i < frames; i++) {
+        // Read delayed sample from circular buffer
+        uint16_t rp = (wp >= delaySamples) ? (uint16_t)(wp - delaySamples)
+                                            : (uint16_t)(OUTPUT_DSP_MAX_DELAY_SAMPLES + wp - delaySamples);
+        float delayed = delayBuf[rp];
+        // Write current sample into buffer
+        delayBuf[wp] = buf[i];
+        buf[i] = delayed;
+        if (++wp >= OUTPUT_DSP_MAX_DELAY_SAMPLES) wp = 0;
+    }
+    d.writePos = wp;
 }
 
 // ===== Limiter (2-pass: envelope detection + gain application) =====
@@ -483,6 +525,27 @@ static void output_dsp_compressor_process(DspCompressorParams &comp, float *buf,
     comp.gainReduction = -maxGr;
 }
 
+// ===== Delay Buffer Management =====
+
+// Allocate the per-channel delay circular buffer on demand.
+// Returns true if the buffer is ready (already allocated or just allocated).
+static bool output_dsp_alloc_delay_buf(int channel) {
+    if (channel < 0 || channel >= OUTPUT_DSP_MAX_CHANNELS) return false;
+    if (_outDelayBufAlloc[channel]) return true;
+#ifdef NATIVE_TEST
+    memset(_outDelayBuf[channel], 0, sizeof(_outDelayBuf[channel]));
+#else
+    _outDelayBuf[channel] = (float *)psram_alloc(OUTPUT_DSP_MAX_DELAY_SAMPLES, sizeof(float), "outdsp_delay");
+    if (!_outDelayBuf[channel]) {
+        LOG_W("[OutputDSP] Failed to allocate delay buffer for ch=%d", channel);
+        return false;
+    }
+    memset(_outDelayBuf[channel], 0, OUTPUT_DSP_MAX_DELAY_SAMPLES * sizeof(float));
+#endif
+    _outDelayBufAlloc[channel] = true;
+    return true;
+}
+
 // ===== Stage CRUD =====
 
 int output_dsp_add_stage(int channel, DspStageType type, int position) {
@@ -492,11 +555,16 @@ int output_dsp_add_stage(int channel, DspStageType type, int position) {
     OutputDspChannelConfig &ch = cfg->channels[channel];
     if (ch.stageCount >= OUTPUT_DSP_MAX_STAGES) return -1;
 
-    // Validate supported types for output DSP (no FIR, delay, decimator, convolution, etc.)
+    // Validate supported types for output DSP (no FIR, decimator, convolution, etc.)
     if (!dsp_is_biquad_type(type) &&
         type != DSP_LIMITER && type != DSP_GAIN && type != DSP_POLARITY &&
-        type != DSP_MUTE && type != DSP_COMPRESSOR) {
+        type != DSP_MUTE && type != DSP_COMPRESSOR && type != DSP_DELAY) {
         LOG_W("[OutputDSP] Unsupported stage type %d for output DSP", (int)type);
+        return -1;
+    }
+    // Delay requires a buffer — allocate on demand
+    if (type == DSP_DELAY && !output_dsp_alloc_delay_buf(channel)) {
+        LOG_W("[OutputDSP] Cannot add delay stage for ch=%d — buffer allocation failed", channel);
         return -1;
     }
 
@@ -731,6 +799,9 @@ void output_dsp_save_channel(int ch) {
             params["ratio"] = s.compressor.ratio;
             params["kneeDb"] = s.compressor.kneeDb;
             params["makeupGainDb"] = s.compressor.makeupGainDb;
+        } else if (s.type == DSP_DELAY) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["delaySamples"] = s.delay.delaySamples;
         }
     }
 
@@ -787,8 +858,13 @@ void output_dsp_load_channel(int ch) {
         // Validate type is supported
         if (!dsp_is_biquad_type(type) &&
             type != DSP_LIMITER && type != DSP_GAIN && type != DSP_POLARITY &&
-            type != DSP_MUTE && type != DSP_COMPRESSOR) {
+            type != DSP_MUTE && type != DSP_COMPRESSOR && type != DSP_DELAY) {
             LOG_W("[OutputDSP] Skipping unsupported type '%s' in ch%d config", typeName, ch);
+            continue;
+        }
+        // Delay stages need a buffer allocated before they can process
+        if (type == DSP_DELAY && !output_dsp_alloc_delay_buf(ch)) {
+            LOG_W("[OutputDSP] Skipping DSP_DELAY for ch%d — buffer allocation failed", ch);
             continue;
         }
 
@@ -846,6 +922,12 @@ void output_dsp_load_channel(int ch) {
                 output_dsp_compute_compressor_makeup(s.compressor);
                 s.compressor.envelope = 0.0f;
                 s.compressor.gainReduction = 0.0f;
+            } else if (type == DSP_DELAY) {
+                s.delay.delaySamples = params["delaySamples"] | (uint16_t)0;
+                if (s.delay.delaySamples > OUTPUT_DSP_MAX_DELAY_SAMPLES)
+                    s.delay.delaySamples = OUTPUT_DSP_MAX_DELAY_SAMPLES;
+                s.delay.writePos = 0;
+                s.delay.delaySlot = -1;  // Not used in output DSP (inline buffer)
             }
         }
 

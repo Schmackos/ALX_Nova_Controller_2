@@ -30,6 +30,7 @@ void sendDebugState();
 #ifdef DSP_ENABLED
 void sendDspState();
 void sendDspMetrics();
+void sendThdResult();
 #endif
 #ifdef DAC_ENABLED
 void sendHalDeviceState();

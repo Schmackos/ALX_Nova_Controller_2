@@ -102,3 +102,123 @@ test.describe('@audio @ws Audio Input Controls', () => {
     await expect(strip3.locator('.channel-device-name')).toHaveText('USB Audio');
   });
 });
+
+test.describe('@audio @ws Phase 2 — Input Channel Label and Capability Controls', () => {
+  test.beforeEach(async ({ connectedPage: page }) => {
+    await page.locator('.sidebar-item[data-tab="audio"]').click();
+    await expect(page.locator('#audio-sv-inputs')).toHaveClass(/active/);
+    await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 5000 });
+  });
+
+  test('channel label is rendered with data-action="edit-channel-label"', async ({ connectedPage: page }) => {
+    // _buildInputStrip() always renders a .channel-label with data-action="edit-channel-label"
+    const label = page.locator('.channel-label[data-action="edit-channel-label"][data-lane="0"]');
+    await expect(label).toBeAttached();
+  });
+
+  test('channel label text comes from inputNames fixture', async ({ connectedPage: page }) => {
+    // input-names.json has "ADC1 L" at index 0; lane 0 uses inputNames[lane*2] = inputNames[0]
+    await expect(page.locator('.channel-label[data-lane="0"]')).toContainText('ADC1 L');
+  });
+
+  test('clicking channel label makes it contenteditable; Enter commits and sends setInputNames WS', async ({ connectedPage: page }) => {
+    const label = page.locator('.channel-label[data-lane="0"]');
+
+    clearWsCapture(page);
+
+    // Single click triggers startChannelLabelEdit() via data-action="edit-channel-label" delegation
+    await label.click();
+
+    // Label becomes contenteditable='true'
+    await expect(label).toHaveAttribute('contenteditable', 'true', { timeout: 2000 });
+
+    // Select all existing text and replace
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('My Custom ADC');
+    await page.keyboard.press('Enter');
+
+    // startChannelLabelEdit commit() calls ws.send({ type: 'setInputNames', names: inputNames.slice() })
+    const cmd = await expectWsCommand(page, 'setInputNames', {}, 3000);
+    expect(Array.isArray(cmd.names), 'names should be an array').toBe(true);
+    expect(cmd.names[0]).toBe('My Custom ADC');
+  });
+
+  test('PGA slider rendered when input capabilities include bit 5 (HAL_CAP_PGA_CONTROL=32)', async ({ connectedPage: page }) => {
+    await page.wsRoute.send({
+      type: 'audioChannelMap',
+      inputs: [
+        {
+          lane: 0,
+          name: 'ADC PGA',
+          channels: 2,
+          matrixCh: 0,
+          deviceName: 'ES8388',
+          deviceType: 2,
+          compatible: 'everest-semi,es8388',
+          manufacturer: 'Everest Semiconductor',
+          capabilities: 32,
+          ready: true
+        }
+      ],
+      outputs: [],
+      matrixInputs: 16,
+      matrixOutputs: 16,
+      matrixBypass: false,
+      matrix: []
+    });
+
+    // Clear the render guard so re-render fires
+    await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 3000 });
+    // _buildInputStrip() adds #inputPga{lane} slider when (capabilities & 32) is truthy
+    await expect(page.locator('#inputPga0')).toBeAttached({ timeout: 3000 });
+  });
+
+  test('HPF button rendered when input capabilities include bit 6 (HAL_CAP_HPF_CONTROL=64)', async ({ connectedPage: page }) => {
+    await page.wsRoute.send({
+      type: 'audioChannelMap',
+      inputs: [
+        {
+          lane: 0,
+          name: 'ADC HPF',
+          channels: 2,
+          matrixCh: 0,
+          deviceName: 'ES8388',
+          deviceType: 2,
+          compatible: 'everest-semi,es8388',
+          manufacturer: 'Everest Semiconductor',
+          capabilities: 64,
+          ready: true
+        }
+      ],
+      outputs: [],
+      matrixInputs: 16,
+      matrixOutputs: 16,
+      matrixBypass: false,
+      matrix: []
+    });
+
+    await expect(page.locator('#audio-inputs-container')).not.toContainText('Waiting for device data...', { timeout: 3000 });
+    // _buildInputStrip() adds #inputHpf{lane} button when (capabilities & 64) is truthy
+    await expect(page.locator('#inputHpf0')).toBeAttached({ timeout: 3000 });
+  });
+
+  test('PGA and HPF controls absent when capability bits not set', async ({ connectedPage: page }) => {
+    // PCM1808 has capabilities=8 — neither bit 5 (32) nor bit 6 (64) set
+    await expect(page.locator('#inputPga0')).not.toBeAttached();
+    await expect(page.locator('#inputHpf0')).not.toBeAttached();
+  });
+
+  test('solo button toggles active class on click', async ({ connectedPage: page }) => {
+    // toggleInputSolo() is UI-only — toggles .active on the button
+    const soloBtn = page.locator('#inputSolo0');
+    await expect(soloBtn).toBeAttached();
+    await expect(soloBtn).not.toHaveClass(/active/);
+
+    await soloBtn.click();
+    await expect(soloBtn).toHaveClass(/active/);
+
+    // Second click deactivates
+    await soloBtn.click();
+    await expect(soloBtn).not.toHaveClass(/active/);
+  });
+});

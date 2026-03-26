@@ -51,6 +51,7 @@
   "outputs": [
     {
       "index": 0,
+      "halSlot": 0,
       "name": "PCM5102A",
       "firstChannel": 0,
       "channels": 2,
@@ -64,6 +65,7 @@
     },
     {
       "index": 1,
+      "halSlot": 1,
       "name": "ES8311",
       "firstChannel": 2,
       "channels": 2,

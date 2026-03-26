@@ -328,12 +328,12 @@ function buildAudioChannelMap(inputCount = 4, outputCount = 2) {
 
   const defaultOutputs = [
     {
-      index: 0, name: 'PCM5102A', firstChannel: 0, channels: 2,
+      index: 0, halSlot: 0, name: 'PCM5102A', firstChannel: 0, channels: 2,
       muted: false, compatible: 'ti,pcm5102a', manufacturer: 'Texas Instruments',
       capabilities: 16, ready: true, deviceType: 1, i2cAddr: 0
     },
     {
-      index: 1, name: 'ES8311', firstChannel: 2, channels: 2,
+      index: 1, halSlot: 1, name: 'ES8311', firstChannel: 2, channels: 2,
       muted: false, compatible: 'everest-semi,es8311', manufacturer: 'Everest Semiconductor',
       capabilities: 199, ready: true, deviceType: 3, i2cAddr: 24
     }
