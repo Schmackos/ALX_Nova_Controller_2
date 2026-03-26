@@ -6916,6 +6916,24 @@ body.night-mode {
             }
         }
 
+        function onInputPgaChange(lane, val) {
+            var label = document.getElementById('inputPgaVal' + lane);
+            if (label) label.textContent = parseFloat(val).toFixed(0) + ' dB';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setInputPga', lane: lane, gain: parseFloat(val) }));
+            }
+        }
+
+        function toggleInputHpf(lane) {
+            var btn = document.getElementById('inputHpf' + lane);
+            if (!btn) return;
+            var enabled = !btn.classList.contains('active');
+            btn.classList.toggle('active', enabled);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setInputHpf', lane: lane, enabled: enabled }));
+            }
+        }
+
         function toggleInputSolo(lane) {
             // UI-only solo: mute all other lanes visually
             var btn = document.getElementById('inputSolo' + lane);
@@ -6927,7 +6945,6 @@ body.night-mode {
 
         function toggleStereoLink(lane) {
             _stereoLinkState[lane] = !_stereoLinkState[lane];
-            var btn = document.getElementById('inputSolo' + lane);
             // Re-render the strip to update the button state
             // (cheaper to just re-render since we already have the hash guard)
             var hash = _audioChannelHash(audioChannelMap) + '|in';
@@ -7121,6 +7138,8 @@ body.night-mode {
                     toggleInputPhase(parseInt(el.dataset.lane));
                 } else if (action === 'toggle-input-solo') {
                     toggleInputSolo(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-input-hpf') {
+                    toggleInputHpf(parseInt(el.dataset.lane));
                 } else if (action === 'toggle-stereo-link') {
                     toggleStereoLink(parseInt(el.dataset.lane));
                 } else if (action === 'edit-channel-label') {
@@ -7167,6 +7186,8 @@ body.night-mode {
                 var action = el.dataset.action;
                 if (action === 'input-gain') {
                     onInputGainChange(parseInt(el.dataset.lane), el.value);
+                } else if (action === 'input-pga') {
+                    onInputPgaChange(parseInt(el.dataset.lane), el.value);
                 } else if (action === 'output-gain') {
                     onOutputGainChange(parseInt(el.dataset.sink), el.value);
                 } else if (action === 'output-hw-vol') {
