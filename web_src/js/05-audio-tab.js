@@ -3,17 +3,41 @@
         // Dynamically populated from HAL device channel map.
 
         // Channel map state (received from firmware via WS)
-        let audioChannelMap = null;
-        let audioSubView = 'inputs';  // 'inputs' | 'matrix' | 'outputs' | 'siggen'
+        var audioChannelMap = null;
+        var audioSubView = 'inputs';  // 'inputs' | 'matrix' | 'outputs' | 'siggen'
+
+        // Previous channel map snapshot for hot-plug detection
+        var _audioChannelMapHash = '';
 
         // Per-channel VU state for inputs (lane-indexed) and outputs (sink-indexed)
-        let inputVuCurrent = [], inputVuTarget = [];
-        let outputVuCurrent = [], outputVuTarget = [];
-        let audioTabAnimId = null;
+        var inputVuCurrent = [], inputVuTarget = [];
+        var outputVuCurrent = [], outputVuTarget = [];
+        var audioTabAnimId = null;
+
+        // Stereo link UI state: maps lane index to boolean
+        var _stereoLinkState = {};
+
+        // ===== Channel Map Key Hash =====
+        function _audioChannelHash(data) {
+            if (!data) return '';
+            var parts = [];
+            var inputs = data.inputs || [];
+            var outputs = data.outputs || [];
+            for (var i = 0; i < inputs.length; i++) {
+                parts.push(inputs[i].lane + ':' + inputs[i].deviceName + ':' + inputs[i].manufacturer + ':' + (inputs[i].ready ? '1' : '0'));
+            }
+            for (var o = 0; o < outputs.length; o++) {
+                parts.push(outputs[o].index + ':' + outputs[o].name + ':' + (outputs[o].ready ? '1' : '0'));
+            }
+            return parts.join('|');
+        }
 
         // ===== Channel Map Handler =====
         function handleAudioChannelMap(data) {
+            var newHash = _audioChannelHash(data);
+            var prevHash = _audioChannelMapHash;
             audioChannelMap = data;
+            _audioChannelMapHash = newHash;
 
             // Resize shared audio arrays (waveform, spectrum, VU) to match input count
             resizeAudioArrays(data.inputs ? data.inputs.length : 0);
@@ -26,6 +50,11 @@
             while (outputVuCurrent.length < (data.outputs || []).length * 2) {
                 outputVuCurrent.push(0);
                 outputVuTarget.push(0);
+            }
+
+            // Hot-plug toast: compare new vs previous hash
+            if (prevHash !== '' && newHash !== prevHash) {
+                showToast('Audio devices changed', 'info');
             }
 
             // Re-render current sub-view if audio tab is active
@@ -58,7 +87,10 @@
         }
 
         function renderAudioSubView() {
-            if (!audioChannelMap) return;
+            if (!audioChannelMap) {
+                _renderAudioEmptyState();
+                return;
+            }
             switch (audioSubView) {
                 case 'inputs':  renderInputStrips(); break;
                 case 'matrix':  renderMatrixGrid(); break;
@@ -67,157 +99,322 @@
             }
         }
 
+        function _renderAudioEmptyState() {
+            var emptyMsg = '<div class="empty-state">No input/output devices detected. Connect a mezzanine board or check the Devices tab.</div>';
+            var ids = ['audio-inputs-container', 'audio-matrix-container', 'audio-outputs-container'];
+            for (var i = 0; i < ids.length; i++) {
+                var c = document.getElementById(ids[i]);
+                if (c && !c.dataset.emptyRendered) {
+                    c.innerHTML = emptyMsg;
+                    c.dataset.emptyRendered = '1';
+                }
+            }
+        }
+
+        // ===== Device Grouping Helper =====
+        // Groups an array of items by a key derived from each item.
+        // Returns an array of { key, items[] } in encounter order.
+        function _groupBy(items, keyFn) {
+            var groups = [];
+            var keyMap = {};
+            for (var i = 0; i < items.length; i++) {
+                var k = keyFn(items[i]);
+                if (keyMap[k] === undefined) {
+                    keyMap[k] = groups.length;
+                    groups.push({ key: k, items: [] });
+                }
+                groups[keyMap[k]].items.push(items[i]);
+            }
+            return groups;
+        }
+
         // ===== Input Channel Strips =====
         function renderInputStrips() {
             var container = document.getElementById('audio-inputs-container');
             if (!container || !audioChannelMap) return;
-            audioTabInitDelegation();  // Ensure delegation is set up when content is rendered
+            audioTabInitDelegation();
 
             var inputs = audioChannelMap.inputs || [];
-            if (container.dataset.rendered === String(inputs.length)) return;  // Already rendered
+            if (inputs.length === 0) {
+                container.innerHTML = '<div class="empty-state">No input/output devices detected. Connect a mezzanine board or check the Devices tab.</div>';
+                container.dataset.rendered = '';
+                return;
+            }
+
+            // Re-render guard: use content hash
+            var hash = _audioChannelHash(audioChannelMap) + '|in';
+            if (container.dataset.rendered === hash) return;
+
+            // Group inputs by deviceName + manufacturer
+            var groups = _groupBy(inputs, function(inp) {
+                return (inp.deviceName || '') + '|' + (inp.manufacturer || '');
+            });
 
             var html = '';
-            for (var i = 0; i < inputs.length; i++) {
-                var inp = inputs[i];
-                var statusClass = inp.ready ? 'status-ok' : 'status-off';
-                var statusText = inp.ready ? 'OK' : 'Offline';
+            for (var g = 0; g < groups.length; g++) {
+                var grp = groups[g];
+                var firstInp = grp.items[0];
+                var grpReady = grp.items.some(function(inp) { return inp.ready; });
+                var grpStatusClass = grpReady ? 'status-ok' : 'status-off';
+                var grpStatusText = grpReady ? 'Ready' : 'Offline';
+                var mfr = firstInp.manufacturer ? escapeHtml(firstInp.manufacturer) : '';
 
-                html += '<div class="channel-strip" data-lane="' + inp.lane + '">';
-                html += '  <div class="channel-strip-header">';
-                html += '    <span class="channel-device-name">' + escapeHtml(inp.deviceName) + '</span>';
-                html += '    <span class="channel-status ' + statusClass + '">' + statusText + '</span>';
-                html += '  </div>';
-
-                // Stereo VU meters
-                html += '  <div class="channel-vu-pair">';
-                html += '    <div class="channel-vu-wrapper">';
-                html += '      <canvas class="channel-vu-canvas" id="inputVu' + inp.lane + 'L" width="24" height="120"></canvas>';
-                html += '      <div class="channel-vu-label">L</div>';
+                html += '<div class="device-group">';
+                html += '  <div class="device-group-header">';
+                html += '    <div class="device-group-header-left">';
+                html += '      <span class="device-group-name">' + escapeHtml(firstInp.deviceName || 'Unknown Device') + '</span>';
+                if (mfr) html += '      <span class="device-group-manufacturer">' + mfr + '</span>';
                 html += '    </div>';
-                html += '    <div class="channel-vu-wrapper">';
-                html += '      <canvas class="channel-vu-canvas" id="inputVu' + inp.lane + 'R" width="24" height="120"></canvas>';
-                html += '      <div class="channel-vu-label">R</div>';
-                html += '    </div>';
-                html += '    <div class="channel-vu-readout" id="inputVuReadout' + inp.lane + '">-- dB</div>';
+                html += '    <span class="device-group-status channel-status ' + grpStatusClass + '">' + grpStatusText + '</span>';
                 html += '  </div>';
+                html += '  <div class="channel-strip-grid">';
 
-                // Gain slider
-                html += '  <div class="channel-control-row">';
-                html += '    <label class="channel-control-label">Gain</label>';
-                html += '    <input type="range" class="channel-gain-slider" id="inputGain' + inp.lane + '" min="-72" max="12" step="0.5" value="0"';
-                html += '      data-action="input-gain" data-lane="' + inp.lane + '">';
-                html += '    <span class="channel-gain-value" id="inputGainVal' + inp.lane + '">0.0 dB</span>';
+                for (var i = 0; i < grp.items.length; i++) {
+                    html += _buildInputStrip(grp.items[i]);
+                }
+
                 html += '  </div>';
-
-                // Mute / Phase / Solo buttons
-                html += '  <div class="channel-button-row">';
-                html += '    <button class="channel-btn" id="inputMute' + inp.lane + '" data-action="toggle-input-mute" data-lane="' + inp.lane + '">Mute</button>';
-                html += '    <button class="channel-btn" id="inputPhase' + inp.lane + '" data-action="toggle-input-phase" data-lane="' + inp.lane + '">Phase</button>';
-                html += '  </div>';
-
-                // PEQ button
-                html += '  <div class="channel-dsp-row">';
-                html += '    <button class="channel-btn channel-btn-wide" data-action="open-input-peq" data-lane="' + inp.lane + '">';
-                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
-                html += '      PEQ';
-                html += '    </button>';
-                html += '  </div>';
-
                 html += '</div>';
             }
 
             container.innerHTML = html;
-            container.dataset.rendered = String(inputs.length);
+            container.dataset.rendered = hash;
+            delete container.dataset.emptyRendered;
+        }
+
+        function _buildInputStrip(inp) {
+            var lane = inp.lane;
+            var statusClass = inp.ready ? 'status-ok' : 'status-off';
+            var statusText = inp.ready ? 'OK' : 'Offline';
+            var hasPga = (inp.capabilities & 32);   // HAL_CAP_PGA_CONTROL
+            var hasHpf = (inp.capabilities & 64);   // HAL_CAP_HPF_CONTROL
+            var isStereoLinked = !!_stereoLinkState[lane];
+
+            // Channel label from inputNames (L channel = lane*2)
+            var chanLabel = inputNames[lane * 2] || ('In ' + (lane * 2 + 1));
+
+            var html = '';
+            html += '<div class="channel-strip" data-lane="' + lane + '">';
+            html += '  <div class="channel-strip-header">';
+            html += '    <span class="channel-device-name">' + escapeHtml(inp.deviceName || 'Unknown') + '</span>';
+            html += '    <span class="channel-status ' + statusClass + '">' + statusText + '</span>';
+            html += '  </div>';
+            html += '  <div class="channel-label-row">';
+            html += '    <span class="channel-label" data-action="edit-channel-label" data-lane="' + lane + '" title="Click to rename">' + escapeHtml(chanLabel) + '</span>';
+            html += '  </div>';
+
+            // Stereo VU meters (vertical, segmented LED style)
+            html += '  <div class="channel-vu-pair">';
+            html += '    <div class="channel-vu-wrapper">';
+            html += '      <canvas class="channel-vu-canvas" id="inputVu' + lane + 'L" width="24" height="120"></canvas>';
+            html += '      <div class="channel-vu-label">L</div>';
+            html += '    </div>';
+            html += '    <div class="channel-vu-wrapper">';
+            html += '      <canvas class="channel-vu-canvas" id="inputVu' + lane + 'R" width="24" height="120"></canvas>';
+            html += '      <div class="channel-vu-label">R</div>';
+            html += '    </div>';
+            html += '    <div class="channel-vu-readout" id="inputVuReadout' + lane + '">-- dB</div>';
+            html += '  </div>';
+
+            // Gain slider
+            html += '  <div class="channel-control-row">';
+            html += '    <label class="channel-control-label">Gain</label>';
+            html += '    <input type="range" class="channel-gain-slider" id="inputGain' + lane + '" min="-72" max="12" step="0.5" value="0"';
+            html += '      data-action="input-gain" data-lane="' + lane + '">';
+            html += '    <span class="channel-gain-value" id="inputGainVal' + lane + '">0.0 dB</span>';
+            html += '  </div>';
+
+            // Mute / Phase / Solo buttons
+            html += '  <div class="channel-button-row">';
+            html += '    <button class="channel-btn" id="inputMute' + lane + '" data-action="toggle-input-mute" data-lane="' + lane + '">Mute</button>';
+            html += '    <button class="channel-btn" id="inputPhase' + lane + '" data-action="toggle-input-phase" data-lane="' + lane + '">\u00d8</button>';
+            html += '    <button class="channel-btn" id="inputSolo' + lane + '" data-action="toggle-input-solo" data-lane="' + lane + '">Solo</button>';
+            html += '  </div>';
+
+            // Stereo link toggle
+            html += '  <div class="channel-button-row">';
+            html += '    <button class="channel-btn stereo-link-toggle' + (isStereoLinked ? ' active' : '') + '" data-action="toggle-stereo-link" data-lane="' + lane + '">';
+            html += '      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M10.59,13.41C11,13.8 11,14.44 10.59,14.83C10.2,15.22 9.56,15.22 9.17,14.83C7.22,12.88 7.22,9.71 9.17,7.76V7.76L12.76,4.17C14.71,2.22 17.88,2.22 19.83,4.17C21.78,6.12 21.78,9.29 19.83,11.24L18.07,13C18.07,11.96 17.9,10.92 17.5,9.95L18.41,9C19.59,7.79 19.59,5.83 18.41,4.62C17.22,3.41 15.28,3.41 14.07,4.62L10.48,8.21C9.27,9.42 9.27,11.38 10.48,12.59M13.41,10.59C13.8,10.2 14.44,10.2 14.83,10.59C16.78,12.54 16.78,15.71 14.83,17.66V17.66L11.24,21.25C9.29,23.2 6.12,23.2 4.17,21.25C2.22,19.3 2.22,16.13 4.17,14.18L5.93,12.46C5.93,13.5 6.1,14.54 6.5,15.51L5.59,16.42C4.41,17.63 4.41,19.57 5.59,20.78C6.78,21.99 8.72,21.99 9.93,20.78L13.52,17.19C14.73,15.98 14.73,14.02 13.52,12.81C13.13,12.42 13.13,11.78 13.41,10.59Z"/></svg>';
+            html += '      ' + (isStereoLinked ? 'Linked' : 'Link');
+            html += '    </button>';
+            html += '  </div>';
+
+            // Optional: PGA gain control (bit 5 = 32)
+            if (hasPga) {
+                html += '  <div class="channel-control-row pga-control">';
+                html += '    <label class="channel-control-label">PGA</label>';
+                html += '    <input type="range" class="channel-gain-slider" id="inputPga' + lane + '" min="0" max="30" step="1" value="0"';
+                html += '      data-action="input-pga" data-lane="' + lane + '">';
+                html += '    <span class="channel-gain-value" id="inputPgaVal' + lane + '">0 dB</span>';
+                html += '  </div>';
+            }
+
+            // Optional: HPF toggle (bit 6 = 64)
+            if (hasHpf) {
+                html += '  <div class="channel-button-row">';
+                html += '    <button class="channel-btn channel-btn-wide hpf-toggle" id="inputHpf' + lane + '" data-action="toggle-input-hpf" data-lane="' + lane + '">HPF</button>';
+                html += '  </div>';
+            }
+
+            // DSP placeholder button
+            html += '  <div class="channel-dsp-row">';
+            html += '    <button class="channel-btn channel-btn-wide" data-action="open-input-peq" data-lane="' + lane + '">';
+            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+            html += '      DSP';
+            html += '    </button>';
+            html += '  </div>';
+
+            html += '</div>';
+            return html;
         }
 
         // ===== Output Channel Strips =====
         function renderOutputStrips() {
             var container = document.getElementById('audio-outputs-container');
             if (!container || !audioChannelMap) return;
-            audioTabInitDelegation();  // Ensure delegation is set up when content is rendered
+            audioTabInitDelegation();
 
             var outputs = audioChannelMap.outputs || [];
-            if (container.dataset.rendered === String(outputs.length)) return;
+            if (outputs.length === 0) {
+                container.innerHTML = '<div class="empty-state">No input/output devices detected. Connect a mezzanine board or check the Devices tab.</div>';
+                container.dataset.rendered = '';
+                return;
+            }
+
+            // Re-render guard: use content hash
+            var hash = _audioChannelHash(audioChannelMap) + '|out';
+            if (container.dataset.rendered === hash) return;
+
+            // Group outputs by name (device name)
+            var groups = _groupBy(outputs, function(out) {
+                return out.name || '';
+            });
 
             var html = '';
-            for (var i = 0; i < outputs.length; i++) {
-                var out = outputs[i];
-                var statusClass = out.ready ? 'status-ok' : 'status-off';
-                var statusText = out.ready ? 'OK' : 'Offline';
-                var hasHwVol = (out.capabilities & 1);  // HAL_CAP_HW_VOLUME
-                var hasHwMute = (out.capabilities & 4);  // HAL_CAP_MUTE
+            for (var g = 0; g < groups.length; g++) {
+                var grp = groups[g];
+                var firstOut = grp.items[0];
+                var grpReady = grp.items.some(function(out) { return out.ready; });
+                var grpStatusClass = grpReady ? 'status-ok' : 'status-off';
+                var grpStatusText = grpReady ? 'Ready' : 'Offline';
 
-                html += '<div class="channel-strip channel-strip-output" data-sink="' + out.index + '">';
-                html += '  <div class="channel-strip-header">';
-                html += '    <span class="channel-device-name">' + escapeHtml(out.name) + '</span>';
-                html += '    <span class="channel-status ' + statusClass + '">' + statusText + '</span>';
-                html += '  </div>';
-                html += '  <div class="channel-strip-sub">Ch ' + out.firstChannel + '-' + (out.firstChannel + out.channels - 1) + '</div>';
+                // Capability badges
+                var hasDsd = (firstOut.capabilities & 2048);   // HAL_CAP_DSD (bit 11)
+                var hasDpll = (firstOut.capabilities & 32768); // HAL_CAP_DPLL (bit 15)
 
-                // VU meters
-                html += '  <div class="channel-vu-pair">';
-                for (var ch = 0; ch < out.channels && ch < 2; ch++) {
-                    var label = out.channels > 1 ? (ch === 0 ? 'L' : 'R') : '';
-                    html += '    <div class="channel-vu-wrapper">';
-                    html += '      <canvas class="channel-vu-canvas" id="outputVu' + out.index + 'c' + ch + '" width="24" height="120"></canvas>';
-                    if (label) html += '      <div class="channel-vu-label">' + label + '</div>';
-                    html += '    </div>';
+                html += '<div class="device-group">';
+                html += '  <div class="device-group-header">';
+                html += '    <div class="device-group-header-left">';
+                html += '      <span class="device-group-name">' + escapeHtml(firstOut.name || 'Unknown Device') + '</span>';
+                if (firstOut.manufacturer) html += '      <span class="device-group-manufacturer">' + escapeHtml(firstOut.manufacturer) + '</span>';
+                html += '    </div>';
+                html += '    <div class="device-group-badges">';
+                if (hasDsd) html += '      <span class="capability-badge badge-dsd">DSD</span>';
+                if (hasDpll) {
+                    html += '      <span class="capability-badge badge-dpll">';
+                    html += '        <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M17.13,17C15.92,18.85 14.11,20.24 12,20.92C9.89,20.24 8.08,18.85 6.87,17C6.53,16.5 6.24,16 6,15.47C6,13.82 8.71,12.47 12,12.47C15.29,12.47 18,13.79 18,15.47C17.76,16 17.47,16.5 17.13,17Z"/></svg>';
+                    html += '        DPLL';
+                    html += '      </span>';
                 }
-                html += '    <div class="channel-vu-readout" id="outputVuReadout' + out.index + '">-- dB</div>';
-                html += '  </div>';
-
-                // Gain / HW Volume
-                if (hasHwVol) {
-                    html += '  <div class="channel-control-row">';
-                    html += '    <label class="channel-control-label">HW Vol</label>';
-                    html += '    <input type="range" class="channel-gain-slider" id="outputHwVol' + out.index + '" min="0" max="100" step="1" value="80"';
-                    html += '      data-action="output-hw-vol" data-sink="' + out.index + '">';
-                    html += '    <span class="channel-gain-value" id="outputHwVolVal' + out.index + '">80%</span>';
-                    html += '  </div>';
-                }
-
-                html += '  <div class="channel-control-row">';
-                html += '    <label class="channel-control-label">Gain</label>';
-                html += '    <input type="range" class="channel-gain-slider" id="outputGain' + out.index + '" min="-72" max="12" step="0.5" value="0"';
-                html += '      data-action="output-gain" data-sink="' + out.index + '">';
-                html += '    <span class="channel-gain-value" id="outputGainVal' + out.index + '">0.0 dB</span>';
-                html += '  </div>';
-
-                // Mute / Phase / Solo
-                html += '  <div class="channel-button-row">';
-                html += '    <button class="channel-btn" id="outputMute' + out.index + '" data-action="toggle-output-mute" data-sink="' + out.index + '">' + (hasHwMute ? 'HW Mute' : 'Mute') + '</button>';
-                html += '    <button class="channel-btn" id="outputPhase' + out.index + '" data-action="toggle-output-phase" data-sink="' + out.index + '">Phase</button>';
-                html += '  </div>';
-
-                // DSP controls
-                html += '  <div class="channel-dsp-section">';
-                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-peq" data-channel="' + out.firstChannel + '">';
-                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
-                html += '      PEQ 10-band</button>';
-                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-crossover" data-channel="' + out.firstChannel + '">';
-                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>';
-                html += '      Crossover</button>';
-                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-compressor" data-channel="' + out.firstChannel + '">';
-                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M5,4V7H10.5V19H13.5V7H19V4H5Z"/></svg>';
-                html += '      Compressor</button>';
-                html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-limiter" data-channel="' + out.firstChannel + '">';
-                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2,12A10,10 0 0,1 12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12M4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12M7,12L12,7V17L7,12Z"/></svg>';
-                html += '      Limiter</button>';
-
-                // Delay
-                html += '    <div class="channel-control-row" style="margin-top:6px;">';
-                html += '      <label class="channel-control-label">Delay</label>';
-                html += '      <input type="number" class="channel-delay-input" id="outputDelay' + out.firstChannel + '" min="0" max="10" step="0.01" value="0.00"';
-                html += '        data-action="output-delay" data-channel="' + out.firstChannel + '">';
-                html += '      <span class="channel-gain-value">ms</span>';
+                html += '      <span class="device-group-status channel-status ' + grpStatusClass + '">' + grpStatusText + '</span>';
                 html += '    </div>';
                 html += '  </div>';
+                html += '  <div class="channel-strip-grid">';
 
+                for (var i = 0; i < grp.items.length; i++) {
+                    html += _buildOutputStrip(grp.items[i]);
+                }
+
+                html += '  </div>';
                 html += '</div>';
             }
 
             container.innerHTML = html;
-            container.dataset.rendered = String(outputs.length);
+            container.dataset.rendered = hash;
+            delete container.dataset.emptyRendered;
+        }
+
+        function _buildOutputStrip(out) {
+            var idx = out.index;
+            var statusClass = out.ready ? 'status-ok' : 'status-off';
+            var statusText = out.ready ? 'OK' : 'Offline';
+            var hasHwVol = (out.capabilities & 1);    // HAL_CAP_HW_VOLUME (bit 0)
+            var hasHwMute = (out.capabilities & 4);   // HAL_CAP_MUTE (bit 2)
+
+            var html = '';
+            html += '<div class="channel-strip channel-strip-output" data-sink="' + idx + '">';
+            html += '  <div class="channel-strip-header">';
+            html += '    <span class="channel-device-name">' + escapeHtml(out.name || 'Output ' + idx) + '</span>';
+            html += '    <span class="channel-status ' + statusClass + '">' + statusText + '</span>';
+            html += '  </div>';
+            html += '  <div class="channel-strip-sub">Ch ' + out.firstChannel + '-' + (out.firstChannel + out.channels - 1) + '</div>';
+
+            // Post-matrix VU meters
+            html += '  <div class="channel-vu-pair">';
+            for (var ch = 0; ch < out.channels && ch < 2; ch++) {
+                var label = out.channels > 1 ? (ch === 0 ? 'L' : 'R') : '';
+                html += '    <div class="channel-vu-wrapper">';
+                html += '      <canvas class="channel-vu-canvas" id="outputVu' + idx + 'c' + ch + '" width="24" height="120"></canvas>';
+                if (label) html += '      <div class="channel-vu-label">' + label + '</div>';
+                html += '    </div>';
+            }
+            html += '    <div class="channel-vu-readout" id="outputVuReadout' + idx + '">-- dB</div>';
+            html += '  </div>';
+
+            // HW Volume slider (if supported)
+            if (hasHwVol) {
+                html += '  <div class="channel-control-row">';
+                html += '    <label class="channel-control-label">HW Vol</label>';
+                html += '    <input type="range" class="channel-gain-slider" id="outputHwVol' + idx + '" min="0" max="100" step="1" value="80"';
+                html += '      data-action="output-hw-vol" data-sink="' + idx + '">';
+                html += '    <span class="channel-gain-value" id="outputHwVolVal' + idx + '">80%</span>';
+                html += '  </div>';
+            }
+
+            // Gain slider
+            html += '  <div class="channel-control-row">';
+            html += '    <label class="channel-control-label">Gain</label>';
+            html += '    <input type="range" class="channel-gain-slider" id="outputGain' + idx + '" min="-72" max="12" step="0.5" value="0"';
+            html += '      data-action="output-gain" data-sink="' + idx + '">';
+            html += '    <span class="channel-gain-value" id="outputGainVal' + idx + '">0.0 dB</span>';
+            html += '  </div>';
+
+            // Mute / Phase buttons
+            html += '  <div class="channel-button-row">';
+            html += '    <button class="channel-btn' + (hasHwMute ? ' hw-mute-label' : '') + '" id="outputMute' + idx + '" data-action="toggle-output-mute" data-sink="' + idx + '">' + (hasHwMute ? 'HW Mute' : 'Mute') + '</button>';
+            html += '    <button class="channel-btn" id="outputPhase' + idx + '" data-action="toggle-output-phase" data-sink="' + idx + '">\u00d8</button>';
+            html += '  </div>';
+
+            // DSP section
+            html += '  <div class="channel-dsp-section">';
+
+            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-peq" data-channel="' + out.firstChannel + '">';
+            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+            html += '      PEQ 10-band</button>';
+
+            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-crossover" data-channel="' + out.firstChannel + '">';
+            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>';
+            html += '      Crossover</button>';
+
+            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-compressor" data-channel="' + out.firstChannel + '">';
+            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M5,4V7H10.5V19H13.5V7H19V4H5Z"/></svg>';
+            html += '      Compressor</button>';
+
+            html += '    <button class="channel-btn channel-btn-wide" data-action="open-output-limiter" data-channel="' + out.firstChannel + '">';
+            html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2,12A10,10 0 0,1 12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12M4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12M7,12L12,7V17L7,12Z"/></svg>';
+            html += '      Limiter</button>';
+
+            // Delay input
+            html += '    <div class="channel-control-row" style="margin-top:6px;">';
+            html += '      <label class="channel-control-label">Delay</label>';
+            html += '      <input type="number" class="channel-delay-input" id="outputDelay' + out.firstChannel + '" min="0" max="10" step="0.01" value="0.00"';
+            html += '        data-action="output-delay" data-channel="' + out.firstChannel + '">';
+            html += '      <span class="channel-gain-value">ms</span>';
+            html += '    </div>';
+
+            html += '  </div>';
+            html += '</div>';
+            return html;
         }
 
         // ===== Matrix Grid =====
@@ -414,6 +611,17 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'setInputGain', lane: lane, db: parseFloat(val) }));
             }
+            // Mirror to stereo-linked pair if active
+            if (_stereoLinkState[lane]) {
+                var pairLane = (lane % 2 === 0) ? lane + 1 : lane - 1;
+                var pairSlider = document.getElementById('inputGain' + pairLane);
+                var pairLabel = document.getElementById('inputGainVal' + pairLane);
+                if (pairSlider) { pairSlider.value = val; }
+                if (pairLabel) { pairLabel.textContent = parseFloat(val).toFixed(1) + ' dB'; }
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'setInputGain', lane: pairLane, db: parseFloat(val) }));
+                }
+            }
         }
 
         function toggleInputMute(lane) {
@@ -423,6 +631,15 @@
             btn.classList.toggle('active', muted);
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'setInputMute', lane: lane, muted: muted }));
+            }
+            // Mirror to stereo-linked pair
+            if (_stereoLinkState[lane]) {
+                var pairLane = (lane % 2 === 0) ? lane + 1 : lane - 1;
+                var pairBtn = document.getElementById('inputMute' + pairLane);
+                if (pairBtn) pairBtn.classList.toggle('active', muted);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'setInputMute', lane: pairLane, muted: muted }));
+                }
             }
         }
 
@@ -434,6 +651,76 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'setInputPhase', lane: lane, inverted: inverted }));
             }
+            // Mirror to stereo-linked pair
+            if (_stereoLinkState[lane]) {
+                var pairLane = (lane % 2 === 0) ? lane + 1 : lane - 1;
+                var pairBtn = document.getElementById('inputPhase' + pairLane);
+                if (pairBtn) pairBtn.classList.toggle('active', inverted);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'setInputPhase', lane: pairLane, inverted: inverted }));
+                }
+            }
+        }
+
+        function toggleInputSolo(lane) {
+            // UI-only solo: mute all other lanes visually
+            var btn = document.getElementById('inputSolo' + lane);
+            if (!btn) return;
+            var soloed = !btn.classList.contains('active');
+            btn.classList.toggle('active', soloed);
+            // Visual-only: no WS command for solo
+        }
+
+        function toggleStereoLink(lane) {
+            _stereoLinkState[lane] = !_stereoLinkState[lane];
+            var btn = document.getElementById('inputSolo' + lane);
+            // Re-render the strip to update the button state
+            // (cheaper to just re-render since we already have the hash guard)
+            var hash = _audioChannelHash(audioChannelMap) + '|in';
+            var container = document.getElementById('audio-inputs-container');
+            if (container) {
+                delete container.dataset.rendered;
+                renderInputStrips();
+            }
+        }
+
+        // ===== Inline Channel Label Edit =====
+        function startChannelLabelEdit(lane) {
+            var el = document.querySelector('.channel-label[data-lane="' + lane + '"]');
+            if (!el || el.isContentEditable) return;
+            el.contentEditable = 'true';
+            el.focus();
+            // Select all text
+            var range = document.createRange();
+            range.selectNodeContents(el);
+            var sel = window.getSelection();
+            if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+
+            function commit() {
+                el.contentEditable = 'false';
+                var newLabel = el.textContent.trim() || ('In ' + (lane * 2 + 1));
+                el.textContent = newLabel;
+                // Update inputNames array
+                inputNames[lane * 2] = newLabel;
+                // Send full setInputNames array via WS
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'setInputNames', names: inputNames.slice() }));
+                }
+                el.removeEventListener('blur', commit);
+                el.removeEventListener('keydown', onKey);
+            }
+            function onKey(e) {
+                if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                if (e.key === 'Escape') {
+                    el.contentEditable = 'false';
+                    // Restore original label
+                    el.textContent = inputNames[lane * 2] || ('In ' + (lane * 2 + 1));
+                    el.removeEventListener('blur', commit);
+                    el.removeEventListener('keydown', onKey);
+                }
+            }
+            el.addEventListener('blur', commit);
+            el.addEventListener('keydown', onKey);
         }
 
         // ===== Output Controls =====
@@ -503,16 +790,26 @@
             ctx.fillStyle = 'var(--bg-card)';
             ctx.fillRect(0, 0, w, h);
 
-            // VU bar (bottom-up)
+            // Segmented LED VU bar (bottom-up)
             var pct = Math.max(0, Math.min(1, (value + 60) / 60));  // -60dB to 0dB range
-            var barH = Math.round(pct * h);
-            if (barH > 0) {
-                var grad = ctx.createLinearGradient(0, h, 0, 0);
-                grad.addColorStop(0, '#4CAF50');
-                grad.addColorStop(0.7, '#FFC107');
-                grad.addColorStop(1.0, '#F44336');
-                ctx.fillStyle = grad;
-                ctx.fillRect(2, h - barH, w - 4, barH);
+            var numSegs = 20;
+            var segH = Math.floor((h - numSegs) / numSegs);
+            var activeSeg = Math.round(pct * numSegs);
+            for (var s = 0; s < numSegs; s++) {
+                var y = h - (s + 1) * (segH + 1);
+                var ratio = s / numSegs;
+                if (s < activeSeg) {
+                    if (ratio > 0.85) {
+                        ctx.fillStyle = '#F44336';
+                    } else if (ratio > 0.65) {
+                        ctx.fillStyle = '#FFC107';
+                    } else {
+                        ctx.fillStyle = '#4CAF50';
+                    }
+                } else {
+                    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                }
+                ctx.fillRect(2, y, w - 4, segH);
             }
         }
 
@@ -542,10 +839,10 @@
                     var sk = data.sinks[s];
                     drawChannelVu('outputVu' + s + 'c0', sk.vuL || -90);
                     drawChannelVu('outputVu' + s + 'c1', sk.vuR || -90);
-                    readout = document.getElementById('outputVuReadout' + s);
-                    if (readout) {
+                    var outReadout = document.getElementById('outputVuReadout' + s);
+                    if (outReadout) {
                         var avg = ((sk.vuL || -90) + (sk.vuR || -90)) / 2;
-                        readout.textContent = avg.toFixed(1) + ' dB';
+                        outReadout.textContent = avg.toFixed(1) + ' dB';
                     }
                 }
             }
@@ -568,6 +865,12 @@
                     toggleInputMute(parseInt(el.dataset.lane));
                 } else if (action === 'toggle-input-phase') {
                     toggleInputPhase(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-input-solo') {
+                    toggleInputSolo(parseInt(el.dataset.lane));
+                } else if (action === 'toggle-stereo-link') {
+                    toggleStereoLink(parseInt(el.dataset.lane));
+                } else if (action === 'edit-channel-label') {
+                    startChannelLabelEdit(parseInt(el.dataset.lane));
                 } else if (action === 'open-input-peq') {
                     openInputPeq(parseInt(el.dataset.lane));
                 } else if (action === 'toggle-output-mute') {
@@ -633,4 +936,3 @@
         document.addEventListener('DOMContentLoaded', function() {
             audioTabInitDelegation();
         });
-

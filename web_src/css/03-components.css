@@ -2496,3 +2496,113 @@
     font-size: 0.85em;
     color: var(--accent);
 }
+
+/* ===== Audio Tab Device Groups ===== */
+.device-group {
+    margin-bottom: 16px;
+}
+.device-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    gap: 8px;
+}
+.device-group-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.device-group-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.device-group-manufacturer {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.device-group-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.device-group-status {
+    flex-shrink: 0;
+}
+
+/* ===== Capability Badges ===== */
+.capability-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 10px;
+    letter-spacing: 0.3px;
+}
+.badge-dsd {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--info, #2196f3);
+    border: 1px solid rgba(33, 150, 243, 0.3);
+}
+.badge-dpll {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--success, #4caf50);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    background: var(--bg-surface);
+    border-radius: 12px;
+    border: 1px dashed var(--border);
+}
+
+/* ===== Channel Label Inline Edit ===== */
+.channel-label-row {
+    padding: 0 2px;
+}
+.channel-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 1px 4px;
+    min-width: 40px;
+    transition: background 0.15s ease;
+    outline: none;
+}
+.channel-label:hover {
+    background: var(--bg-input);
+}
+.channel-label[contenteditable="true"] {
+    background: var(--bg-input);
+    border: 1px solid var(--accent);
+    color: var(--text-primary);
+    cursor: text;
+}
+
+/* ===== Stereo Link Toggle ===== */
+.stereo-link-toggle {
+    gap: 4px;
+}
+.stereo-link-toggle.active {
+    background: rgba(255, 152, 0, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+}
