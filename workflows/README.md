@@ -107,7 +107,21 @@ Use `--pick` to browse concepts and select one for brainstorming with Claude.
 
 ### Concept Doc Template
 
-Each generated concept doc follows this structure:
+Each generated concept doc has a metadata table and four sections:
+
+**Metadata fields:**
+
+| Field | Description |
+|---|---|
+| Workflow | Current lifecycle stage (see above) |
+| Priority | `---` until triaged |
+| Effort | `---` until researched |
+| Success KPI | Measurable outcome that defines success (fill before promoting to `ready`) |
+| Sources | Comma-separated list of source audio filenames |
+| Audio | Relative link to `inbox/processed/` where original audio files are stored |
+| Last updated | Date of last pipeline run or manual edit |
+
+**Sections:**
 
 - **Problem / Opportunity** — Why this matters for ALX Nova (2-4 sentences)
 - **Sub-topics** — Grouped by theme, each with:
