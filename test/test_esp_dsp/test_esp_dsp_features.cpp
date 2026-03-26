@@ -24,9 +24,7 @@
  */
 
 // Mirror FftWindowType enum from app_state.h (avoids pulling in ESP32 deps)
-#ifndef AUDIO_PIPELINE_MAX_INPUTS
-#define AUDIO_PIPELINE_MAX_INPUTS 2
-#endif
+#include "../../src/config.h"
 
 enum FftWindowType : uint8_t {
     FFT_WINDOW_HANN = 0,
