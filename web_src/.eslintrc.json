@@ -522,6 +522,9 @@
     "toggleEthStaticIPFields": "readonly",
     "updateEthConfigFromStatus": "readonly",
     "updateEthernetStatus": "readonly",
-    "updateNetworkOverview": "readonly"
+    "updateNetworkOverview": "readonly",
+    "toggleVizSection": "readonly",
+    "_vizSectionOpen": "writable",
+    "updateSnrSfdr": "readonly"
   }
 }

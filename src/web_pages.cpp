@@ -3496,6 +3496,48 @@ body.night-mode {
     border-color: var(--accent);
 }
 
+/* ===== Collapsible Viz Section ===== */
+.viz-section {
+    margin: 12px 0 0;
+}
+.viz-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+}
+.viz-section-header:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.05));
+    color: var(--text-primary);
+}
+.viz-section-header.collapsed {
+    border-radius: 8px;
+}
+.viz-collapse-chevron {
+    margin-left: auto;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+.viz-section-body {
+    margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+    .viz-section-header {
+        font-size: 12px;
+        padding: 7px 10px;
+    }
+}
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -4277,6 +4319,15 @@ body.night-mode {
 
 
 
+            <!-- ===== Visualization Section (collapsible) ===== -->
+            <div class="viz-section" id="audioVizSection">
+                <div class="viz-section-header" onclick="toggleVizSection()" id="audioVizSectionHeader">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>
+                    <span>Visualizations</span>
+                    <svg class="viz-collapse-chevron" id="audioVizChevron" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+                </div>
+                <div class="viz-section-body" id="audioVizBody">
+
             <!-- Audio Waveform -->
             <div class="card">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -4356,8 +4407,10 @@ body.night-mode {
                             <option value="4">Nuttall</option>
                             <option value="5">Flat-Top</option>
                         </select>
-                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">SNR: <span id="audioSnr0">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">ADC 1 SNR: <span id="audioSnr0">--</span> dB</span>
                         <span style="font-size:11px;color:var(--text-secondary);">SFDR: <span id="audioSfdr0">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">ADC 2 SNR: <span id="audioSnr1">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);">SFDR: <span id="audioSfdr1">--</span> dB</span>
                     </div>
                 </div>
             </div>
@@ -4483,8 +4536,8 @@ body.night-mode {
                 </div>
             </div>
 
-
-
+                </div><!-- end viz-section-body -->
+            </div><!-- end viz-section -->
 
             </div><!-- end audio-sv-inputs -->
 
@@ -7779,6 +7832,11 @@ body.night-mode {
                     }
                 }
             }
+            // SNR/SFDR readout from audioLevels broadcast
+            if (data.adcSnrDb || data.adcSfdrDb) {
+                updateSnrSfdr(data.adcSnrDb, data.adcSfdrDb);
+            }
+
             // Output sink VU meters
             if (data.sinks && audioSubView === 'outputs') {
                 for (var s = 0; s < data.sinks.length; s++) {
@@ -10500,6 +10558,30 @@ body.night-mode {
             toggleGraphDisabled(contentMap[graph], !enabled);
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:map[graph], enabled:enabled}));
+        }
+
+        // ===== Collapsible Viz Section =====
+        var _vizSectionOpen = true;
+
+        function toggleVizSection() {
+            _vizSectionOpen = !_vizSectionOpen;
+            var body = document.getElementById('audioVizBody');
+            var chevron = document.getElementById('audioVizChevron');
+            var header = document.getElementById('audioVizSectionHeader');
+            if (body) body.style.display = _vizSectionOpen ? '' : 'none';
+            if (chevron) chevron.style.transform = _vizSectionOpen ? '' : 'rotate(-90deg)';
+            if (header) header.classList.toggle('collapsed', !_vizSectionOpen);
+        }
+
+        // ===== SNR/SFDR update from audioLevels broadcast =====
+        function updateSnrSfdr(adcSnrDb, adcSfdrDb) {
+            if (!adcSnrDb) return;
+            for (var a = 0; a < adcSnrDb.length; a++) {
+                var snrEl = document.getElementById('audioSnr' + a);
+                var sfdrEl = document.getElementById('audioSfdr' + a);
+                if (snrEl) snrEl.textContent = adcSnrDb[a] !== null && adcSnrDb[a] !== undefined ? adcSnrDb[a].toFixed(1) : '--';
+                if (sfdrEl && adcSfdrDb) sfdrEl.textContent = adcSfdrDb[a] !== null && adcSfdrDb[a] !== undefined ? adcSfdrDb[a].toFixed(1) : '--';
+            }
         }
 
 //# sourceURL=09-audio-viz.js

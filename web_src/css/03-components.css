@@ -3037,3 +3037,45 @@
     color: var(--accent);
     border-color: var(--accent);
 }
+
+/* ===== Collapsible Viz Section ===== */
+.viz-section {
+    margin: 12px 0 0;
+}
+.viz-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+}
+.viz-section-header:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.05));
+    color: var(--text-primary);
+}
+.viz-section-header.collapsed {
+    border-radius: 8px;
+}
+.viz-collapse-chevron {
+    margin-left: auto;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+.viz-section-body {
+    margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+    .viz-section-header {
+        font-size: 12px;
+        padding: 7px 10px;
+    }
+}
