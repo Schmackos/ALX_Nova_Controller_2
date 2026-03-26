@@ -240,24 +240,4 @@ int dsp_insert_crossover_lr8(int channel, float freq, int role) {
     return dsp_insert_crossover_lr(channel, freq, 8, role);
 }
 
-// ===== Bass Management =====
-
-int dsp_setup_bass_management(int subChannel, const int *mainChannels, int numMains, float crossoverFreq) {
-    if (subChannel < 0 || subChannel >= DSP_MAX_CHANNELS) return -1;
-    if (!mainChannels || numMains <= 0) return -1;
-
-    // LPF on sub channel (LR4 = 2 cascaded Butterworth)
-    int result = dsp_insert_crossover_lr4(subChannel, crossoverFreq, 0);
-    if (result < 0) return -1;
-
-    // HPF on each main channel (LR4)
-    for (int i = 0; i < numMains; i++) {
-        if (mainChannels[i] < 0 || mainChannels[i] >= DSP_MAX_CHANNELS) continue;
-        int r = dsp_insert_crossover_lr4(mainChannels[i], crossoverFreq, 1);
-        if (r < 0) return -1;
-    }
-
-    return 0;
-}
-
 #endif // DSP_ENABLED

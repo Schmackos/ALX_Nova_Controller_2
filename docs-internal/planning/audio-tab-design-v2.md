@@ -95,7 +95,6 @@ Dynamic NxM grid. Inputs on rows (left), Outputs on columns (top). Both axes lab
 
 ### Toolbar
 - Quick presets: 1:1 Passthrough, Stereo -> All, Clear All
-- **Bass Management**: sub channel, frequency, main channels (uses existing `/api/dsp/bassmanagement`)
 - Save/Load named presets (persisted to LittleFS)
 - Reset to saved state
 

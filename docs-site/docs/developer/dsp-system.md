@@ -51,7 +51,6 @@ flowchart LR
 | Correction | `DSP_FIR`, `DSP_CONVOLUTION`, `DSP_DECIMATOR` |
 | Utility | `DSP_GAIN`, `DSP_DELAY`, `DSP_POLARITY`, `DSP_MUTE` |
 | Perceptual | `DSP_TONE_CTRL`, `DSP_LOUDNESS`, `DSP_BASS_ENHANCE`, `DSP_STEREO_WIDTH` |
-| Protection | `DSP_SPEAKER_PROT` |
 
 Use `dsp_is_biquad_type(type)` to test whether a stage is processed through the standard biquad difference equation.
 
@@ -270,10 +269,6 @@ dsp_insert_crossover_butterworth(channel, freq, 3, role);
 
 // Bessel 4th-order (maximally-flat group delay)
 dsp_insert_crossover_bessel(channel, freq, 4, role);
-
-// Bass management: LPF on sub + HPF on all mains in one call
-int mains[] = {1, 2};
-dsp_setup_bass_management(0, mains, 2, 80.0f);
 
 // Remove existing crossover stages before inserting a new one
 dsp_clear_crossover_stages(channel);

@@ -155,7 +155,7 @@ The device test suite contains **206 tests across 21 modules** in `device_tests/
 | `test_hal_devices.py` | 7 | HAL | Device list, onboard present, no errors, valid configs, DB presets, scan, pin conflicts |
 | `test_hal_advanced.py` | 31 | HAL | DB completeness, scan behavior, config updates, validation enforcement, reinit, CRUD lifecycle, custom devices, error handling |
 | `test_dsp_audio.py` | 24 | Audio | DSP config/metrics/bypass/presets, signal generator, pipeline matrix, DAC, THD, diagnostics |
-| `test_dsp_extended.py` | 21 | Audio/DSP | DSP stage CRUD, crossover, bass management, baffle step, import/export (APO/miniDSP/JSON), preset CRUD, PEQ presets |
+| `test_dsp_extended.py` | 20 | Audio/DSP | DSP stage CRUD, crossover, baffle step, import/export (APO/miniDSP/JSON), preset CRUD, PEQ presets |
 | `test_output_dsp.py` | 9 | Audio/DSP | Per-output post-matrix DSP: config, bypass, stage add/delete, crossover, validation |
 | `test_audio.py` | 12 | Audio | I2S ports, pipeline matrix, DAC status, PSRAM, DMA, pause state, heap budget, smart sensing, input names roundtrip, sensing mode roundtrip |
 | `test_rest_ws_sync.py` | 5 | Sync | REST→WS state propagation: DSP bypass, buzzer, HAL scan, signal gen, HAL config mute |
@@ -373,7 +373,7 @@ When the firmware is updated to call `hal_validate_config()` in the PUT handler,
 
 ## DSP Extended Testing
 
-`test_dsp_extended.py` (20 tests across 5 classes) covers DSP operations not tested in the base `test_dsp_audio.py` module — primarily stage CRUD, crossover/bass management, import/export, and preset management.
+`test_dsp_extended.py` (20 tests across 5 classes) covers DSP operations not tested in the base `test_dsp_audio.py` module — primarily stage CRUD, crossover, import/export, and preset management.
 
 ### Stage CRUD
 
@@ -387,13 +387,12 @@ When the firmware is updated to call `hal_validate_config()` in the PUT handler,
 
 All tests use a `_cleanup_test_stages()` helper that brute-force removes all stages from the test channel, ensuring clean state even on test failure.
 
-### Crossover and Bass Management
+### Crossover
 
 `TestDspCrossover` applies signal-processing presets and verifies responses:
 
 - LR4 crossover at 2000 Hz on channel 0.
 - Baffle step correction with 200mm diameter.
-- Bass management with main/sub channel routing.
 
 ### Import/Export
 

@@ -490,13 +490,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 if (doc["trebleGain"].is<float>()) s.toneCtrl.trebleGain = doc["trebleGain"].as<float>();
                 extern void dsp_compute_tone_ctrl_coeffs(DspToneCtrlParams &, uint32_t);
                 dsp_compute_tone_ctrl_coeffs(s.toneCtrl, cfg->sampleRate);
-              } else if (s.type == DSP_SPEAKER_PROT) {
-                if (doc["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = doc["powerRatingW"].as<float>();
-                if (doc["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = doc["impedanceOhms"].as<float>();
-                if (doc["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = doc["thermalTauMs"].as<float>();
-                if (doc["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = doc["excursionLimitMm"].as<float>();
-                if (doc["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = doc["driverDiameterMm"].as<float>();
-                if (doc["maxTempC"].is<float>()) s.speakerProt.maxTempC = doc["maxTempC"].as<float>();
               } else if (s.type == DSP_STEREO_WIDTH) {
                 if (doc["width"].is<float>()) s.stereoWidth.width = doc["width"].as<float>();
                 if (doc["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = doc["centerGainDb"].as<float>();

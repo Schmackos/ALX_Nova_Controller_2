@@ -37,12 +37,5 @@ int dsp_insert_crossover_lr2(int channel, float freq, int role);
 int dsp_insert_crossover_lr4(int channel, float freq, int role);
 int dsp_insert_crossover_lr8(int channel, float freq, int role);
 
-// ===== Bass Management =====
-// Sets up sub + main crossover at given frequency with LR4 slopes.
-// subChannel: channel index for subwoofer (gets LPF)
-// mainChannels: array of channel indices for mains (get HPF)
-// numMains: number of main channels
-int dsp_setup_bass_management(int subChannel, const int *mainChannels, int numMains, float crossoverFreq);
-
 #endif // DSP_ENABLED
 #endif // DSP_CROSSOVER_H

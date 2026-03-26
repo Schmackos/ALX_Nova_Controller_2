@@ -26,6 +26,9 @@
 // Biquad coefficient generators
 #include "../../src/dsp_biquad_gen.c"
 
+// Shared coefficient computation (extracted by 0A biquad dedup refactor)
+#include "../../src/dsp_coefficients.cpp"
+
 // Include output_dsp.h first to get DspStageType and all type declarations.
 // The include guard will prevent double-inclusion when output_dsp.cpp is included below.
 #include "../../src/output_dsp.h"

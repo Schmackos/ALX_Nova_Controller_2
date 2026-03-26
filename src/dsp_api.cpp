@@ -403,7 +403,6 @@ static DspStageType typeFromString(const char *name) {
     if (strcmp(name, "LINKWITZ") == 0) return DSP_BIQUAD_LINKWITZ;
     if (strcmp(name, "NOISE_GATE") == 0) return DSP_NOISE_GATE;
     if (strcmp(name, "TONE_CTRL") == 0) return DSP_TONE_CTRL;
-    if (strcmp(name, "SPEAKER_PROT") == 0) return DSP_SPEAKER_PROT;
     if (strcmp(name, "STEREO_WIDTH") == 0) return DSP_STEREO_WIDTH;
     if (strcmp(name, "LOUDNESS") == 0) return DSP_LOUDNESS;
     if (strcmp(name, "BASS_ENHANCE") == 0) return DSP_BASS_ENHANCE;
@@ -607,13 +606,6 @@ JsonDocument doc;
             if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
             if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
             dsp_compute_tone_ctrl_coeffs(s.toneCtrl, inactive->sampleRate);
-        } else if (type == DSP_SPEAKER_PROT && !params.isNull()) {
-            if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
-            if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
-            if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
-            if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
-            if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
-            if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
         } else if (type == DSP_STEREO_WIDTH && !params.isNull()) {
             if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
             if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
@@ -720,13 +712,6 @@ JsonDocument doc;
             if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
             if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
             dsp_compute_tone_ctrl_coeffs(s.toneCtrl, inactive->sampleRate);
-        } else if (s.type == DSP_SPEAKER_PROT && !params.isNull()) {
-            if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
-            if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
-            if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
-            if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
-            if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
-            if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
         } else if (s.type == DSP_STEREO_WIDTH && !params.isNull()) {
             if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
             if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
@@ -1022,42 +1007,6 @@ JsonDocument doc;
         snprintf(resp, sizeof(resp), "{\"success\":true,\"firstStage\":%d}", result);
         server_send(200, "application/json", resp);
         LOG_I("[DSP] Crossover applied: ch=%d type=%s freq=%.0f role=%d", ch, typeStr, freq, role);
-    });
-
-    // POST /api/dsp/bassmanagement — setup bass management
-    server_on_versioned("/api/dsp/bassmanagement", HTTP_POST, []() {
-        if (!requireAuth()) return;
-        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
-
-JsonDocument doc;
-        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
-
-        int subChannel = doc["subChannel"] | 0;
-        float crossoverFreq = doc["freq"] | 80.0f;
-
-        if (!doc["mainChannels"].is<JsonArray>()) {
-            sendJsonError(400, "Missing mainChannels array");
-            return;
-        }
-
-        JsonArray mains = doc["mainChannels"].as<JsonArray>();
-        int mainChannels[DSP_MAX_CHANNELS];
-        int numMains = 0;
-        for (JsonVariant v : mains) {
-            if (numMains >= DSP_MAX_CHANNELS) break;
-            mainChannels[numMains++] = v.as<int>();
-        }
-
-        dsp_copy_active_to_inactive();
-
-        int result = dsp_setup_bass_management(subChannel, mainChannels, numMains, crossoverFreq);
-        if (result < 0) { sendJsonError(400, "Failed to setup bass management"); return; }
-
-        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
-        saveDspSettingsDebounced();
-        appState.markDspConfigDirty();
-        server_send(200, "application/json", "{\"success\":true}");
-        LOG_I("[DSP] Bass management: sub=%d mains=%d freq=%.0f", subChannel, numMains, crossoverFreq);
     });
 
     // ===== Baffle Step & THD Endpoints =====
