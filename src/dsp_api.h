@@ -14,11 +14,12 @@ void saveDspSettingsDebounced();
 // Call from main loop to flush pending debounced saves
 void dsp_check_debounced_save();
 
-// DSP Preset management (4 slots)
+// DSP Preset management (32 slots)
 bool dsp_preset_save(int slot, const char *name);
 bool dsp_preset_load(int slot);
 bool dsp_preset_delete(int slot);
 bool dsp_preset_exists(int slot);
+bool dsp_preset_rename(int slot, const char *newName);
 
 #endif // DSP_ENABLED
 #endif // DSP_API_H

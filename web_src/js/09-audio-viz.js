@@ -438,3 +438,27 @@
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:map[graph], enabled:enabled}));
         }
+
+        // ===== Collapsible Viz Section =====
+        var _vizSectionOpen = true;
+
+        function toggleVizSection() {
+            _vizSectionOpen = !_vizSectionOpen;
+            var body = document.getElementById('audioVizBody');
+            var chevron = document.getElementById('audioVizChevron');
+            var header = document.getElementById('audioVizSectionHeader');
+            if (body) body.style.display = _vizSectionOpen ? '' : 'none';
+            if (chevron) chevron.style.transform = _vizSectionOpen ? '' : 'rotate(-90deg)';
+            if (header) header.classList.toggle('collapsed', !_vizSectionOpen);
+        }
+
+        // ===== SNR/SFDR update from audioLevels broadcast =====
+        function updateSnrSfdr(adcSnrDb, adcSfdrDb) {
+            if (!adcSnrDb) return;
+            for (var a = 0; a < adcSnrDb.length; a++) {
+                var snrEl = document.getElementById('audioSnr' + a);
+                var sfdrEl = document.getElementById('audioSfdr' + a);
+                if (snrEl) snrEl.textContent = adcSnrDb[a] !== null && adcSnrDb[a] !== undefined ? adcSnrDb[a].toFixed(1) : '--';
+                if (sfdrEl && adcSfdrDb) sfdrEl.textContent = adcSfdrDb[a] !== null && adcSfdrDb[a] !== undefined ? adcSfdrDb[a].toFixed(1) : '--';
+            }
+        }

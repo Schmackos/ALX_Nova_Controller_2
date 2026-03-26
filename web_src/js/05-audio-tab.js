@@ -1055,6 +1055,11 @@
                     }
                 }
             }
+            // SNR/SFDR readout from audioLevels broadcast
+            if (data.adcSnrDb || data.adcSfdrDb) {
+                updateSnrSfdr(data.adcSnrDb, data.adcSfdrDb);
+            }
+
             // Output sink VU meters
             if (data.sinks && audioSubView === 'outputs') {
                 for (var s = 0; s < data.sinks.length; s++) {

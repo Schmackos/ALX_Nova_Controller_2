@@ -11,7 +11,8 @@
             --accent-dark: #E68900;
             --text-primary: #212121;
             --text-secondary: #757575;
-            --text-disabled: #9E9E9E;
+            --text-muted: #9E9E9E;
+            --text-disabled: #BDBDBD;
             --success: #4CAF50;
             --error: #F44336;
             --warning: #FFC107;
@@ -31,7 +32,8 @@
             --bg-input: #2C2C2C;
             --text-primary: #FFFFFF;
             --text-secondary: #B0B0B0;
-            --text-disabled: #666666;
+            --text-muted: #808080;
+            --text-disabled: #555555;
             --error: #F44336;
             --info: #2196F3;
             --border: #333333;
