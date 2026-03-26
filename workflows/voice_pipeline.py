@@ -82,6 +82,7 @@ CONCEPT_TEMPLATE = """# Concept: {title}
 | Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
+| Success KPI | `---` |
 | Sources | {sources} |
 | Audio | [`inbox/processed/`](inbox/processed/) |
 | Last updated | {date} |
@@ -516,6 +517,7 @@ Generate a markdown document with EXACTLY this structure:
 | Workflow | `raw` |
 | Priority | `---` |
 | Effort | `---` |
+| Success KPI | `---` |
 | Sources | <comma-separated list of source .m4a filenames> |
 | Audio | `voice-notes/` |
 | Last updated | {today} |

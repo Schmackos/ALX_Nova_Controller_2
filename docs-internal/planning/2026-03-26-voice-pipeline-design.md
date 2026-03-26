@@ -49,6 +49,7 @@ Each concept doc follows this structure:
 | Workflow | `raw` / `draft` / `ready` / `in-progress` / `done` / `archived` |
 | Priority | `---` (unset until decided) |
 | Effort | `---` (unset until researched) |
+| Success KPI | `---` (define before promoting to `ready`) |
 | Sources | <list of source audio filenames> |
 | Last updated | YYYY-MM-DD |
 
