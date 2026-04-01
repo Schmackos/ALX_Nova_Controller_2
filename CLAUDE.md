@@ -6,6 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ESP32-P4 open-source audio platform with modular mezzanine expansion. HAL-managed ADC/DSP/DAC pipeline, web UI, MQTT/HA integration, OTA updates. Built with PlatformIO + Arduino framework (esp-idf based). Firmware version in `src/config.h` (`FIRMWARE_VERSION`). Target board: Waveshare ESP32-P4-WiFi6-DEV-Kit (`board=esp32-p4`). Upload port: COM8. Full project mission: `docs-site/docs/about.md`.
 
+## Project Context
+
+This project is managed by a Vault pipeline that tracks ideas from capture through to shipped code. The pipeline generates a `.vault-context.md` file in this repo root containing accumulated project memory:
+
+- **Architectural decisions** (ADRs) — what was decided and why, so you don't re-litigate settled questions
+- **Past milestones** — what was actually built, giving you awareness of existing capabilities
+- **Deprecations** — approaches that were tried and removed, so you don't repeat them
+- **In-progress work** — what's currently being worked on, so you avoid conflicts
+- **Capacity constraints** — resource budgets and hardware limitations
+
+If `.vault-context.md` exists, read it at session start. It gives you the project's institutional memory — the kind of context that would normally require weeks of onboarding. The file may be stale — check the generated timestamp at the top. Regenerate from the Vault directory with: `python _pipeline/workflow_pipeline.py --context --project "ALX Nova"`.
+
 ## Build & Test Commands
 
 ```bash

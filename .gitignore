@@ -7,6 +7,9 @@
 .vscode/launch.json
 .vscode/ipch
 
+# Vault pipeline context brief (generated, not committed)
+.vault-context.md
+
 # Temporary files
 platformio.ini
 mockup_dsp_peq.html
