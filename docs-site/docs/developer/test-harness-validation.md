@@ -42,7 +42,7 @@ Zeroes `head` and `tail`, putting the buffer into an empty state. Does not touch
 bool test_harness_ringbuf_push(TestHarnessRingbuf *buf, uint8_t value);
 ```
 
-Writes `value` at the current `tail` position and advances `tail`. Returns `true` on success. Returns `false` without modifying the buffer when the buffer is full (i.e., when adding one more byte would make `head == tail`).
+Writes `value` at the current `head` position and advances `head`. Returns `true` on success. Returns `false` without modifying the buffer when the buffer is full (i.e., when adding one more byte would make `head == tail`).
 
 ---
 
@@ -50,7 +50,7 @@ Writes `value` at the current `tail` position and advances `tail`. Returns `true
 bool test_harness_ringbuf_pop(TestHarnessRingbuf *buf, uint8_t *value);
 ```
 
-Reads the byte at `head` into `*value` and advances `head`. Returns `true` on success. Returns `false` without modifying `*value` or `head` when the buffer is empty.
+Reads the byte at `tail` into `*value` and advances `tail`. Returns `true` on success. Returns `false` without modifying `*value` or `tail` when the buffer is empty.
 
 ---
 
@@ -139,15 +139,15 @@ renderTestHarnessStatus(containerId, moduleStatuses?)
 | `containerId` | `string` | The `id` of a DOM element that the status card will be rendered into. |
 | `moduleStatuses` | `object` (optional) | A map of module names to status strings. When omitted, the card renders in an empty / default state. |
 
-The function does not return a value. It writes directly to the container's `innerHTML`. Because the module is a self-contained IIFE, `renderTestHarnessStatus` is available as a global after the script tag loads — no `import` or `require` call is needed.
+The function does not return a value. It constructs DOM nodes via `createElement` / `createElementNS` / `appendChild` and replaces the container's children (no `innerHTML`). Because the module is a self-contained IIFE, `renderTestHarnessStatus` is available as a global after the script tag loads — no `import` or `require` call is needed.
 
 ```html
 <div id="harness-status"></div>
 <script src="test-harness-status.js"></script>
 <script>
   renderTestHarnessStatus('harness-status', {
-    ringbuf: 'pass',
-    utils:   'pass',
+    'ring-buffer': 'pass',
+    utils:         'pass',
   });
 </script>
 ```
