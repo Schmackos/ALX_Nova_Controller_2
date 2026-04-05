@@ -19,7 +19,7 @@ function renderTestHarnessStatus(containerId) {
             name: 'Utils',
             key: 'utils',
             description: 'General-purpose utility helpers shared across firmware modules.',
-            tests: ['string sanitisation', 'numeric clamp', 'bit-manipulation helpers', 'safe memcpy bounds']
+            tests: ['numeric clamp', 'percentage validation', 'linear range mapping']
         }
     ];
 

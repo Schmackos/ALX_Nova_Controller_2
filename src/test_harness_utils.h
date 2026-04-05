@@ -41,6 +41,8 @@ static inline bool test_harness_is_valid_percentage(int32_t value)
  * Map value from input range [in_min, in_max] to output range [out_min, out_max]
  * using linear interpolation.
  * If in_min == in_max, return out_min to avoid division by zero.
+ * Note: intermediate product (value - in_min) * (out_max - out_min) must fit
+ * in int32_t. Safe for ranges up to ~46,000.
  */
 static inline int32_t test_harness_map_range(int32_t value, int32_t in_min, int32_t in_max,
                                               int32_t out_min, int32_t out_max)
