@@ -30,25 +30,19 @@ An ISR-safe ring buffer implementation using volatile head/tail pointers for loc
 **API:**
 
 ```c
-// Initialize ring buffer (call before first use)
-void test_harness_ringbuf_init(test_harness_ringbuf_t *rb, uint32_t *buffer, size_t size);
+// Initialize (or reset) a ring buffer to the empty state
+void test_harness_ringbuf_init(TestHarnessRingbuf *rb);
 
-// Push a value into the buffer (ISR-safe)
+// Push a uint8_t value onto the buffer (ISR-safe)
 // Returns true if successful, false if buffer is full
-bool test_harness_ringbuf_push(test_harness_ringbuf_t *rb, uint32_t value);
+bool test_harness_ringbuf_push(TestHarnessRingbuf *rb, uint8_t value);
 
-// Pop a value from the buffer (ISR-safe)
+// Pop a value from the buffer into *value (ISR-safe)
 // Returns true if successful, false if buffer is empty
-bool test_harness_ringbuf_pop(test_harness_ringbuf_t *rb, uint32_t *value);
+bool test_harness_ringbuf_pop(TestHarnessRingbuf *rb, uint8_t *value);
 
-// Get current count of items in buffer (approximate in ISR context)
-size_t test_harness_ringbuf_count(test_harness_ringbuf_t *rb);
-
-// Check if buffer is full
-bool test_harness_ringbuf_is_full(test_harness_ringbuf_t *rb);
-
-// Check if buffer is empty
-bool test_harness_ringbuf_is_empty(test_harness_ringbuf_t *rb);
+// Get current count of items in buffer
+uint8_t test_harness_ringbuf_count(TestHarnessRingbuf *rb);
 ```
 
 ### test_harness_utils.h
@@ -67,16 +61,8 @@ float test_harness_clamp(float value, float min, float max);
 bool test_harness_is_valid_percentage(float value);
 
 // Map a value from one range to another (linear interpolation)
+// Returns out_min when in_min == in_max (division-by-zero guard)
 float test_harness_map_range(float value, float in_min, float in_max, float out_min, float out_max);
-
-// Check if value is within tolerance of target
-bool test_harness_is_within_tolerance(float value, float target, float tolerance);
-
-// Convert decibels to linear amplitude
-float test_harness_db_to_linear(float db);
-
-// Convert linear amplitude to decibels
-float test_harness_linear_to_db(float linear);
 ```
 
 ### test-harness-status.js
@@ -86,10 +72,10 @@ Web UI component for displaying test harness validation status and metrics.
 **Purpose:** Provide real-time visibility into test harness operation through the web dashboard.
 
 **Features:**
-- Status card display with test metrics
-- Real-time updates via WebSocket
-- Integration with existing web UI layout
-- Displays current test progress and pass/fail counts
+- Self-contained IIFE pattern (no external dependencies)
+- Status card display with per-module pass/fail/pending indicators
+- MDI inline SVG icons following project conventions
+- Standalone — not wired into web server or build pipeline
 
 ## Test Coverage
 
@@ -111,8 +97,7 @@ The test harness modules include comprehensive Unity-based tests covering:
 - **Clamp function** — Values above max clamped, below min clamped, within range unchanged
 - **Percentage validation** — Valid range 0.0-100.0, rejects negative and >100.0
 - **Range mapping** — Linear interpolation across ranges, boundary values, inverted ranges
-- **Tolerance checking** — Values within tolerance pass, outside fail
-- **dB conversion** — Round-trip conversion (dB → linear → dB) maintains precision
+- **Division-by-zero guard** — map_range with equal input bounds returns out_min
 - **Extreme values** — Very small/large numbers, zero, negative values
 
 ## Cleanup Procedure
