@@ -17,28 +17,44 @@ function renderTestHarnessStatus(containerId, statusData) {
   var status = statusData.status || "unknown";
   var modules = Array.isArray(statusData.modules) ? statusData.modules : [];
 
-  var moduleItems = modules
-    .map(function (mod) {
-      return "<li>" + mod + "</li>";
-    })
-    .join("");
+  container.textContent = "";
 
-  // Static template HTML — no user-controlled content interpolated unsanitized
-  container.innerHTML =
-    "<article class=\"test-harness-card\">" +
-      "<header class=\"test-harness-card__header\">" +
-        "<h2 class=\"test-harness-card__title\">" + title + "</h2>" +
-        "<span class=\"test-harness-card__status test-harness-card__status--" + status + "\">" +
-          status +
-        "</span>" +
-      "</header>" +
-      "<section class=\"test-harness-card__body\">" +
-        "<h3>Modules</h3>" +
-        "<ul class=\"test-harness-card__modules\">" +
-          moduleItems +
-        "</ul>" +
-      "</section>" +
-    "</article>";
+  var article = document.createElement("article");
+  article.className = "test-harness-card";
+
+  var header = document.createElement("header");
+  header.className = "test-harness-card__header";
+
+  var h2 = document.createElement("h2");
+  h2.className = "test-harness-card__title";
+  h2.textContent = title;
+  header.appendChild(h2);
+
+  var span = document.createElement("span");
+  span.className = "test-harness-card__status test-harness-card__status--" + status;
+  span.textContent = status;
+  header.appendChild(span);
+
+  article.appendChild(header);
+
+  var section = document.createElement("section");
+  section.className = "test-harness-card__body";
+
+  var h3 = document.createElement("h3");
+  h3.textContent = "Modules";
+  section.appendChild(h3);
+
+  var ul = document.createElement("ul");
+  ul.className = "test-harness-card__modules";
+  modules.forEach(function (mod) {
+    var li = document.createElement("li");
+    li.textContent = mod;
+    ul.appendChild(li);
+  });
+  section.appendChild(ul);
+
+  article.appendChild(section);
+  container.appendChild(article);
 
   return container;
 }
